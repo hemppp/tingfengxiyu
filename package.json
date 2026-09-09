@@ -1,0 +1,27 @@
+{
+  "name": "novel-companion",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @novel/web dev",
+    "dev:all": "pnpm -r --parallel --filter @novel/web --filter @novel/server --filter @novel/agents run dev",
+    "dev:agents": "pnpm --filter @novel/agents dev",
+    "dev:server": "pnpm --filter @novel/server dev",
+    "build": "pnpm --filter @novel/web build",
+    "build:server": "pnpm --filter @novel/server build",
+    "start:server": "pnpm --filter @novel/server start",
+    "lint": "pnpm -r lint",
+    "lint:server": "pnpm --filter @novel/server lint",
+    "type-check": "pnpm -r type-check",
+    "type-check:server": "pnpm --filter @novel/server type-check"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.8.0+sha512.c1f5e7c4cb241c8f174b743851d82f42b802324afc8b0f116b96adb15aa06664948dde36960a3ba1079ba5b4b29dd0140135b94b5b5f5263592249d68e555f26",
+  "dependencies": {
+    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/dsh-host-webserver": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-invariants": "0.1.1-rc.2",
+    "@deepseek-ai/schemastery": "3.18.1"
+  }
+}

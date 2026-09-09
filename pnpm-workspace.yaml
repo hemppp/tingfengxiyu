@@ -1,0 +1,50 @@
+packages:
+  - "apps/*"
+  - "apps/plugins/*"
+  - "packages/*"
+# ★ hoisted 模式：依赖扁平化安装到根 node_modules（非符号链接）
+# 原因：Docker 多阶段构建时，pnpm 默认的符号链接跨容器 COPY 会丢失，
+#       导致 node_modules/.bin/tsx 等可执行文件找不到，容器无法启动
+nodeLinker: hoisted
+# 允许 @electron/rebuild 的 git 子依赖（@electron/node-gyp）
+blockExoticSubdeps: false
+allowBuilds:
+  better-sqlite3: true
+  electron: true
+  esbuild: true
+onlyBuiltDependencies:
+  - better-sqlite3
+  - esbuild
+  - electron
+
+# ★ 仅 Windows x64：跳过 linux/darwin 等平台的 rollup 等可选包，避免慢速镜像浪费下载
+supportedArchitectures:
+  os:
+    - win32
+  cpu:
+    - x64
+
+# ★ 安全补丁 overrides（C5/C6）：
+#   - linkify-it <5.0.2 / ini <1.3.6：原型污染
+#   - undici <7.28/7.29 多处高危（TLS/WS DoS/SOCKS5/缓存注入），统一 7.29.0
+#   - brace-expansion <5.0.9 指数级 DoS（开发工具链 minimatch/glob 路径）
+#   - nanoid <5.1.16 自定义生成器死循环（web 直依赖）；postcss 侧 pin 3.x 补丁
+#   - markdown-it <14.1.2 smartquotes 二次复杂度 DoS（prosemirror/tiptap 链）
+#   - esbuild <0.28.1 任意文件读取（tsx/构建工具链）
+#   - @babel/core <=7.29.0 sourceMappingURL 任意文件读取（vite 插件链）
+# ★ 选择性覆盖：vite 6.4 的依赖预构建（optimizeDeps）与 esbuild 0.28 不兼容
+#   （0.28 移除了对旧 target 的解构转译支持，vite 默认 baseline target 直接报错）。
+#   因此 vite 保留其兼容的 0.24.x；esbuild 0.28 仅作为独立工具链（tsx/tsdown/构建）使用。
+#   注：esbuild <0.28.1 公告（任意文件读取）针对其 dev-server 模式，vite 仅将其作为
+#   transform 库调用（不启动 serve），故 vite 侧 0.24.x 不受该公告影响。
+overrides:
+  linkify-it: ^5.0.2
+  ini: ^1.3.8
+  undici: ^7.29.0
+  brace-expansion: ^5.0.9
+  nanoid: ^5.1.16
+  markdown-it: ^14.3.0
+  "vite>esbuild": ^0.24.2
+  esbuild: ^0.28.1
+  "@babel/core": ^7.29.7
+  postcss>nanoid: ^3.3.18

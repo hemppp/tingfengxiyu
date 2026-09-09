@@ -1,0 +1,96 @@
+# Git
+.git
+.gitattributes
+.github
+.gitignore
+
+# Dependencies (will be installed inside Docker)
+node_modules/
+.pnpm-store/
+
+# Build outputs (will be built inside Docker)
+dist/
+build/
+.next/
+.vite/
+
+# Database files (SQLite + WAL + 备份，全部排除，绝不进镜像)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.db.sqljs.bak
+*.db.bak
+data/
+data/**
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temp
+.tmp/
+.cache/
+.workbuddy/
+
+# Python agents
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+.venv/
+env/
+ENV/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+apps/agents/.env
+apps/agents/dev.ps1
+
+# Docs (not needed in production image)
+docs/
+README.md
+*.md
+
+# 根目录散落的临时/调试文件
+_find_sha.js
+check-events.js
+apps/server/check-events.js
+apps/server/check-timeline.cjs
+apps/server/errors.txt
+ChatGPT*.png
+
+# OS
+Thumbs.db
+
+# AI / planning cache
+.reasonix/
+.plan/
+.codex/
+
+# Desktop (Electron) - 不打进 Docker 镜像
+apps/desktop/
+release/

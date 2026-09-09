@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="emerald">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NovelMuse - 伴写小说工具</title>
+
+    <!-- 主题已固定为亮色「晨雾」模式，无暗色切换 -->
+
+    <!-- Noto Serif SC — 中文衬线主字体（文人气质） -->
+    <!-- 使用 local() 引用系统字体，避免 Google Fonts 被墙的问题 -->
+    <!-- 若系统未安装，fallback 到 Source Han Serif SC / 宋体 / serif -->
+
+    <style>
+      @font-face {
+        font-family: 'Press Start 2P';
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url('/fonts/PressStart2P-Regular.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Zpix';
+        src: local('SimSun'), local('宋体');
+      }
+    </style>
+  </head>
+  <body class="text-foreground" style="background: transparent;">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

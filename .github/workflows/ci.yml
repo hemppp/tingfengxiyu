@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# 防止并发流水线互相踩踏
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    name: Type Check / Lint / Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        # onlyBuiltDependencies 含 better-sqlite3 / esbuild，确保原生模块可构建
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm -r type-check
+
+      - name: Lint
+        run: pnpm -r lint
+
+      - name: Test
+        # 当前仅 apps/web 有 Vitest；server/agents 补测试后自动纳入
+        run: pnpm -r test

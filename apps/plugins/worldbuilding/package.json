@@ -1,0 +1,44 @@
+{
+  "name": "@novel-plugins/worldbuilding",
+  "version": "0.1.0",
+  "private": true,
+  "description": "世界观建造师示例插件：势力管理 + AI 工具 + 技能 + 项目面板（验证插件化闭环的全栈示例）",
+  "type": "module",
+  "main": "src/server/index.ts",
+  "types": "src/server/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/server/index.ts",
+      "import": "./src/server/index.ts",
+      "default": "./src/server/index.ts"
+    },
+    "./web": {
+      "types": "./src/web/index.tsx",
+      "import": "./src/web/index.tsx",
+      "default": "./src/web/index.tsx"
+    }
+  },
+  "novelMuse": {
+    "id": "novel.worldbuilding",
+    "name": "世界观建造师",
+    "description": "势力管理 + AI 世界观顾问（示例插件，展示完整插件契约）",
+    "version": "0.1.0",
+    "dependsOn": ["novel.projects"],
+    "permissions": ["routes", "db:project", "ai:tools", "ai:skills", "events"],
+    "server": {
+      "inject": ["routes", "db", "ai", "events"]
+    },
+    "web": {
+      "inject": ["projectPanels", "commands", "selection", "toolbar"]
+    }
+  },
+  "dependencies": {
+    "@novel/core": "workspace:*",
+    "@novel/db": "workspace:*",
+    "@novel/shared": "workspace:*",
+    "@tiptap/core": "^2.11.0",
+    "@tiptap/pm": "^2.11.0",
+    "hono": "^4.13.3",
+    "zod": "^4.0.0"
+  }
+}

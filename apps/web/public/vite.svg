@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- 背景渐变 -->
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#c8d5cc;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6d8e80;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 背景 -->
+  <rect width="32" height="32" fill="url(#bg)"/>
+  
+  <!-- 竹竿 -->
+  <path d="M 16 4 L 16 28" stroke="#2a4038" stroke-width="2" stroke-linecap="round"/>
+  <path d="M 16 10 L 16 10.5" stroke="#1a3028" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 16 18 L 16 18.5" stroke="#1a3028" stroke-width="3" stroke-linecap="round"/>
+  
+  <!-- 竹叶 -->
+  <path d="M 16 8 Q 20 6 22 8 Q 20 9 16 8" fill="#3a5a40" opacity="0.8"/>
+  <path d="M 16 14 Q 12 12 10 14 Q 12 15 16 14" fill="#3a5a40" opacity="0.8"/>
+  <path d="M 16 20 Q 20 18 22 20 Q 20 21 16 20" fill="#3a5a40" opacity="0.8"/>
+</svg>
