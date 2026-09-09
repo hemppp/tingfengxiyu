@@ -16,7 +16,7 @@ import { Hono, type Context, type Next } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { getProvider, type AIConfig, configLoaders, applyBuiltinRelayFallback } from '../ai/providers/provider-factory.js';
-import { getBuiltinRelay, isBuiltinRelayKey, BUILTIN_RELAY_LABEL } from '../lib/builtin-relay.js';
+import { isBuiltinRelayKey, BUILTIN_RELAY_LABEL } from '../lib/builtin-relay.js';
 import { getDb, schema, eq, saveToDisk } from '@novel/db';
 import { getActiveProxy } from '../lib/proxy-agent.js';
 import {

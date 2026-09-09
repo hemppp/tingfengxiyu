@@ -8,15 +8,18 @@
     "build": "tsc",
     "start": "tsx src/index.ts",
     "type-check": "tsc --noEmit",
-    "lint": "eslint src/"
+    "lint": "eslint src/",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/dsh-host-webserver": "0.1.1-rc.2",
     "@hono/node-server": "^1.19.17",
     "@hono/zod-validator": "^0.9.0",
+    "@novel-plugins/worldbuilding": "workspace:*",
     "@novel/core": "workspace:*",
     "@novel/db": "workspace:*",
     "@novel/shared": "workspace:*",
-    "@novel-plugins/worldbuilding": "workspace:*",
     "@openai/agents": "^0.14.3",
     "bcryptjs": "^3.0.3",
     "hono": "^4.13.3",
@@ -24,9 +27,7 @@
     "openai": "^7.4.0",
     "undici": "^7.29.0",
     "uuid": "^11.0.0",
-    "zod": "^4.0.0",
-    "@deepseek-ai/cordis": "4.0.1",
-    "@deepseek-ai/dsh-host-webserver": "0.1.1-rc.2"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -38,6 +39,7 @@
     "@typescript-eslint/parser": "^8.59.4",
     "eslint": "^10.4.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.7"
   }
 }
