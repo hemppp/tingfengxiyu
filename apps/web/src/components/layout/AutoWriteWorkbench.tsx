@@ -144,6 +144,13 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
    * 按**收到的事件累积**，不解析 phase 文案（文案会改，事件契约不会）。
    */
   const [stages, setStages] = useState<Partial<Record<StageKey, StageState>>>({});
+  /**
+   * 连写章数（1 = 单章）。>1 时后端逐章跑完整闭环（讨论→结论→落笔→三道门→交付→沉淀），
+   * 后一章自动「接着上一章往下写」，不重复作者这句指令（它是指向第 1 章的）。
+   */
+  const [chapterCount, setChapterCount] = useState(1);
+  /** 连写进度（仅 total > 1 时显示） */
+  const [progress, setProgress] = useState<{ index: number; total: number } | null>(null);
   /** 当前正文是第几稿：0 = 初稿，≥1 = 被意图门打回后的第 N 次重写 */
   const [revision, setRevision] = useState(0);
 
@@ -240,6 +247,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
     setPhase('正在召集智能体…');
     // 新一轮会话：阶段推进从「讨论」重来
     setStages({ discuss: 'running' });
+    setProgress(chapterCount > 1 ? { index: 1, total: chapterCount } : null);
 
     const push = (turn: Omit<ChatTurn, 'id' | 'time'>) => {
       setTurns((prev) => [...prev, { ...turn, id: nanoid(), time: nowHHMM() }]);
@@ -247,8 +255,33 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
     };
 
     try {
-      await runSession(text, { signal: ac.signal }, (e: SessionEvent) => {
-        if (e.type === 'phase') {
+      await runSession(text, { signal: ac.signal, chapterCount }, (e: SessionEvent) => {
+        if (e.type === 'chapter_start') {
+          // 连写：每章开跑前把上一章的结论/正文/阶段状态清干净，否则会串台
+          setProgress({ index: e.index, total: e.total });
+          if (e.total > 1) {
+            setConclusion(null);
+            setProse(null);
+            setStages({ discuss: 'running' });
+            push({
+              from: 'system', name: `第 ${e.order} 章`, color: 'hsl(var(--primary))', short: '章',
+              text: `开始第 ${e.index} / ${e.total} 章`,
+            });
+          }
+        } else if (e.type === 'chapter_done') {
+          // 一章收尾（不论是否交付成功都会发）—— 让作者知道 30 章跑到第几章了
+          push({
+            from: e.delivered ? 'delivered' : 'system',
+            name: `第 ${e.order} 章`,
+            color: e.delivered ? 'hsl(var(--state-done))' : 'hsl(var(--state-blocked))',
+            short: e.delivered ? '✓' : '!',
+            text: e.delivered
+              ? `第 ${e.order} 章完成（${e.index}/${e.total}）`
+              : `第 ${e.order} 章未完成（${e.index}/${e.total}），已继续下一章`,
+            tone: e.delivered ? 'ok' : 'warn',
+          });
+          if (e.index >= e.total) setProgress(null);
+        } else if (e.type === 'phase') {
           setPhase(e.label);
         } else if (e.type === 'turn') {
           push({
@@ -344,7 +377,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
       setPhase('');
       scrollStreamToEnd();
     }
-  }, [scrollStreamToEnd, onProjectDataChanged]);
+  }, [scrollStreamToEnd, onProjectDataChanged, chapterCount]);
 
   /** 作者发言：先落到流里，再交给编排器 */
   const send = useCallback(() => {
@@ -488,7 +521,9 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                         <br />
                         <span style={{ color: 'hsl(var(--muted-foreground) / 0.8)' }}>
                           剧情设计师 / 角色设计师 / 设定管家会先来回讨论，定稿官收敛成本章结论，
-                          写作官据此落笔并过意图复核 —— 发言按时间展开，随时可在下方插话。
+                          写作官据此落笔并过三道门 —— 发言按时间展开，随时可在下方插话。
+                          <br />
+                          想连着写就在输入框右下角设「连写 N 章」：从章号起逐章写下去，每章都会完整走完复核与沉淀。
                         </span>
                       </p>
                     </div>
@@ -615,6 +650,44 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                   <span className="text-[10px] truncate" style={{ color: 'hsl(var(--muted-foreground) / 0.7)' }}>
                     {busy ? (phase || '智能体处理中…') : 'Enter 发送 · Shift+Enter 换行'}
                   </span>
+
+                  {/* 连写章数：>1 时后端逐章跑完整闭环（讨论 → 结论 → 三道门 → 交付 → 沉淀），
+                      后续章自动「接着上一章往下写」。每章约一分钟，别在忙的时候改它 */}
+                  {!busy && (
+                    <label
+                      className="ml-auto flex items-center gap-1 text-[10px] shrink-0"
+                      style={{ color: 'hsl(var(--muted-foreground))' }}
+                      title="连写章数：从指令里的章号开始逐章写，每章约一分钟"
+                    >
+                      连写
+                      <input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={chapterCount}
+                        onChange={(ev) => {
+                          const n = Math.floor(Number(ev.target.value) || 1);
+                          setChapterCount(Math.max(1, Math.min(50, n)));
+                        }}
+                        className="rounded-md text-center"
+                        style={{
+                          width: 40,
+                          height: 20,
+                          background: 'rgb(var(--glass-tint) / 0.5)',
+                          border: '0.5px solid hsl(var(--border) / 0.8)',
+                          color: 'hsl(var(--ink))',
+                        }}
+                      />
+                      章
+                    </label>
+                  )}
+
+                  {progress && (
+                    <span className="text-[10px] shrink-0 ml-auto" style={{ color: 'hsl(var(--primary))' }}>
+                      第 {progress.index} / {progress.total} 章
+                    </span>
+                  )}
+
                   {busy && (
                     <button
                       type="button"

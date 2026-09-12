@@ -26,11 +26,20 @@ export interface ConsistencyVerdict {
   conflicts: string[];
   /** 给写作官的定向修正指令 */
   instructions: string;
+  /**
+   * 非空表示这次比对**没能执行**（模型调用/解析失败）。
+   * 此时 `pass` 一律为 `true` —— 绝不能因为基础设施抖动就让稿子被打回；
+   * 但也**不能静默吞掉**：调用方必须把它透给作者看（实测踩过：静默失败
+   * 会让校对门变成一个永远「跳过」的摆设，白白多烧一次调用）。
+   */
+  error?: string;
 }
 
 export interface PolishVerdict {
   score: number;
   comments: string;
+  /** 同 ConsistencyVerdict.error：非空 = 这一步没执行成功 */
+  error?: string;
 }
 
 /** 校对官对照的设定摘要（直接取 context-resolver 的 digest 三栏） */
@@ -46,13 +55,13 @@ export const POLISH_PASS_SCORE = 7;
 /**
  * 校对门：全文 × 设定库一致性机判。
  *
- * 返回 `null` 表示**基础设施失败**（模型调用出错）—— 与「有冲突」严格区分：
- * 调用失败绝不能当成不通过，否则一次网络抖动就能让稿子被打回。
+ * **不会抛错**。执行失败时返回带 `error` 的「通过」结论 —— 调用方据此照常交付，
+ * 但要把 error 透给作者（别再静默跳过）。
  */
 export async function runConsistencyGate(
   ctx: ServerPluginContext,
   opts: { order: number; draft: string; digest: GateDigest; userId?: string },
-): Promise<ConsistencyVerdict | null> {
+): Promise<ConsistencyVerdict> {
   try {
     const raw = await ctx.ai.complete({
       messages: [
@@ -77,9 +86,10 @@ export async function runConsistencyGate(
       ],
       json: true,
       temperature: 0.1,
-      // 与实体抽取同理：不传 maxTokens 时由服务商默认值兜底，推理模型的思考 token
-      // 也计入该上限，预算偏小会让 JSON 被截断（截断=解析失败=白调一次）
-      maxTokens: 2048,
+      // ★ 必须给足：校对官要逐条列出「冲突描述 + 出处」，正文一长输出就上千 token。
+      //   实测（2026-09-12）：设 2048 时多章跑下来会**间歇性截断** → JSON 解析失败 →
+      //   整个门静默跳过（还白烧一次调用）。与 entity-sink 同量级取 4096。
+      maxTokens: 4096,
       userId: opts.userId,
     });
     const parsed = parseJsonLoose<{ pass?: boolean; conflicts?: unknown; instructions?: unknown }>(raw);
@@ -89,16 +99,17 @@ export async function runConsistencyGate(
       instructions: String(parsed.instructions ?? '').slice(0, 300),
     };
   } catch (e) {
-    console.warn('[gates] 校对官调用失败（跳过校对门，不算冲突）:', e);
-    return null;
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn('[gates] 校对官调用失败（按通过处理，不拦交付）:', msg);
+    return { pass: true, conflicts: [], instructions: '', error: `校对门未能执行：${msg}` };
   }
 }
 
-/** 润色门：质量评分（软门，从不阻塞交付；失败同样返回 null 而不是低分） */
+/** 润色门：质量评分（软门，从不阻塞交付；执行失败同样返回带 error 的结果） */
 export async function runPolishGate(
   ctx: ServerPluginContext,
   opts: { order: number; draft: string; userId?: string },
-): Promise<PolishVerdict | null> {
+): Promise<PolishVerdict> {
   try {
     const raw = await ctx.ai.complete({
       messages: [
@@ -107,7 +118,7 @@ export async function runPolishGate(
       ],
       json: true,
       temperature: 0.2,
-      maxTokens: 1024,
+      maxTokens: 1536,
       userId: opts.userId,
     });
     const parsed = parseJsonLoose<{ score?: unknown; comments?: unknown }>(raw);
@@ -116,7 +127,8 @@ export async function runPolishGate(
       comments: String(parsed.comments ?? '').slice(0, 200),
     };
   } catch (e) {
-    console.warn('[gates] 评审官调用失败（跳过润色门）:', e);
-    return null;
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn('[gates] 评审官调用失败（跳过润色门）:', msg);
+    return { score: 0, comments: '', error: `润色门未能执行：${msg}` };
   }
 }

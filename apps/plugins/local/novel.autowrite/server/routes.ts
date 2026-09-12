@@ -16,7 +16,7 @@
 import { Hono } from 'hono';
 import type { ServerPluginContext } from '@novel/core';
 import { FlowStore, type ChapterFlow } from './framework/flow-store.js';
-import { runDiscussion } from './discuss/orchestrator.js';
+import { runDiscussion, runChapters } from './discuss/orchestrator.js';
 
 /** 单章对外视图（不暴露草稿全文，只暴露状态与结论） */
 function flowView(f: ChapterFlow | undefined) {
@@ -98,7 +98,7 @@ export function createAutowriteRouter(ctx: ServerPluginContext): Hono {
     const projectId = c.req.header('x-project-id');
     if (!projectId) return c.json({ error: '缺少 X-Project-Id 头' }, 400);
 
-    let body: { message?: string; chapterOrder?: number } = {};
+    let body: { message?: string; chapterOrder?: number; chapterCount?: number } = {};
     try {
       body = await c.req.json();
     } catch {
@@ -106,6 +106,8 @@ export function createAutowriteRouter(ctx: ServerPluginContext): Hono {
     }
     const message = String(body.message ?? '').trim();
     if (!message) return c.json({ error: '缺少 message' }, 400);
+    /** 连写章数：1 = 单章（默认），>1 走连写循环；上限 50 防手滑跑出个几百章 */
+    const chapterCount = Math.max(1, Math.min(50, Math.floor(Number(body.chapterCount ?? 1)) || 1));
 
     // 宿主已注入 user，取 id 供子代理上下文使用（讨论阶段不写库，缺省空串亦可）
     const user = (c as unknown as { get: (key: string) => { id?: string } | undefined }).get('user');
@@ -137,16 +139,17 @@ export function createAutowriteRouter(ctx: ServerPluginContext): Hono {
           }, 15_000);
 
           try {
-            await runDiscussion(
-              ctx,
-              {
-                projectId,
-                userId: user?.id ?? '',
-                message,
-                chapterOrder: body.chapterOrder,
-              },
-              send,
-            );
+            const base = {
+              projectId,
+              userId: user?.id ?? '',
+              message,
+              chapterOrder: body.chapterOrder,
+            };
+            if (chapterCount > 1) {
+              await runChapters(ctx, { ...base, chapterCount }, send);
+            } else {
+              await runDiscussion(ctx, base, send);
+            }
           } catch (e) {
             send({ type: 'error', message: e instanceof Error ? e.message : String(e) });
             send({ type: 'done' });

@@ -56,6 +56,10 @@ export type SessionEvent =
   | { type: 'deliver_blocked'; order: number; title: string; reason: string }
   /** 实体沉淀结果：本章交付后写入项目库的角色/物品/地点/伏笔条数 */
   | { type: 'entities'; created: number; updated: number; skipped: number; notes: string[] }
+  /** 连写模式：一章开始（前端据此插分段并重置本轮的结论/正文/阶段状态） */
+  | { type: 'chapter_start'; order: number; index: number; total: number }
+  /** 连写模式：一章收尾（不论该章是否交付成功都会发） */
+  | { type: 'chapter_done'; order: number; index: number; total: number; delivered: boolean }
   | { type: 'error'; message: string }
   | { type: 'done' };
 
@@ -66,6 +70,12 @@ export interface DiscussionOpts {
   message: string;
   /** 可选：在意第几章（写进输入，帮助角色聚焦） */
   chapterOrder?: number;
+  /**
+   * 是否在本轮结束时发 `done`（默认 true）。
+   * 连写模式下由 `runChapters` 统一收尾，单章调用要传 false ——
+   * 否则前端会在第一章结束时就把整轮判成「跑完了」。
+   */
+  finalDone?: boolean;
 }
 
 /** 单角色发言的 maxTurns：带工具的角色需要多转几轮查库 */
@@ -437,15 +447,15 @@ export async function runDiscussion(
       // 而两次打回后整章作废的代价（实测 2026-09-12：3333 字全废）远大于残留一处小冲突。
       emit({ type: 'phase', label: '校对门：全文对照设定库…' });
       let gate = await runConsistencyGate(ctx, { order: targetOrder, draft: currentDraft, digest, userId });
-      if (gate) {
-        emit({
-          type: 'gate',
-          name: 'check',
-          passed: gate.pass,
-          detail: gate.pass ? '未发现与设定库冲突' : (gate.conflicts.join('；') || '未给出具体冲突'),
-        });
-      }
-      if (gate && !gate.pass) {
+      emit({
+        type: 'gate',
+        name: 'check',
+        passed: gate.pass,
+        detail: gate.error
+          ? gate.error
+          : (gate.pass ? '未发现与设定库冲突' : (gate.conflicts.join('；') || '未给出具体冲突')),
+      });
+      if (!gate.pass) {
         emit({ type: 'phase', label: `校对门发现 ${gate.conflicts.length || 1} 处冲突，写作官定向修订中…` });
         try {
           const fixed = await speak(
@@ -460,22 +470,22 @@ export async function runDiscussion(
           if (fixed.trim()) currentDraft = fixed;
           emit({ type: 'draft', text: currentDraft, revision: MAX_REVISIONS + 1 });
           const recheck = await runConsistencyGate(ctx, { order: targetOrder, draft: currentDraft, digest, userId });
-          if (recheck) {
-            emit({
-              type: 'gate',
-              name: 'check',
-              passed: recheck.pass,
-              detail: recheck.pass
+          emit({
+            type: 'gate',
+            name: 'check',
+            passed: recheck.pass,
+            detail: recheck.error
+              ? recheck.error
+              : (recheck.pass
                 ? '定向修订后冲突已消除'
-                : `定向修订后仍有冲突：${recheck.conflicts.join('；')}`,
-            });
-            gate = recheck;
-          }
+                : `定向修订后仍有冲突：${recheck.conflicts.join('；')}`),
+          });
+          gate = recheck;
         } catch (e) {
           console.warn('[discuss] 校对门定向修订失败，按原稿继续:', e);
         }
       }
-      if (gate && !gate.pass) {
+      if (!gate.pass) {
         // 不阻塞：宁可带着一处标注交付，也不要让整章作废
         emit({
           type: 'phase',
@@ -486,15 +496,13 @@ export async function runDiscussion(
       // ——— 润色门（软门 · 评分）——从不阻塞交付 ———
       emit({ type: 'phase', label: '润色门：质量评分中…' });
       const polish = await runPolishGate(ctx, { order: targetOrder, draft: currentDraft, userId });
-      if (polish) {
-        emit({
-          type: 'gate',
-          name: 'polish',
-          passed: polish.score >= POLISH_PASS_SCORE,
-          score: polish.score,
-          detail: polish.comments || '（无评语）',
-        });
-      }
+      emit({
+        type: 'gate',
+        name: 'polish',
+        passed: !polish.error && polish.score >= POLISH_PASS_SCORE,
+        score: polish.score,
+        detail: polish.error ?? (polish.comments || '（无评语）'),
+      });
 
       // 只有过了意图门才落库 —— 别把没过门的东西写进章节
       emit({ type: 'phase', label: '交付中…' });
@@ -523,9 +531,75 @@ export async function runDiscussion(
       }
     }
 
-    emit({ type: 'done' });
+    if (opts.finalDone !== false) emit({ type: 'done' });
   } catch (e) {
     emit({ type: 'error', message: e instanceof Error ? e.message : String(e) });
-    emit({ type: 'done' });
+    if (opts.finalDone !== false) emit({ type: 'done' });
   }
+}
+
+// ============================================================
+// 连写多章（P1-2）
+//
+// 动机：在此之前一轮会话只能处理一章 —— 想写 10 章就得有人守着敲 10 次，
+// 那不叫「自动写作」。这里把单章闭环串成循环。
+//
+// 设计要点：
+//   · **逐章串行**：每章都完整跑讨论 → 结论 → 落笔 → 三道门 → 交付 → 沉淀，
+//     不给它「跳过某步省事」的机会（多章连写最容易在这里偷工减料）。
+//   · **一章失败不拖垮后面**：单章内部已把异常收敛成 error 事件，
+//     这里只统计成败、继续下一章，最后汇总 —— 30 章跑到第 17 章崩掉不该全废。
+//   · **后续章的指令由上一章自然延续**：不重复作者的原始口头指令（那是指向第 1 章的），
+//     改发「接着上一章往下写第 N 章」，并靠「上一章全文注入」保证衔接。
+//   · 事件带 index/total，前端据此分段显示。
+// ============================================================
+
+export interface MultiChapterOpts extends DiscussionOpts {
+  /** 连写章数（1 = 单章） */
+  chapterCount: number;
+}
+
+export async function runChapters(
+  ctx: ServerPluginContext,
+  opts: MultiChapterOpts,
+  emit: (e: SessionEvent) => void,
+): Promise<void> {
+  const total = Math.max(1, Math.min(50, Math.floor(opts.chapterCount) || 1));
+  const from = opts.chapterOrder ?? parseChapterOrder(opts.message) ?? 1;
+  let ok = 0;
+
+  for (let i = 0; i < total; i++) {
+    const order = from + i;
+    const index = i + 1;
+    emit({ type: 'chapter_start', order, index, total });
+
+    // 第 1 章用作者原话；之后各章自动续写（作者的指令是写给第 1 章的，不能一路照抄）
+    const message = i === 0
+      ? opts.message
+      : `接着上一章往下写第 ${order} 章。保持人物、伏笔与文风的连续性，不要重述上一章已经写过的内容。`;
+
+    let failed = false;
+    const wrapped = (e: SessionEvent) => {
+      if (e.type === 'error') failed = true;
+      emit(e);
+    };
+
+    try {
+      await runDiscussion(
+        ctx,
+        { ...opts, message, chapterOrder: order, finalDone: false },
+        wrapped,
+      );
+    } catch (e) {
+      failed = true;
+      const detail = e instanceof Error ? e.message : String(e);
+      emit({ type: 'error', message: `第 ${order} 章异常中止：${detail}` });
+    }
+
+    if (!failed) ok++;
+    emit({ type: 'chapter_done', order, index, total, delivered: !failed });
+  }
+
+  console.log(`[discuss] 连写结束：${ok}/${total} 章无错（起始第 ${from} 章）`);
+  emit({ type: 'done' });
 }

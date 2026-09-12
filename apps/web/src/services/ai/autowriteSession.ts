@@ -46,17 +46,23 @@ export type SessionEvent =
   | { type: 'deliver_blocked'; order: number; title: string; reason: string }
   /** 实体沉淀：交付后写入项目库的角色/物品/地点/伏笔条数 */
   | { type: 'entities'; created: number; updated: number; skipped: number; notes: string[] }
+  /** 连写模式：一章开始（前端据此分段并重置本轮的结论/正文/阶段状态） */
+  | { type: 'chapter_start'; order: number; index: number; total: number }
+  /** 连写模式：一章收尾（不论是否交付成功都会发） */
+  | { type: 'chapter_done'; order: number; index: number; total: number; delivered: boolean }
   | { type: 'error'; message: string }
   | { type: 'done' };
 
 /**
  * 跑一轮设计讨论。
  * @param message 作者这一轮说的话
+ * @param opts.chapterCount 连写章数（1 = 单章）。>1 时后端逐章跑完整闭环，
+ *        后续章由后端自动「接着上一章往下写」—— 不要在这里自己拼 N 条指令。
  * @param onEvent 每个 SSE 事件的回调（角色发言是**整段**到达的，不是逐字）
  */
 export async function runSession(
   message: string,
-  opts: { chapterOrder?: number; signal?: AbortSignal } = {},
+  opts: { chapterOrder?: number; chapterCount?: number; signal?: AbortSignal } = {},
   onEvent: (e: SessionEvent) => void,
 ): Promise<void> {
   const token = getToken();
@@ -71,7 +77,7 @@ export async function runSession(
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(projectId ? { 'X-Project-Id': projectId } : {}),
     },
-    body: JSON.stringify({ message, chapterOrder: opts.chapterOrder }),
+    body: JSON.stringify({ message, chapterOrder: opts.chapterOrder, chapterCount: opts.chapterCount }),
     signal: opts.signal,
   });
 
