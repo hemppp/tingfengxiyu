@@ -208,6 +208,46 @@ def main(argv: list[str]) -> int:
             return 1
         return 0
 
+    if cmd == "chrome":
+        # 用**独立 profile** 启动 Chrome，而不是 webbrowser.open 复用日常 profile。
+        # 为什么：日常 profile 反复弹「Chrome 未正常关闭 → 恢复页面」把页面挡住，
+        # 而且登录态（session cookie）动不动就丢（实测每轮都要重登）。
+        # 独立 profile 的 cookie 自己持久、无提示、也不碰用户平时用的浏览器。
+        import os
+        import subprocess
+
+        url = argv[2] if len(argv) > 2 else "http://localhost:5173/"
+        profile = argv[3] if len(argv) > 3 else "F:/new1.2/data/.chrome-profile"
+        cands = [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+        ]
+        exe = next((p for p in cands if os.path.exists(p)), None)
+        if not exe:
+            print("找不到 chrome.exe（试过 Program Files / LOCALAPPDATA）")
+            return 1
+        os.makedirs(profile, exist_ok=True)
+        # ★ 必须脱离进程树：直接 Popen 的 Chrome 会随本脚本所在的 shell 一起被清理
+        #   （实测命令一结束 chrome.exe 就没了，进程数 0）。
+        #   DETACHED_PROCESS + CREATE_NEW_PROCESS_GROUP 之后它才真正独立存活。
+        detached = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+        subprocess.Popen(
+            [
+                exe,
+                f"--user-data-dir={profile}",
+                "--hide-crash-restore-bubble",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--start-maximized",
+                url,
+            ],
+            close_fds=True,
+            creationflags=detached,
+        )
+        print(f"已启动独立 Chrome（已脱离进程树）: {url}  profile={profile}")
+        return 0
+
     if cmd == "open":
         # 用默认浏览器打开 URL。
         # 注：不要用 `cmd /c start` —— 那会绕过命令校验，本机安全策略直接拦。

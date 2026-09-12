@@ -622,6 +622,10 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                 >
                   <textarea
                     ref={taRef}
+                    // 进工作台就把焦点给输入框：作者来这里就是要说话的。
+                    // （顺带让「无人值守驱动界面」这条链路能用键盘走完，不必依赖点击坐标 —— 实测坐标点击在
+                    //   满屏/窗口位移时并不可靠）
+                    autoFocus
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={onDraftKeyDown}

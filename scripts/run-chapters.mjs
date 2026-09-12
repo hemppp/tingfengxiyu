@@ -167,7 +167,11 @@ async function runBatch(startOrder, nChapters) {
             say('  ! error:', String(e.message).slice(0, 140));
             break;
           case 'chapter_done':
-            flush(e.delivered);
+            // ★ 判定成功的唯一凭据是 **delivered 事件**（cur.delivered 非 null）。
+            //   被治理拦下时（已有正文不覆盖 / 没认出章号）只会来 deliver_blocked，
+            //   此时的 chapter_done.delivered 仍是 true（因为没发生 error）——
+            //   早先拿它当成功，把「被拦」误报成了「交付 0 字」。
+            flush(cur.delivered != null);
             break;
           case 'done':
             // 单章模式（chapterCount=1）不走 runChapters，没有 chapter_done —— 在这里补一次收尾
