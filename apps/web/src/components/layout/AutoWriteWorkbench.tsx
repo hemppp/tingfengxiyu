@@ -410,7 +410,29 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
     }
   }, [send]);
 
-  const latestChapter = projChapters[projChapters.length - 1];
+  /**
+   * 正在查看的章号（库里的）。
+   *
+   * ★ 为什么需要它：正文区原先只显示 `prose` —— 那是**本次会话**流出来的稿子，
+   *   页面一刷新就没了，于是「30 章都在库里」和「界面上什么都看不到」同时成立。
+   *   AI 写作模式又没有章节编辑器的入口，等于写完了却没法读。
+   */
+  const [viewOrder, setViewOrder] = useState<number | null>(null);
+  /** 默认落在最新一章；只有用户没手动切、或那一章被删了才重设 */
+  useEffect(() => {
+    if (projChapters.length === 0) return;
+    setViewOrder((cur) =>
+      cur != null && projChapters.some((c) => c.order === cur)
+        ? cur
+        : (projChapters[projChapters.length - 1]?.order ?? null),
+    );
+  }, [projChapters]);
+  const viewChapter = useMemo(
+    () => (viewOrder != null ? projChapters.find((c) => c.order === viewOrder) ?? null : null),
+    [projChapters, viewOrder],
+  );
+  /** 正文区显示什么：**本次会话刚产出的稿优先**（那是刚发生的事），否则读库里那一章 */
+  const shownText = prose ?? viewChapter?.content ?? null;
 
   return (
     // ★ 必须是 h-screen 而不是 h-full：本组件经 ProjectLayout 的 early return 挂载，
@@ -760,26 +782,43 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
               <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))', letterSpacing: '0.06em' }}>
                 正文
               </span>
-              {latestChapter && (
-                <span className="text-[11px] truncate" style={{ color: 'hsl(var(--muted-foreground) / 0.75)' }}>
-                  · {latestChapter.title}
-                </span>
+              {/* 章节切换：AI 模式没有章节编辑器，这里就是唯一的「读已写章节」入口 */}
+              {projChapters.length > 0 && (
+                <select
+                  value={viewOrder ?? ''}
+                  onChange={(ev) => {
+                    setViewOrder(Number(ev.target.value));
+                    setProse(null); // 切章看库内容，不再占着本次会话的稿
+                  }}
+                  className="text-[11px] bg-transparent outline-none cursor-pointer truncate"
+                  style={{ color: 'hsl(var(--muted-foreground) / 0.85)', maxWidth: 170, border: 'none' }}
+                  title="切换查看已交付的章节"
+                >
+                  {projChapters.map((c) => (
+                    <option key={c.id} value={c.order}>
+                      第 {c.order} 章 · {c.wordCount ?? 0} 字
+                    </option>
+                  ))}
+                </select>
               )}
-              {prose && revision > 0 && (
+              {prose ? (
                 <span className="ml-auto text-[10px]" style={{ color: 'hsl(var(--state-running))' }}>
-                  第 {revision} 次重写
+                  {revision > 0 ? `第 ${revision} 次重写` : '本次生成'}
                 </span>
-              )}
+              ) : viewChapter ? (
+                <span className="ml-auto text-[10px]" style={{ color: 'hsl(var(--muted-foreground) / 0.7)' }}>
+                  已入库 · {viewChapter.wordCount ?? 0} 字
+                </span>
+              ) : null}
             </div>
 
             <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
-              {prose ? (
-                // 正文落点：写作官产出后逐字出现在这里
+              {shownText ? (
                 <div
                   className="font-serif whitespace-pre-wrap"
                   style={{ fontSize: 13.5, lineHeight: 1.9, color: 'hsl(var(--foreground))' }}
                 >
-                  {prose}
+                  {shownText}
                 </div>
               ) : (
                 <div className="min-h-full flex items-center justify-center">
@@ -795,11 +834,10 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                   ) : (
                     <div className="text-center px-4">
                       <div className="font-serif mb-2" style={{ fontSize: 14, color: 'hsl(var(--ink))' }}>
-                        等待正文流入
+                        这一章还没有正文
                       </div>
                       <p className="text-[11px] leading-[1.8]" style={{ color: 'hsl(var(--muted-foreground))' }}>
-                        讨论收敛出「本章结论」后，写作官会据此写出正文并出现在这里；
-                        同一份正文也会以卡片形式进左侧交流流。
+                        用上方下拉切到别的章节看看，或在左侧让智能体写这一章。
                       </p>
                     </div>
                   )}
