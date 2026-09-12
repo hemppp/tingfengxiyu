@@ -16,15 +16,17 @@ pnpm --filter @novel/server exec vitest run   # 当前基线：7 文件 / 75 用
 
 三件必须先知道的事：
 
-1. **所有 AI 写作代码都还没提交。** 仓库只有 2 个 commit（基线 + 一个测试关卡），工作区有 **35 个已改 + 16 个未跟踪**文件，`apps/plugins/local/novel.autowrite/` 整个目录都是未跟踪的。**动手前先建分支/提交基线**，否则一次误操作就能丢掉这块的全部工作。
-2. **没有任何真机验证。** type-check 与单测只覆盖纯逻辑与落库器；模型输出的质量、字数、实体抽取准确度**全部未经实测**（最近一次实测是 2026-09-12 上午，只覆盖修复前的状态，见 `docs/ai-writing-test-report.md`）。
+1. **基线已提交**（2026-09-12，`4a0cb93`，87 个文件）。此前一直悬在工作区的「35 改 + 16 未跟踪」（`novel.autowrite` 整目录）现已入库，改坏了可以回到这一刻。
+2. **已经跑过三轮真机验证**（2026-09-12，见 `docs/ai-writing-test-report.md` 的第二轮）：P1（实体不落库）/ P2（字数不达标）确认修复，三道门与「上一章全文注入」实测通过。**但每次改完仍必须重跑** —— 模型输出是链路的一部分，type-check 与单测证明不了它真能用（见 §3）。
 3. **这个模块有两条并行链路，改之前先确认你改的是哪条**（见 §2）。看错链路是这里最容易犯的错。
 
 ---
 
 ## 1. 一句话现状
 
-`novel.autowrite` 插件实现了「**多角色讨论 → 收敛本章结论 → 写作官落笔 → 意图复核（打回重写）→ 交付写库 → 实体沉淀**」的单章闭环，治理阀门（意图门、覆盖保护）在 08-12 实测中真实生效；主要缺口是**只有单章**（无连续多章/水车记忆）、**缺校对门与润色门**、以及**旧的批次流水线已成死代码**。
+`novel.autowrite` 插件实现了「**多角色讨论 → 收敛本章结论 → 写作官落笔 → 篇幅自检 → 意图门（打回重写）→ 校对门 → 润色门 → 交付写库 → 实体沉淀**」的**单章**闭环。三道门与实体沉淀均已真机验证（2026-09-12）。
+
+主要缺口只剩**「只有单章」**：没有连续多章、没有灌溉水车记忆 —— 当前的多章连续性靠「上一章全文强制注入 + 实体沉淀」两件事撑着（实测第 2 章能引用第 1 章的正文细节与伏笔状态）。另外旧的批次流水线仍是死代码。
 
 ---
 
@@ -44,9 +46,9 @@ pnpm --filter @novel/server exec vitest run   # 当前基线：7 文件 / 75 用
 
 **关键事实：AI 写作模式（`project.mode === 'auto'`）的工作台只连讨论链路。** 8 个 `autowrite_*` 工具在自动写作模式下**根本调不到**（讨论链路里子代理的工具白名单只有 `list_chapters` / `read_chapter`）；它们只可能被**手写模式**的 AI 对话（ChatPanel 开工具）调起，而手写模式又看不到自动写作工作台。
 
-**结论**：批次流水线（`server/autowrite/*`、`FlowStore`、`/batches` 路由、状态面板、`GET /api/plugins/autowrite/batches`）目前基本是**死代码**，只有 `tool-deliver` 的覆写快照能力在讨论链路里被复用（实体沉淀也挂进了它的交付路径，见 §4）。
+**结论**：批次流水线（`server/autowrite/*`、`FlowStore`、`/batches` 路由、状态面板、`GET /api/plugins/autowrite/batches`）目前是**死代码** —— 讨论链路**完全不复用**它：编排器自己实现了交付（`orchestrator.ts` 的 `deliver()`）与实体沉淀，`tool-deliver` 的覆写快照**并未被调用**（讨论链路直接拒绝覆盖已有正文，见 §6-4）。
 
-→ **接手第一件事应该是在这两条里选一条**：要么把批次能力接回讨论链路（做连续多章），要么正式废弃并在文档/UI 里清掉（含 `AutoWriteWorkbench` 底部硬编码的「批次 0 / 0」）。
+→ **接手第一件事是在这两条里选一条**：要么把批次能力接回讨论链路（做连续多章），要么正式废弃并在文档/UI 里清掉。**2026-09-12 已清掉 UI 侧的误导**（删了「批次 0/0」与旧话术，两处入口加了废弃标注），只剩「要不要物理删代码」，见 §5 的 P0-1。
 
 ---
 
@@ -54,7 +56,15 @@ pnpm --filter @novel/server exec vitest run   # 当前基线：7 文件 / 75 用
 
 type-check 和单测**不能**证明这个模块能用 —— 模型输出是链路的一部分。真实的验收方式是：**新建临时账号 + `mode: 'auto'` 项目，直接消费 SSE 事件流，然后查项目库**。
 
-`docs/ai-writing-test-report.md` 里有完整的实测方法（含耗时、调用次数、逐步事件、落库核验），照抄即可。要点：
+**已经脚本化了，直接用**（server 必须先起、且用 Node 24）：
+
+```bash
+node scripts/verify-autowrite-session.mjs 2                       # 跑 2 章
+node scripts/verify-autowrite-cleanup.mjs <username> <projectId>  # 参数由上一个脚本打印
+```
+
+脚本自己注册临时账号（继承管理员的 AI 配置）、建 auto 项目、逐章消费 SSE 并打印事件（含 `gate`），
+最后列出项目库各表行数。实测结果与手工方法（耗时、调用次数、逐步事件）见 `docs/ai-writing-test-report.md`。要点：
 
 - 用 Node 脚本 POST `/api/plugins/autowrite/session`，逐条记 `data:` 行（事件类型：`phase` / `turn` / `conclusion` / `draft` / `review` / `delivered` / `deliver_blocked` / `entities` / `error` / `done`）。
 - 关键验证点，按重要性：
@@ -77,11 +87,26 @@ type-check 和单测**不能**证明这个模块能用 —— 模型输出是链
 - **覆写保护**：目标章已有正文时**不自动覆盖**，emit `deliver_blocked` 交人工（实测有效）。
 - **篇幅自检**（2026-09-12 新增）：初稿低于 2500 字先补写一次（取更长一稿），补写在意图门**之前**，保证过门的就是最终稿。
 - **实体沉淀**（2026-09-12 新增，`framework/entity-sink.ts`）：交付成功后一次 `ctx.ai.complete({json:true})` 抽取，保守 upsert 进 `characters/items/locations/foreshadows/story_events`。
+- **三道门齐了**（2026-09-12 新增，架构 §5 的设计至此全部落地）：
+  · **意图门**（`discuss/roles.ts` 的 `ROLE_REVIEWER`）—— 点状：写出来的是不是我们商量的那一章。
+    判定范围**只含结论里的硬约束**（节拍与落点 / 关键物 / 禁项 / 结束状态 / 角色状态变化）；
+    「表演方式」（动作怎么做、措辞怎么选）不构成打回理由 —— 这条是实测教训换来的，见 §6-3。
+  · **校对门**（`framework/gates.ts:runConsistencyGate`）—— 面状：全文 × 设定库。
+    **只给一次定向修订**；修订后仍有冲突也**照常交付**并把冲突清单交人工 —— 宁可带一处标注，也不让整章作废。
+  · **润色门**（`framework/gates.ts:runPolishGate`）—— 评分（软门，通过线 7/10），**从不阻塞交付**。
+- **上一章全文强制注入**（2026-09-12 新增，`context-resolver.ts:resolvePreviousChapter`）：
+  架构 §7 列为「不注入必然写错」的一类。超 6000 字保留结尾（衔接点在那里）；
+  没有已交付章节时**明确告知「这是第一章」**，不给模型留幻想前情的余地。
+  实测：第 2 章的设定管家能引用第 1 章的正文细节（「手机是第七节车厢专座上捡的」）。
 
 **前端（`apps/web/src/components/layout/`）**
 
 - `AutoWriteWorkbench`：三栏工作台（左交流流 / 中正文+仪表盘 / 右实体栏），双分隔条可拖、两栏可收，中间 340px 保底。
-- `WorldStateBoard`：本章计划卡（阶段推进 + 结构化的本章结论）+「最近变动」流水。
+  footer 显示「单章会话 · 库中 N 章」（原先硬编码的「批次 0 / 0」已删）。
+- `WorldStateBoard`：本章计划卡（6 段阶段推进 + 结构化的本章结论）+「最近变动」流水。
+  **阶段状态由工作台按收到的事件累积**（收到 `conclusion` 即讨论完成、收到 `gate` 即该门完成），
+  不解析 `phase` 文案 —— 文案会改，事件契约不会。
+  「最近变动」现在读**三类**：`characters.states`（角色变化，此前漏读）/ `items.states` + holders / `foreshadows.payoffChapter`。
 - `EntityRail`：右栏存量视图（知识库 / 地点 / 物品 / 伏笔）。
 - 交付后收到 `entities` 事件 → 触发宿主 `reload()` 刷新 store，仪表盘与实体栏自动亮起。
 
@@ -95,34 +120,31 @@ type-check 和单测**不能**证明这个模块能用 —— 模型输出是链
 
 ## 5. 未完成清单
 
-### P0 —— 不做会持续误导后来者
+### P0 —— 只剩一项决策
 
 | # | 事项 | 现状 / 下手位置 |
 |---|---|---|
-| 1 | **两条链路二选一** | 见 §2。批次流水线已成死代码，UI 里还有硬编码「批次 0 / 0」（`AutoWriteWorkbench.tsx` footer）。要么接回、要么废弃 |
-| 2 | **P1/P2 修复未经真机验证** | 按 §3 跑一轮。若字数仍不达标，见 §6 的 maxTokens 那条 |
-| 3 | **提交基线** | 35 改 + 16 未跟踪全在工作区；建议先提交再改 |
+| 1 | **旧批次流水线怎么处置** | UI 侧的误导**已清**（「批次 0/0」删了、旧话术改了、`autowrite/index.ts` 与 `routes.ts` 顶部加了废弃标注）。剩下的是**要不要物理删除** `server/autowrite/*`（8 工具）+ `FlowStore` + `/batches` 三条路由。倾向删；但 `/batches` 的审计台账能力可能值得先迁到讨论链路。**这是需要拍板的决策，不是技术问题** |
 
-### P1 —— 功能缺口（架构文档里承诺过）
+### P1 —— 功能缺口
 
 | # | 事项 | 说明 |
 |---|---|---|
-| 4 | **校对门 / 润色门未接进讨论链路** | `docs/ai-writing-architecture.md` §5 承诺三道门，讨论链路只落了**意图门**。现成的 `autowrite/tool-review.ts`（`check_draft` / `polish_draft`）属旧流水线，需改成对讨论链路的稿子生效 |
-| 5 | **水车记忆（三斗 + 三层时间戳）未实现** | §6 设计（`chapterNo` / `ingestedAt` / `storyTime`）grep 零命中。当前连续性只靠「本章结论 + 章节 summary 列表」，**多章长篇会露馅** |
-| 6 | **强制注入清单未完整落地** | §7 要求强制注入「上一章全文、本章细纲、出场角色卡、未回收伏笔、已确立硬设定」。当前只注入了 digest 摘要，**不含上一章全文** |
-| 7 | **连续多章写作没有** | 一轮会话只处理一章，没有 cursor / 自动续写。原批次流水线有状态机但 UI 不连（P0-1） |
-| 8 | **正文非流式** | `draft` 事件整段到达，正文方块一次出现（不是逐字流）。`AutoWriteWorkbench.tsx:23` 那句「待接入：正文流式落点」的注释已过时，需修正或实现 |
-| 9 | **台账回放历史运行未做** | KV 里其实有 audit 数据（旧流水线写的），但没有回放 UI |
-| 10 | **角色变化不进「最近变动」** | `WorldStateBoard` 只读 `Item.states` + `Foreshadow.payoffChapter`。实体沉淀**已经**在写 `characters.states`，但前端不读，所以角色的状态变化看不见。改前端（读 characters.states）或补后端变更流水 |
+| 2 | **连续多章写作** | 一轮会话只处理一章，没有 cursor / 自动续写。现在做它比之前**有底气**了：上一章全文注入 + 实体沉淀已实测打通，缺的只是「谁来驱动下一章」 |
+| 3 | **水车记忆（三斗 + 三层时间戳）未实现** | §6 设计（`chapterNo` / `ingestedAt` / `storyTime`）grep 零命中。当前连续性靠「上一章全文 + 实体沉淀 + 章节摘要」，**到第 4–5 章之后可能露馅**（上一章之外的前情只剩摘要） |
+| 4 | **「本章细纲」没有对应物** | §7 的强制注入清单里，「上一章全文 / 出场角色卡 / 未回收伏笔 / 已确立硬设定」都已具备（后三者来自 digest），唯独**本章细纲**没有落盘物 —— 这一章写什么完全由讨论现场决定，没有可复用的细纲 |
+| 5 | **正文非流式** | `draft` 事件整段到达，正文方块一次出现（不是逐字流）。`AutoWriteWorkbench.tsx` 顶部「待接入：正文流式落点」那句注释**仍然有效** |
+| 6 | **台账回放历史运行未做** | KV 里其实有 audit 数据（旧流水线写的），但没有回放 UI。若 P0-1 决定删旧流水线，这条要一起处理 |
+| 7 | **两道门可能互相矛盾** | 复核官看「本章结论」、校对官看「设定库」，视角不同，实测出现过「意图门通过、校对门报冲突」。不是 bug，但同时为 false 时该怎么向作者交代**尚未设计** |
 
 ### P2 —— 历史债（与 AI 写作相邻）
 
 | # | 事项 | 说明 |
 |---|---|---|
-| 11 | 伏笔模块设计债 | `SnapshotManager` / `ConsistencyPanel` 仍用**未定义**的 `mc-*` 类；`EarmarkPanel.tsx`（398 行）与 `ForeshadowsPage.tsx` 是**无引用死代码**，已报告未删 |
-| 12 | 安全审计结论未逐条复核 | `security_best_practices_report.md`（2026-08-19）报了 1 条高危 RCE（`create_plugin` 让 LLM 生成 `serverCode` 运行时挂载，`apps/server/src/ai/tools/plugin-tools.ts:325` 仍在）+ 默认管理员口令 + 依赖漏洞。插件路由现已要求鉴权（测试断言 401），但**其余结论没有逐条确认** |
-| 13 | server 业务模块仍无单测 | 现有 7 个测试文件＝3 个 server 冒烟/迁移（`src/__tests__/`）+ 1 个旧框架单测（`flow-state.test.ts`）+ 我加的 2 个（`entity-sink.test.ts`、`roles.test.ts`）+ 1 个**从插件 node_modules 副本里跑到的** core `install.test.ts`。`apps/server/src/modules/` 的 20 个业务模块与 `guardian.ts` 的熔断状态机**全无测试保护**。附带清理：vitest 的 include 通配 `../plugins/local/novel.autowrite/**/*.test.ts` 会扫进 `node_modules`，建议补 `exclude` |
-| 14 | 杂项 | `apps/desktop` 是空壳（无 package.json，`pnpm -r` 只扫到 8/9）；仓库根有 `.tmp-p.json` / `.tmp-ck.txt` 等临时文件；测试账号残留（`autowrite_probe`、`uiver…`、`bverify…`） |
+| 8 | 伏笔模块设计债 | `SnapshotManager` / `ConsistencyPanel` 仍用**未定义**的 `mc-*` 类；`EarmarkPanel.tsx`（398 行）与 `ForeshadowsPage.tsx` 是**无引用死代码**，已报告未删 |
+| 9 | 安全审计结论未逐条复核 | `security_best_practices_report.md`（2026-08-19）报了 1 条高危 RCE（`create_plugin` 让 LLM 生成 `serverCode` 运行时挂载，`apps/server/src/ai/tools/plugin-tools.ts:325` 仍在）+ 默认管理员口令 + 依赖漏洞。插件路由现已要求鉴权（测试断言 401），但**其余结论没有逐条确认** |
+| 10 | server 业务模块仍无单测 | 当前基线 6 文件 / 49 用例（`src/__tests__/` 3 个冒烟与迁移 + 插件内 3 个纯逻辑）。`apps/server/src/modules/` 的 20 个业务模块与 `guardian.ts` 的熔断状态机**全无测试保护**。✅ 附带清理已完成：vitest 通配扫进插件 `node_modules` 的问题已修（曾让整个套件卡到超时） |
+| 11 | 杂项 | `apps/desktop` 是空壳（无 package.json，`pnpm -r` 只扫到 8/9）；仓库根有 `.tmp-p.json` / `.tmp-ck.txt` 等临时文件；测试账号残留（`autowrite_probe`、`uiver…`、`bverify…`） |
 
 ---
 
@@ -163,6 +185,17 @@ type-check 和单测**不能**证明这个模块能用 —— 模型输出是链
 19. **Windows + tsx watch**：kill 不干净会留孤儿进程占 3774，需 `taskkill`。
 20. **vite 与 esbuild 版本不能齐步升**：vite 6.4 的依赖预构建与 esbuild 0.28 不兼容，故 vite 侧 pin 0.24（`pnpm-workspace.yaml` 的 overrides 有详解）。
 
+**治理（2026-09-12 实测新增）**
+
+21. **意图门会「抠细节」**：复核官容易抠「同一件事的表演方式」—— 动作是主动还是被动、做了几次、措辞怎么选。这类东西结论里根本没规定，却足以连打两次回、且第二次改稿往往更远，最终整章作废（实测 3333 字全废）。已把判定范围写进 `ROLE_REVIEWER`：**只判结论里的硬约束**。再遇到「明明没写错却过不了门」，先看是不是这类。
+22. **两道门不能都设成「能拦死」**：校对门若也无限打回，等于把同一个循环跑两遍。现在的取向是——意图门最多打回 2 次（方向问题值得重写），校对门只给 **1 次**定向修订、之后带冲突交付（事实问题交人工）。**「宁可带标注交付，也不要整章作废」**是这里的设计原则。
+23. **改动越大越要跑真机**：type-check 全绿 + 单测全过之后，实测仍抓出三处问题（意图门的细节拉锯、校对门发现的真冲突、初稿只有 1384 字）。验收方式只有一种，见 §3。
+
+**环境（Windows 本机）**
+
+24. **Git Bash 下 `taskkill` 要关掉路径转换**：`taskkill //PID <pid> //F` 会报「无效参数」，得用 `MSYS_NO_PATHCONV=1 taskkill /PID <pid> /F`。重启 server 前先用 `netstat -ano | grep :3774` 拿 PID。
+25. **vitest 的 `include` 通配会扫进 `node_modules`**：插件目录下有 pnpm hoisted 的副本，`../plugins/local/novel.autowrite/**/*.test.ts` 会把里面第三方的测试也收进来 —— 实测把 server 套件直接拖到超时。已收窄 include 并补 `exclude`（`apps/server/vitest.config.ts`），修后 10.1s / 6 文件 / 49 用例。
+
 ---
 
 ## 7. 关键文件地图
@@ -180,7 +213,8 @@ apps/plugins/local/novel.autowrite/
 │   ├── framework/
 │   │   ├── entity-sink.ts               # ★ 实体沉淀（抽取 + 保守 upsert 五表）
 │   │   ├── entity-sink.test.ts          #   14 例：去重 / 幂等 / 伏笔三分支 / 脏数据
-│   │   ├── context-resolver.ts          #   项目库→digest（供数与幻觉防治）
+│   │   ├── context-resolver.ts          #   项目库→digest（供数与幻觉防治）+ 上一章全文
+│   │   ├── gates.ts                     # ★ 校对门 / 润色门（架构 §5 的后两道门）
 │   │   ├── flow-store.ts / flow-state.ts#   旧流水线的 KV 状态机（现役链路不用）
 │   │   └── types.ts
 │   └── autowrite/                       # 旧批次流水线（8 工具；见 §2）
@@ -211,9 +245,9 @@ apps/server/src/plugin/migrations.ts     # 插件正式表迁移通道
 
 ## 8. 未决决策
 
-1. **两条链路留哪条**（最优先，决定后面所有事）—— 倾向：废弃批次流水线，把「连续多章」做成讨论链路的循环，把 `FlowStore` 的审计台账能力迁过来复用。
-2. **水车记忆做不做** —— 架构 §6 设计了「固定三斗 + 三层时间戳」，但 §6.2 自己也承认「转折的后果本该由设定库承载」。实体沉淀落地后，「靠设定库承载连续性」已经走了第一步；水车可能只需要「上一章全文常驻」这一半。
-3. **意图门之后要不要再补校验** —— 若真机验证发现字数仍不达标，下一步是给写作官做「生成→自数→续写」的多轮，还是再加一道独立门。
+1. **旧批次流水线删不删**（原「两条链路留哪条」，2026-09-12 已收敛到这一步）—— UI 侧的误导已清、批次数据源已不再被读，只剩「要不要物理删除 `server/autowrite/*` + `FlowStore` + `/batches` 三条路由」。倾向删；若想保留 `FlowStore` 的审计台账能力，得先把它迁到讨论链路（这也决定 P1-6「台账回放」怎么做）。
+2. **水车记忆做不做**（现在只剩一半问题）—— 架构 §6 设计「固定三斗 + 三层时间戳」。实体沉淀 + **上一章全文强制注入**已落地，§7 要的「常驻」其实已经做到 1 斗（上一章）。所以问题变成：**要不要把常驻扩到 3 斗**（代价是每轮多带约 2 章全文 × 每章 10+ 次模型调用），以及 `storyTime`（故事内时间）要不要单独维护。
+3. **两道门互相矛盾时怎么呈现**（原「意图门之后要不要再补校验」，已由三道门落地解决）—— 实测出现过「意图门通过、校对门报冲突」，两者都没错（视角不同）。当前是各推一条交流流消息，靠人自己看懂；是否需要一个合并的「本章验收结论」尚未设计。
 4. **实体抽取的粒度** —— 现在是「一次调用抽全五类」。若发现某类噪声大（尤其 `events` 与 `locations`），可拆成按类调用或加置信度阈值。
 5. **收敛是否每次都要用户点头** —— 架构 §4.3 / §10.3 提过，当前是自动收敛、有异议才体现在结论的「待定」栏。
 
@@ -225,7 +259,7 @@ apps/server/src/plugin/migrations.ts     # 插件正式表迁移通道
 |---|---|
 | **本文** | **现状 + 缺口 + 坑（接手先读这个）** |
 | `docs/ai-writing-architecture.md` | 完整架构设计（双框架/三栏/智能体阵容/三道门/水车记忆）。§8 有「设计→代码」落地状态表，§10 未决项 |
-| `docs/ai-writing-test-report.md` | 2026-09-12 上午的真机实测报告（P1/P2 就是它发现的）。**注意：它描述的是修复前的状态**，修复前的所有验证方法仍然有效 |
+| `docs/ai-writing-test-report.md` | **真机实测报告（两轮）**。第一轮（上午）发现了 P1/P2；第二轮（下午）验证修复 + 三道门 + 上一章全文注入，并记录了跑挂的那次及原因。要复现验证照抄它即可 |
 | `docs/autowrite-plugin-framework.md` | 插件框架设计（manifest / 目录 / FlowSpec / KV key 约定 / 安全边界 / 验收锚点） |
 | `docs/plugin-architecture.md` · `docs/plugins.md` · `docs/plugin-standard.md` | 插件体系的架构 / 开发指南 / 标准 |
 | `security_best_practices_report.md` | 2026-08-19 安全审计（含未复核的高危项） |

@@ -6,7 +6,9 @@
 //   讨论 → 收敛 → 写作 → 复核 → 交付，核心产物是「本章结论」而不是批次。
 //
 // 现在这张卡以当前章为中心：
-//   上半 阶段推进（讨论 / 写作 / 复核 / 交付）
+//   上半 阶段推进（讨论 / 写作 / 意图门 / 校对门 / 润色门 / 交付）
+//        —— 状态由前端**按收到的事件累积**（收到 conclusion 即讨论完成、收到 gate 即该门完成），
+//           不解析 phase 文案：文案会改，事件契约不会。
 //   下半 本章结论（讨论的产物 —— 也是意图复核的对照物）
 //
 // 结论文本由定稿官按固定字段输出，这里做**容错解析**：
@@ -16,14 +18,16 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, ListOrdered } from 'lucide-react';
 
-export type StageKey = 'discuss' | 'write' | 'review' | 'deliver';
+export type StageKey = 'discuss' | 'write' | 'review' | 'check' | 'polish' | 'deliver';
 export type StageState = 'idle' | 'running' | 'done' | 'blocked';
 
 const STAGES: ReadonlyArray<{ key: StageKey; label: string; hint: string }> = [
-  { key: 'discuss', label: '讨论', hint: '设计智能体来回讨论并收敛' },
-  { key: 'write', label: '写作', hint: '写作官据结论出稿' },
-  { key: 'review', label: '复核', hint: '意图门：对照结论查有无落实' },
-  { key: 'deliver', label: '交付', hint: '写入章节并打快照' },
+  { key: 'discuss', label: '讨论', hint: '设计智能体来回讨论并收敛出本章结论' },
+  { key: 'write', label: '写作', hint: '写作官据结论出稿（目标 3000 字，不足 2500 会先补写）' },
+  { key: 'review', label: '意图门', hint: '对照本章结论查有无落实；打回上限 2 次' },
+  { key: 'check', label: '校对门', hint: '全文对照设定库查冲突；给一次定向修订后不拦交付' },
+  { key: 'polish', label: '润色门', hint: '质量评分（软门，只评分不拦交付）' },
+  { key: 'deliver', label: '交付', hint: '写入章节；该章已有正文时按治理原则不自动覆盖' },
 ];
 
 /** 定稿官约定的字段名 —— 只有认得出的字段才做结构化 */

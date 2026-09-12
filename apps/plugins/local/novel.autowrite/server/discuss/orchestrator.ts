@@ -24,8 +24,9 @@ import {
   DESIGN_ROLES, CONVENER_ROLE, ROLE_WRITER, ROLE_REVIEWER,
   WRITER_TARGET_CHARS, WRITER_MIN_CHARS, type DesignRole,
 } from './roles.js';
-import { resolveSettingsDigest, type SettingsDigest } from '../framework/context-resolver.js';
+import { resolveSettingsDigest, resolvePreviousChapter, type SettingsDigest } from '../framework/context-resolver.js';
 import { persistChapterEntities } from '../framework/entity-sink.js';
+import { runConsistencyGate, runPolishGate, POLISH_PASS_SCORE } from '../framework/gates.js';
 import { WRITER_MAX_TOKENS } from '../autowrite/helpers.js';
 import { schema, eq, and, isNull, getProjectDb, type DrizzleDb } from '@novel/db';
 import { randomUUID } from 'node:crypto';
@@ -44,6 +45,13 @@ export type SessionEvent =
   | { type: 'conclusion'; text: string }
   | { type: 'draft'; text: string; revision: number }
   | { type: 'review'; text: string; attempt: number; passed: boolean }
+  /**
+   * 方案 §5 的三道门：意图门用 review 事件，校对门 / 润色门用本事件。
+   *   check  —— 硬门（全文 × 设定库一致性）：passed=false 时 detail 是冲突清单；
+   *             它只允许一次定向修订，仍未消除也**不阻塞交付**（随交付交人工）。
+   *   polish —— 软门（质量评分）：**从不阻塞**，passed 表示是否达到 POLISH_PASS_SCORE。
+   */
+  | { type: 'gate'; name: 'check' | 'polish'; passed: boolean; detail: string; score?: number }
   | { type: 'delivered'; order: number; title: string; wordCount: number; created: boolean }
   | { type: 'deliver_blocked'; order: number; title: string; reason: string }
   /** 实体沉淀结果：本章交付后写入项目库的角色/物品/地点/伏笔条数 */
@@ -240,12 +248,34 @@ export async function runDiscussion(
     ? factBlock.slice(0, MAX_FACT_CHARS) + '\n…（项目数据过长，此处已截断；需要细节请用工具查）'
     : factBlock;
 
+  // ★ 强制注入（架构 §7）：**上一章全文**。
+  //   只给现状摘要时，模型知道「发生了什么」，却不知道「上一章是怎么写的」——
+  //   文风、语气、结尾那一刻的处境全靠猜，连着读就会断层。§7 把它列为
+  //   「不注入必然写错、不能交给自主判断」的一类（此前只注入了 digest 摘要）。
+  //   没有已交付章节时**明确说明**，避免模型凭类型套路幻想前情。
+  let prevBlock = '';
+  try {
+    const prev = await resolvePreviousChapter(ctx, projectId, chapterOrder);
+    prevBlock = prev
+      ? [
+          `【上一章全文（第 ${prev.order} 章《${prev.title}》）】`,
+          '以下是上一章已交付的正文。**文风与衔接必须与它连续**：接着它的结尾往下写，',
+          '不要复述它已经写过的内容，也不要换一种语气。',
+          prev.content,
+        ].join('\n')
+      : '【上一章全文】本项目还没有已交付的章节 —— 这是第一章，直接从开局写起，不要假设前情。';
+  } catch (e) {
+    console.warn('[discuss] 读取上一章全文失败（按无前文处理）:', e);
+  }
+
   const header = [
     '【作者要求】',
     message,
     chapterOrder ? `（针对第 ${chapterOrder} 章）` : '',
     '',
     facts,
+    '',
+    prevBlock,
     '',
   ]
     .filter(Boolean)
@@ -390,8 +420,82 @@ export async function runDiscussion(
       emit({ type: 'draft', text: currentDraft, revision: attempt });
     }
     if (!approved) {
-      emit({ type: 'phase', label: '未通过意图门，本章不交付（可在对话里调整后重跑）' });
+      // 不交付 ≠ 白跑：最终稿已经通过 draft 事件送到前端（右栏正文方块），
+      // 作者可以自行取用。这里把话说清楚，别让人以为整轮浪费了。
+      emit({
+        type: 'phase',
+        label: `未通过意图门（${MAX_REVISIONS} 次打回），本章不自动入库 —— 最终稿已送到上方正文方块，可复制到编辑器手动保存`,
+      });
     } else {
+      /** 目标章号：后面两道门与交付都要用（deliver 内部会再算一次，规则相同） */
+      const targetOrder = chapterOrder ?? parseChapterOrder(message) ?? 0;
+
+      // ——— 校对门（硬门 · 全文 × 设定库）———
+      // 与意图门的分工：意图门是「答应的事做了吗」（点，对照本章结论），
+      // 校对门是「有没有说错话」（面，全文扫描设定库）。
+      // 治理上刻意只给它**一次定向修订**：第二个打回循环会引来第三、第四个，
+      // 而两次打回后整章作废的代价（实测 2026-09-12：3333 字全废）远大于残留一处小冲突。
+      emit({ type: 'phase', label: '校对门：全文对照设定库…' });
+      let gate = await runConsistencyGate(ctx, { order: targetOrder, draft: currentDraft, digest, userId });
+      if (gate) {
+        emit({
+          type: 'gate',
+          name: 'check',
+          passed: gate.pass,
+          detail: gate.pass ? '未发现与设定库冲突' : (gate.conflicts.join('；') || '未给出具体冲突'),
+        });
+      }
+      if (gate && !gate.pass) {
+        emit({ type: 'phase', label: `校对门发现 ${gate.conflicts.length || 1} 处冲突，写作官定向修订中…` });
+        try {
+          const fixed = await speak(
+            ROLE_WRITER,
+            '【本轮任务】校对官把正文与设定库逐条比对，发现下列冲突，请**定向修正**：\n'
+            + (gate.conflicts.map((c, i) => `${i + 1}. ${c}`).join('\n') || '（校对官未列出具体条目）')
+            + (gate.instructions ? `\n校对官的修正指令：${gate.instructions}` : '')
+            + '\n\n只改涉及处，不要重写全章；直接输出修正后的**完整正文**。'
+            + `篇幅不得少于 ${WRITER_MIN_CHARS} 字。`,
+            { maxTokens: WRITER_MAX_TOKENS },
+          );
+          if (fixed.trim()) currentDraft = fixed;
+          emit({ type: 'draft', text: currentDraft, revision: MAX_REVISIONS + 1 });
+          const recheck = await runConsistencyGate(ctx, { order: targetOrder, draft: currentDraft, digest, userId });
+          if (recheck) {
+            emit({
+              type: 'gate',
+              name: 'check',
+              passed: recheck.pass,
+              detail: recheck.pass
+                ? '定向修订后冲突已消除'
+                : `定向修订后仍有冲突：${recheck.conflicts.join('；')}`,
+            });
+            gate = recheck;
+          }
+        } catch (e) {
+          console.warn('[discuss] 校对门定向修订失败，按原稿继续:', e);
+        }
+      }
+      if (gate && !gate.pass) {
+        // 不阻塞：宁可带着一处标注交付，也不要让整章作废
+        emit({
+          type: 'phase',
+          label: `校对门仍有 ${gate.conflicts.length || 1} 处冲突未消除 —— 不拦交付，请在成稿里人工确认`,
+        });
+      }
+
+      // ——— 润色门（软门 · 评分）——从不阻塞交付 ———
+      emit({ type: 'phase', label: '润色门：质量评分中…' });
+      const polish = await runPolishGate(ctx, { order: targetOrder, draft: currentDraft, userId });
+      if (polish) {
+        emit({
+          type: 'gate',
+          name: 'polish',
+          passed: polish.score >= POLISH_PASS_SCORE,
+          score: polish.score,
+          detail: polish.comments || '（无评语）',
+        });
+      }
+
       // 只有过了意图门才落库 —— 别把没过门的东西写进章节
       emit({ type: 'phase', label: '交付中…' });
       const delivered = await deliver(ctx, { projectId, message, order: chapterOrder, draft: currentDraft }, emit);

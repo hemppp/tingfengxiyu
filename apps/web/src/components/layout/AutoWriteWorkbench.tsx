@@ -10,7 +10,7 @@
 //   │  交流流      │   计划 / 变动 / 伏笔   │  宣纸信笺    │
 //   │  输入框      │   物品 / 角色 / 地点   │             │
 //   ├────────────┴──────────────────────┴─────────────┤
-//   │ 底：花名册 + 批次总控                              │
+//   │ 底：花名册 + 会话状态                            │
 //   └──────────────────────────────────────────────────┘
 //   左右两栏均可拖分隔条调宽窄，也可各自整栏收起。
 //
@@ -31,6 +31,7 @@ import { nanoid } from 'nanoid';
 import type { Project } from '@novel/shared';
 import { useChapterStore } from '@/stores';
 import { WorldStateBoard } from '@/components/layout/WorldStateBoard';
+import type { StageKey, StageState } from '@/components/layout/WorkbenchPlan';
 import { EntityRail } from '@/components/layout/EntityRail';
 import { runSession, type SessionEvent } from '@/services/ai/autowriteSession';
 
@@ -138,6 +139,11 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
   const [conclusion, setConclusion] = useState<string | null>(null);
   /** 写作官产出的正文 —— 落在中上方的正文方块里（命名避开输入框的 `draft`） */
   const [prose, setProse] = useState<string | null>(null);
+  /**
+   * 阶段推进（讨论 / 写作 / 意图门 / 校对门 / 润色门 / 交付）——
+   * 按**收到的事件累积**，不解析 phase 文案（文案会改，事件契约不会）。
+   */
+  const [stages, setStages] = useState<Partial<Record<StageKey, StageState>>>({});
   /** 当前正文是第几稿：0 = 初稿，≥1 = 被意图门打回后的第 N 次重写 */
   const [revision, setRevision] = useState(0);
 
@@ -232,6 +238,8 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
     abortRef.current = ac;
     setBusy(true);
     setPhase('正在召集智能体…');
+    // 新一轮会话：阶段推进从「讨论」重来
+    setStages({ discuss: 'running' });
 
     const push = (turn: Omit<ChatTurn, 'id' | 'time'>) => {
       setTurns((prev) => [...prev, { ...turn, id: nanoid(), time: nowHHMM() }]);
@@ -250,6 +258,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
         } else if (e.type === 'conclusion') {
           // 结论是契约：既进交流流（留痕），也进中栏计划卡（供后续写作/复核对照）
           setConclusion(e.text);
+          setStages((s) => ({ ...s, discuss: 'done', write: 'running' }));
           push({
             from: 'conclusion', name: '本章结论', color: 'hsl(var(--agent-convener))', short: '结',
             text: e.text, kind: 'conclusion',
@@ -258,6 +267,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
           // 正文落点：同一份文本既作为写作官的发言进交流流，也进中上正文方块
           setProse(e.text);
           setRevision(e.revision);
+          setStages((s) => ({ ...s, write: 'done', review: 'running' }));
         } else if (e.type === 'review') {
           // 复核结论进交流流留痕；tone 让打回一眼能认出来
           push({
@@ -266,18 +276,41 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
             meta: e.passed ? '通过' : `第 ${e.attempt} 次打回`,
             tone: e.passed ? 'ok' : 'warn',
           });
+          // 通过 → 意图门完成、进入校对门；打回 → 停在意图门（写作官正在重写）
+          setStages((s) => (e.passed ? { ...s, review: 'done', check: 'running' } : { ...s, review: 'running' }));
+        } else if (e.type === 'gate') {
+          // 校对门 / 润色门（三道门里的后两道）—— 与意图门一样，结论进交流流留痕。
+          // 注意：校对门 passed=false **不代表没交付**（它只做一次定向修订，之后照样交付），
+          // 所以 meta 里写明「不拦交付」，别让作者误以为整章废了。
+          const isCheck = e.name === 'check';
+          push({
+            from: 'gate',
+            name: isCheck ? '校对门' : '润色门',
+            color: isCheck ? 'hsl(var(--state-blocked))' : 'hsl(var(--entity-foreshadow))',
+            short: isCheck ? '校' : '润',
+            text: !isCheck && typeof e.score === 'number' ? `${e.score}/10 · ${e.detail}` : e.detail,
+            meta: e.passed ? '通过' : (isCheck ? '有冲突（不拦交付）' : '低于通过线'),
+            tone: e.passed ? 'ok' : 'warn',
+          });
+          // 校对门做完 → 进润色门；润色门做完 → 进交付。两道门都不阻塞流程，
+          // 所以状态只区分「完成 / 有冲突」，不表示流程中断。
+          setStages((s) => (isCheck
+            ? { ...s, check: e.passed ? 'done' : 'blocked', polish: 'running' }
+            : { ...s, polish: e.passed ? 'done' : 'blocked', deliver: 'running' }));
         } else if (e.type === 'delivered') {
           push({
             from: 'delivered', name: '交付', color: '#0F6E56', short: '✓',
             text: `${e.created ? '已新建并写入' : '已写入'} ${e.title}（${e.wordCount} 字）`,
             tone: 'ok',
           });
+          setStages((s) => ({ ...s, deliver: 'done' }));
         } else if (e.type === 'deliver_blocked') {
           push({
             from: 'deliver-blocked', name: '交付', color: '#A32D2D', short: '!',
             text: e.title ? `${e.title}：${e.reason}` : e.reason,
             tone: 'warn',
           });
+          setStages((s) => ({ ...s, deliver: 'blocked' }));
         } else if (e.type === 'entities') {
           // 实体已写进项目库 —— 回流一行让作者看得见「本章世界变了什么」
           push({
@@ -451,11 +484,11 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                         智能体就位
                       </div>
                       <p className="text-[11px] leading-[1.75]" style={{ color: 'hsl(var(--muted-foreground))' }}>
-                        对规划官说明要写什么（例如「把第 2 到第 4 章按大纲写出来」），
-                        它会把大纲拆成逐章细纲、开出批次。
+                        说清这一章要写什么，写明章号（例如「写第 2 章：陈默去公司查姐姐的行踪」）。
                         <br />
                         <span style={{ color: 'hsl(var(--muted-foreground) / 0.8)' }}>
-                          四位智能体的发言会按时间展开，随时可在下方插话打断。
+                          剧情设计师 / 角色设计师 / 设定管家会先来回讨论，定稿官收敛成本章结论，
+                          写作官据此落笔并过意图复核 —— 发言按时间展开，随时可在下方插话。
                         </span>
                       </p>
                     </div>
@@ -698,7 +731,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
           {/* 中下：数据面板（本章计划 + 最近变动）—— 从下方包住正文 */}
           <div className="flex-1 min-h-0">
             {project ? (
-              <WorldStateBoard projectId={project.id} conclusion={conclusion} running={busy} />
+              <WorldStateBoard projectId={project.id} conclusion={conclusion} running={busy} stages={stages} />
             ) : (
               <div className="text-[12px] text-center mt-6" style={{ color: 'hsl(var(--muted-foreground))' }}>
                 未加载项目
@@ -752,7 +785,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
         )}
       </div>
 
-      {/* ── 底：花名册 + 批次总控 ── */}
+      {/* ── 底：花名册 + 会话状态 ── */}
       <footer
         className="shrink-0 flex items-center gap-4 flex-wrap"
         style={{
@@ -775,8 +808,9 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
             </span>
           </span>
         ))}
+        {/* 会话状态：当前是单章会话（连续多章尚未实现），如实显示，别再摆一个恒为 0 的批次计数 */}
         <span className="ml-auto text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
-          批次 <span style={{ color: 'hsl(var(--foreground))' }}>0 / 0</span>
+          单章会话 · 库中 <span style={{ color: 'hsl(var(--foreground))' }}>{chapters.length}</span> 章
         </span>
       </footer>
     </div>

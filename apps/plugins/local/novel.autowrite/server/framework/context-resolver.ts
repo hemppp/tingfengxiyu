@@ -6,7 +6,7 @@
 // ============================================================
 
 import type { ServerPluginContext } from '@novel/core';
-import { schema, eq, and, isNull, asc, type DrizzleDb } from '@novel/db';
+import { schema, eq, and, isNull, asc, desc, lt, type DrizzleDb } from '@novel/db';
 
 /** 截断工具：超长字段收敛，保 digest 紧凑 */
 function cut(v: unknown, n: number): string {
@@ -120,4 +120,61 @@ export async function readChapterByOrder(
     .where(and(eq(schema.chapters.projectId, projectId), eq(schema.chapters.order, order), isNull(schema.chapters.deletedAt)))
     .limit(1);
   return rows[0];
+}
+
+/** 上一章全文的注入上限（字符数）—— 衔接最吃结尾，超限时保留结尾 */
+export const PREV_CHAPTER_MAX_CHARS = 6000;
+
+export interface PreviousChapter {
+  order: number;
+  title: string;
+  content: string;
+  /** 因超长被截断（只保留结尾） */
+  truncated: boolean;
+}
+
+/**
+ * 读取「上一章全文」—— 架构 §7 的强制注入项之一。
+ *
+ * 为什么必须**强制注入**而不是让 agent 自己去读：只给「第 N 章 · M 字 · 摘要」的清单时，
+ * 模型不知道上一章的文风、语气、结尾钩子的具体写法，所谓「接着写」会写成另一本书。
+ * 2026-09-12 实测：这是跨章连续性最缺的一块（此前只注入了 digest 摘要）。
+ *
+ * 取章规则（两处调用方语义不同，别混）：
+ *   · 传了 beforeOrder → 取 order **小于**它的最新一章（写第 3 章时给第 2 章）
+ *   · 没传 → 取库中最新一章（作者没指定章号时，「上一章」= 最后交付的那一章）
+ * 超长时保留**结尾**并标注 —— 结尾那一刻的处境才是衔接点。
+ */
+export async function resolvePreviousChapter(
+  ctx: ServerPluginContext,
+  projectId: string,
+  beforeOrder?: number,
+  maxChars: number = PREV_CHAPTER_MAX_CHARS,
+): Promise<PreviousChapter | null> {
+  const db = ctx.db.project(projectId) as DrizzleDb;
+  const scope = eq(schema.chapters.projectId, projectId);
+  const alive = isNull(schema.chapters.deletedAt);
+  const rows = await db
+    .select({ order: schema.chapters.order, title: schema.chapters.title, content: schema.chapters.content })
+    .from(schema.chapters)
+    .where(
+      beforeOrder != null
+        ? and(scope, alive, lt(schema.chapters.order, beforeOrder))
+        : and(scope, alive),
+    )
+    .orderBy(desc(schema.chapters.order))
+    .limit(1);
+
+  const row = rows[0];
+  const content = String(row?.content ?? '').trim();
+  if (!row || !content) return null;
+  if (content.length <= maxChars) {
+    return { order: row.order, title: String(row.title ?? ''), content, truncated: false };
+  }
+  return {
+    order: row.order,
+    title: String(row.title ?? ''),
+    content: `（上一章原文过长，此处只保留结尾 ${maxChars} 字）\n…${content.slice(-maxChars)}`,
+    truncated: true,
+  };
 }

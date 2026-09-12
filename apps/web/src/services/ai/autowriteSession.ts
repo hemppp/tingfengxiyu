@@ -33,6 +33,13 @@ export type SessionEvent =
   | { type: 'draft'; text: string; revision: number }
   /** 意图复核结论（对照本章结论验收） */
   | { type: 'review'; text: string; attempt: number; passed: boolean }
+  /**
+   * 校对门 / 润色门结论（见后端 framework/gates.ts）：
+   *   check  —— 硬门（全文 × 设定库）。passed=false 只做一次定向修订，之后仍会交付，
+   *             所以这里收到 false 不代表本章没交出去。
+   *   polish —— 软门评分（0–10，7 为通过线），从不阻塞交付。
+   */
+  | { type: 'gate'; name: 'check' | 'polish'; passed: boolean; detail: string; score?: number }
   /** 交付成功：正文已写入章节 */
   | { type: 'delivered'; order: number; title: string; wordCount: number; created: boolean }
   /** 交付被拦：多为「该章已有正文，不自动覆盖」，或「没认出章号」 */

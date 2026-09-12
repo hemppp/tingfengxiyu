@@ -10,17 +10,18 @@
 // 那边放并列的存量信息（知识库 / 地点 / 物品 / 伏笔）。
 //
 // 数据全部来自项目 store 与讨论会话，配色走语义变量。
-// 已知缺口：目前只有 Item 带 EntityState[]，所以「最近变动」实际只有物品状态与伏笔回收两类；
-//           角色 / 地点若要进同一张变动表，需要后端补变更流水。
+// 「最近变动」是**三类**实体状态的拉平流水：角色（characters.states，实体沉淀写入）、
+// 物品（items.states / holders，含持有流转）、伏笔（payoffChapter = 回收）。
 // ============================================================
 
 import { useMemo, type ReactNode } from 'react';
 import { Clock } from 'lucide-react';
-import type { Foreshadow, Item } from '@novel/shared';
-import { useForeshadowStore, useItemStore } from '@/stores';
-import { WorkbenchPlan } from '@/components/layout/WorkbenchPlan';
+import type { Character, Foreshadow, Item } from '@novel/shared';
+import { useCharacterStore, useForeshadowStore, useItemStore } from '@/stores';
+import { WorkbenchPlan, type StageKey, type StageState } from '@/components/layout/WorkbenchPlan';
 
 const COLORS = {
+  character: 'hsl(var(--entity-character))',
   item: 'hsl(var(--entity-item))',
   foreshadow: 'hsl(var(--entity-foreshadow))',
 } as const;
@@ -79,21 +80,31 @@ interface WorldStateBoardProps {
   conclusion?: string | null;
   /** 会话进行中（透传给计划卡） */
   running?: boolean;
+  /** 各阶段状态（由工作台按收到的事件累积，透传给计划卡） */
+  stages?: Partial<Record<StageKey, StageState>>;
 }
 
-export function WorldStateBoard({ projectId, conclusion, running }: WorldStateBoardProps) {
+export function WorldStateBoard({ projectId, conclusion, running, stages }: WorldStateBoardProps) {
   const items = useItemStore((s) => s.items);
   const foreshadows = useForeshadowStore((s) => s.foreshadows);
+  const characters = useCharacterStore((s) => s.characters);
 
   const pItems = useMemo(() => items.filter((i) => i.projectId === projectId) as Item[], [items, projectId]);
   const pFsh = useMemo(
     () => foreshadows.filter((f) => f.projectId === projectId) as Foreshadow[],
     [foreshadows, projectId],
   );
+  const pChars = useMemo(
+    () => characters.filter((c) => c.projectId === projectId) as Character[],
+    [characters, projectId],
+  );
 
   /** 全书最大章号：用来表达「距今多少章」 */
   const latestChapter = useMemo(() => {
     let max = 0;
+    for (const ch of pChars) {
+      for (const st of ch.states ?? []) if (st.chapter > max) max = st.chapter;
+    }
     for (const it of pItems) {
       for (const st of it.states ?? []) if (st.chapter > max) max = st.chapter;
       for (const h of it.holders ?? []) if (h.chapter > max) max = h.chapter;
@@ -104,11 +115,25 @@ export function WorldStateBoard({ projectId, conclusion, running }: WorldStateBo
       if (f.payoffChapter && f.payoffChapter > max) max = f.payoffChapter;
     }
     return max;
-  }, [pItems, pFsh]);
+  }, [pChars, pItems, pFsh]);
 
   /** 变动流水：所有 EntityState 拉平后按章号倒序 —— 这就是「随小说内容更变」 */
   const changes = useMemo(() => {
     const rows: ChangeRow[] = [];
+    // 角色：实体沉淀写 characters.states（此前前端不读，角色的变化看不见）
+    for (const ch of pChars) {
+      for (const st of ch.states ?? []) {
+        rows.push({
+          key: `${ch.id}:${st.chapter}:${st.field}:${st.newValue}`,
+          chapter: st.chapter,
+          entity: ch.name,
+          color: COLORS.character,
+          label: st.field === '状态' ? '角色变化' : st.field,
+          from: st.oldValue,
+          to: st.newValue,
+        });
+      }
+    }
     for (const it of pItems) {
       for (const st of it.states ?? []) {
         rows.push({
@@ -135,13 +160,13 @@ export function WorldStateBoard({ projectId, conclusion, running }: WorldStateBo
       }
     }
     return rows.sort((a, b) => b.chapter - a.chapter);
-  }, [pItems, pFsh]);
+  }, [pChars, pItems, pFsh]);
 
   return (
     <div className="h-full grid grid-cols-1 lg:grid-cols-2 gap-3 min-h-0">
       {/* 左：本章计划（阶段推进 + 本章结论） */}
       <div className="min-h-0 flex">
-        <WorkbenchPlan conclusion={conclusion} running={running} />
+        <WorkbenchPlan conclusion={conclusion} running={running} stages={stages} />
       </div>
 
       {/* 右：最近变动 */}
