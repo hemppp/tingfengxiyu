@@ -7,6 +7,7 @@
 // ============================================================
 
 import { createPluginLogger, DisposerBag, EventBus, HookBus, type BasePluginContext } from '@novel/core/web';
+import type { LucideIcon } from 'lucide-react';
 import type { WebPluginContext, WebPluginModule } from './types';
 import type {
   FloatingPanelDef,
@@ -16,6 +17,7 @@ import type {
   EditorExtensionDef,
   EditorToolbarItemDef,
   SelectionActionDef,
+  ChatRailDef,
 } from './types';
 import { pluginRegistryApi } from './registry';
 import { getToken, getCurrentProjectId } from '../services/api/apiClient';
@@ -83,6 +85,16 @@ export function createWebPluginContext(id: string): WebPluginContext {
     registerSelectionAction: (def) => {
       const unregister = pluginRegistryApi.registerSelectionAction(def as unknown as SelectionActionDef);
       bag.add(unregister, `${id}: selection ${def.key}`);
+      return unregister;
+    },
+    registerSkillIcons: (icons) => {
+      const unregister = pluginRegistryApi.registerSkillIcons(icons as Record<string, LucideIcon>);
+      bag.add(unregister, `${id}: skill-icons`);
+      return unregister;
+    },
+    registerChatRail: (def) => {
+      const unregister = pluginRegistryApi.registerChatRail(def as unknown as ChatRailDef);
+      bag.add(unregister, `${id}: chat-rail ${def.key}`);
       return unregister;
     },
   };

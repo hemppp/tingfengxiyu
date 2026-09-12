@@ -12,6 +12,14 @@ export interface BaseEntity {
 
 // ---- 项目 ----
 
+/**
+ * 创作模式 —— 决定该项目加载哪一套工作台，两套 UI **互斥**：
+ * - 'manual'：手写框架（罗盘气泡 + 自由浮窗面板 + AI 对话框辅助）
+ * - 'auto'  ：AI 写作框架（智能体交流流 + 流式写文；手写面板与罗盘一律不挂载）
+ * 缺省/旧数据一律视为 'manual'。
+ */
+export type ProjectMode = 'manual' | 'auto';
+
 export interface Project extends BaseEntity {
   userId: string;
   name: string;
@@ -21,6 +29,8 @@ export interface Project extends BaseEntity {
   genre?: string;
   targetWordCount?: number;
   currentWordCount: number;
+  /** 创作模式，见 ProjectMode；缺省 'manual' */
+  mode?: ProjectMode;
 }
 
 // ---- 章节 ----

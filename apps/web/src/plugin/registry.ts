@@ -6,6 +6,7 @@
 // ============================================================
 
 import { create } from 'zustand';
+import type { LucideIcon } from 'lucide-react';
 import type {
   FloatingPanelDef,
   CommandDef,
@@ -14,6 +15,7 @@ import type {
   EditorExtensionDef,
   EditorToolbarItemDef,
   SelectionActionDef,
+  ChatRailDef,
 } from './types';
 
 export interface PluginRegistryState {
@@ -31,6 +33,10 @@ export interface PluginRegistryState {
   editorToolbarItems: EditorToolbarItemDef[];
   /** 选区菜单动作（按 order 升序） */
   selectionActions: SelectionActionDef[];
+  /** 技能图标映射（key = 技能 id；插件经 registerSkillIcons 注册） */
+  skillIcons: Record<string, LucideIcon>;
+  /** AI 聊天气泡栏（插件经 registerChatRail 接管；null = 走宿主内置兜底） */
+  chatRail: ChatRailDef | null;
 
   /** 内部操作（插件宿主使用） */
   _registerProjectPanel(panel: FloatingPanelDef): () => void;
@@ -40,6 +46,8 @@ export interface PluginRegistryState {
   _registerEditorExtension(def: EditorExtensionDef): () => void;
   _registerEditorToolbarItem(def: EditorToolbarItemDef): () => void;
   _registerSelectionAction(def: SelectionActionDef): () => void;
+  _registerSkillIcons(icons: Record<string, LucideIcon>): () => void;
+  _registerChatRail(def: ChatRailDef): () => void;
   _reset(): void;
 }
 
@@ -122,6 +130,12 @@ let editorExtSlots: Slot<EditorExtensionDef>[] = [];
 let toolbarSlots: Slot<EditorToolbarItemDef>[] = [];
 let selectionSlots: Slot<SelectionActionDef>[] = [];
 
+/** 技能图标合并 map（模块级单例；同 key 后注册覆盖） */
+let skillIconMap: Record<string, LucideIcon> = {};
+
+/** AI 聊天气泡栏（单槽：后注册覆盖前者，注销时回退内置） */
+let chatRailDef: ChatRailDef | null = null;
+
 export const usePluginRegistry = create<PluginRegistryState>((set) => ({
   projectPanels: [],
   commands: [],
@@ -130,6 +144,8 @@ export const usePluginRegistry = create<PluginRegistryState>((set) => ({
   editorExtensions: [],
   editorToolbarItems: [],
   selectionActions: [],
+  skillIcons: {},
+  chatRail: null,
 
   _registerProjectPanel: makeRegister<FloatingPanelDef>(
     panelSeq,
@@ -187,6 +203,26 @@ export const usePluginRegistry = create<PluginRegistryState>((set) => ({
     (next) => { selectionSlots = next; set({ selectionActions: next.map((s) => s.value) }); },
   ),
 
+  _registerSkillIcons: (icons) => {
+    skillIconMap = { ...skillIconMap, ...icons };
+    set({ skillIcons: { ...skillIconMap } });
+    return () => {
+      for (const key of Object.keys(icons)) delete skillIconMap[key];
+      set({ skillIcons: { ...skillIconMap } });
+    };
+  },
+
+  _registerChatRail: (def) => {
+    chatRailDef = def;
+    set({ chatRail: def });
+    return () => {
+      if (chatRailDef === def) {
+        chatRailDef = null;
+        set({ chatRail: null });
+      }
+    };
+  },
+
   _reset: () => {
     panelSlots = [];
     cmdSlots = [];
@@ -195,6 +231,8 @@ export const usePluginRegistry = create<PluginRegistryState>((set) => ({
     editorExtSlots = [];
     toolbarSlots = [];
     selectionSlots = [];
+    skillIconMap = {};
+    chatRailDef = null;
     set({
       projectPanels: [],
       commands: [],
@@ -203,6 +241,8 @@ export const usePluginRegistry = create<PluginRegistryState>((set) => ({
       editorExtensions: [],
       editorToolbarItems: [],
       selectionActions: [],
+      skillIcons: {},
+      chatRail: null,
     });
   },
 }));
@@ -216,5 +256,7 @@ export const pluginRegistryApi = {
   registerEditorExtension: (def: EditorExtensionDef) => usePluginRegistry.getState()._registerEditorExtension(def),
   registerEditorToolbarItem: (def: EditorToolbarItemDef) => usePluginRegistry.getState()._registerEditorToolbarItem(def),
   registerSelectionAction: (def: SelectionActionDef) => usePluginRegistry.getState()._registerSelectionAction(def),
+  registerSkillIcons: (icons: Record<string, LucideIcon>) => usePluginRegistry.getState()._registerSkillIcons(icons),
+  registerChatRail: (def: ChatRailDef) => usePluginRegistry.getState()._registerChatRail(def),
   reset: () => usePluginRegistry.getState()._reset(),
 };

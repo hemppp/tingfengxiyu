@@ -28,6 +28,8 @@ export async function createProject(
     id: data.id ?? uuidv4(),
     userId,
     currentWordCount: data.currentWordCount ?? 0,
+    // 缺省「手写」：旧数据与未显式选择的客户端都落到手写框架
+    mode: data.mode ?? 'manual',
     createdAt: now,
     updatedAt: now,
   };

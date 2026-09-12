@@ -1,7 +1,10 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: 'class',
-  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  // ★ 插件 Web 面也要扫描（novel.autowrite / worldbuilding 等）：
+  //   否则插件独有的工具类（如 -right-14 / right-12）不会生成 CSS，
+  //   表现为气泡栏/弹层类全部失效、叠在面板内部（2026-09-10 实测事故）。
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}', '../plugins/**/web/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
       colors: {
@@ -80,6 +83,29 @@ export default {
         },
         success: {
           DEFAULT: 'hsl(var(--willow))',
+        },
+        // —— 语义扩展层（换肤契约 2026-09-11，值见 globals.css）——
+        // 组件该类色一律用这里，不要写死 #xxxxxx —— 否则换肤不生效
+        entity: {
+          character: 'hsl(var(--entity-character))',
+          location: 'hsl(var(--entity-location))',
+          item: 'hsl(var(--entity-item))',
+          foreshadow: 'hsl(var(--entity-foreshadow))',
+          event: 'hsl(var(--entity-event))',
+          outline: 'hsl(var(--entity-outline))',
+        },
+        agent: {
+          plot: 'hsl(var(--agent-plot))',
+          character: 'hsl(var(--agent-character))',
+          continuity: 'hsl(var(--agent-continuity))',
+          convener: 'hsl(var(--agent-convener))',
+          writer: 'hsl(var(--agent-writer))',
+        },
+        state: {
+          idle: 'hsl(var(--state-idle))',
+          running: 'hsl(var(--state-running))',
+          done: 'hsl(var(--state-done))',
+          blocked: 'hsl(var(--state-blocked))',
         },
       },
       borderRadius: {

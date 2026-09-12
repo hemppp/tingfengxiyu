@@ -2,7 +2,8 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    include: ['src/**/*.test.ts'],
+    // 第二个模式：novel.autowrite 插件的框架单测（纯逻辑，借 server 的 vitest 运行）
+    include: ['src/**/*.test.ts', '../plugins/local/novel.autowrite/**/*.test.ts'],
     environment: 'node',
     // 插件挂载涉及动态 import + SQLite 初始化，整体较慢
     testTimeout: 120_000,

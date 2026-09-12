@@ -51,6 +51,8 @@ export const WEB_SERVICES = [
   'editor',          // ctx.registerEditorExtension
   'toolbar',         // ctx.registerEditorToolbarItem
   'selection',       // ctx.registerSelectionAction
+  'skills',          // ctx.registerSkillIcons（技能选择器图标，随技能归插件所有）
+  'chatRail',        // ctx.registerChatRail（AI 聊天浮窗左缘功能气泡栏，插件可接管）
   'api',             // ctx.api（带鉴权 fetch）
 ] as const;
 

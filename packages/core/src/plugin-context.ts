@@ -53,6 +53,25 @@ export interface KvService {
   delete(pluginId: string, key: string, opts?: { projectId?: string }): Promise<void>;
 }
 
+// ---- 插件正式表迁移（v2 数据扩展，替代「只能走 KV」的限制）----
+
+/** 一条插件迁移：版本号严格升序唯一，幂等应用（已记录版本自动跳过） */
+export interface PluginMigration {
+  /** 版本号（正整数，同一插件内升序唯一） */
+  version: number;
+  /** 迁移名（记账与排查用） */
+  name: string;
+  /** 建表/加列 SQL（可多语句；禁止 PRAGMA/ATTACH） */
+  sql: string;
+}
+
+export interface PluginMigrateResult {
+  /** 本次实际执行的迁移 */
+  applied: Array<{ version: number; name: string }>;
+  /** 因已应用而跳过的数量 */
+  skipped: number;
+}
+
 // ---- Server 面上下文 ----
 
 export interface ServerPluginContext extends BasePluginContext {
@@ -75,6 +94,16 @@ export interface ServerPluginContext extends BasePluginContext {
     project(projectId: string): unknown;
     /** 插件 KV（v1 数据扩展） */
     kv: KvService;
+    /**
+     * 插件正式表迁移（v2 数据扩展）。
+     * - scope 'global'（缺省）：表建在主库，需要权限 db:global；
+     * - scope 'project'：表建在每个项目库，需要权限 db:project；对已打开的库立即执行，
+     *   之后新创建的项目库由宿主在 initProjectDb 钩子里自动补跑。
+     * - 幂等：以 plugin_migrations 记账表为准，重复调用只返回 skipped。
+     * 注意：非内置插件经守护器代理获得此方法（按 pluginId 归因记账）；
+     * 内置插件数据请走 KV。
+     */
+    migrate(migrations: PluginMigration[], opts?: { scope?: 'global' | 'project' }): Promise<PluginMigrateResult>;
   };
 
   /** AI 层 */
@@ -102,7 +131,27 @@ export interface ServerPluginContext extends BasePluginContext {
     /** 注册 AI 智能体 */
     agents: {
       register(def: { name: string; description?: string; handler: (args: Record<string, unknown>, ctx: Record<string, unknown>) => Promise<unknown> }): () => void;
+      /**
+       * 运行一个子代理（宿主实现：SDK 装配 + 工具白名单 + 项目隔离上下文）。
+       * flow 型技能的执行底座：插件只声明 system/input/工具名单，运行细节归宿主。
+       * 需要 ai:agents 权限。
+       */
+      run(opts: AgentRunOptions): Promise<AgentRunResult>;
     };
+    /**
+     * 裸补全（无工具，机判/生成步骤用）。需要 ai:agents 权限。
+     * json=true 时请求 JSON 输出（不保证合法，调用方自行解析兜底）。
+     */
+    complete(opts: {
+      messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+      /** 覆盖默认模型（缺省用当前 AI 配置的模型） */
+      model?: string;
+      json?: boolean;
+      temperature?: number;
+      /** 输出 token 上限（语义同 AgentRunOptions.maxTokens） */
+      maxTokens?: number;
+      userId?: string;
+    }): Promise<string>;
     /** 注册模型提供商（扩展 provider-factory 的 provider 池） */
     providers: {
       register(def: { name: string; create: (config: Record<string, unknown>) => unknown }): () => void;
@@ -142,6 +191,11 @@ export interface FloatingPanelDef {
    * 面板组件自行经 useEditorStore 获取编辑器实例。
    */
   scope?: 'workspace' | 'editor';
+  /**
+   * 浮窗左缘外侧贴附的功能气泡栏（如 AI 写作面板旁的技能快捷入口）。
+   * 浮窗根 div 是绝对定位基准，组件自行绝对定位（参考 AI 对话气泡栏：absolute -left-14 top-4）。
+   */
+  rail?: unknown;
 }
 
 export interface WebCommandDef {
@@ -163,7 +217,7 @@ export interface WebRouteDef {
 }
 
 /** 设置页可挂载的分类（对应 SettingsPage 左侧导航） */
-export type SettingsCategory = 'general' | 'ai' | 'security' | 'plugins' | 'updates';
+export type SettingsCategory = 'general' | 'appearance' | 'ai' | 'security' | 'plugins' | 'updates';
 
 /**
  * 设置页区块：渲染在指定分类下方，宿主负责卡片外壳（标题 + 描述 + nm-card）。
@@ -223,6 +277,41 @@ export interface SelectionActionDef {
  */
 export type WebApiFetch = (path: string, init?: RequestInit) => Promise<Response>;
 
+// ---- 子代理运行契约（宿主实现，flow 型技能执行底座）----
+
+/** 子代理运行选项 */
+export interface AgentRunOptions {
+  /** 子代理 system 指令 */
+  system: string;
+  /** 任务输入（任务描述 + 上下文材料） */
+  input: string;
+  /** 允许调用的工具名白名单（缺省 = 不挂任何工具，纯生成） */
+  tools?: string[];
+  /** 覆盖默认模型（缺省用当前 AI 配置的模型） */
+  model?: string;
+  /**
+   * 单次模型调用的输出 token 上限。
+   * 不传时宿主不发送 max_tokens，由服务商默认值兜底 —— 而推理模型的**思考 token
+   * 也计入该上限**，默认值偏小时模型会自行收短输出（长文写作尤其明显），
+   * 所以需要长输出的调用方应显式给足。
+   */
+  maxTokens?: number;
+  /** 项目隔离上下文 */
+  context: { projectId: string; userId?: string };
+  /** 章节写入能力（默认 false；仅流程收尾交付步显式开启，宿主二次校验） */
+  allowWriteChapter?: boolean;
+  /** 最大工具轮数（防失控，缺省 8） */
+  maxTurns?: number;
+}
+
+/** 子代理运行结果（审计台账的最小记录面） */
+export interface AgentRunResult {
+  /** 最终文本输出 */
+  text: string;
+  /** 实际使用的模型名（审计台账用） */
+  model: string;
+}
+
 export interface WebPluginContext extends BasePluginContext {
   /** 注册项目浮窗面板（插件主功能 UI 入口） */
   registerProjectPanel(panel: FloatingPanelDef): () => void;
@@ -238,6 +327,18 @@ export interface WebPluginContext extends BasePluginContext {
   registerEditorToolbarItem(def: EditorToolbarItemDef): () => void;
   /** 注册选区菜单动作（选中正文后浮出） */
   registerSelectionAction(def: SelectionActionDef): () => void;
+  /**
+   * 注册技能图标映射（key = 技能 id，value = 图标组件）。
+   * 技能内容归插件所有后，图标映射也随技能走：技能选择器按「插件注册 → 内置兜底 → Puzzle」解析。
+   */
+  registerSkillIcons(icons: Record<string, unknown>): () => void;
+  /**
+   * 接管 AI 聊天浮窗左缘的功能气泡栏（模式开关/技能/快捷语）。
+   * 宿主持有全部状态，按 ChatRailProps 下发并接收回调；先注册者生效，无插件注册时回退内置气泡栏。
+   * 组件 props：syncInsert/enableTools/enableAgent/activeSkillId +
+   * onToggleSync/onToggleTools/onToggleAgent/onSkillChange(id: string | null)。
+   */
+  registerChatRail(def: { key: string; Component: unknown }): () => void;
   /** 带鉴权的 API fetch（自动附加 JWT 与项目头，替代裸 fetch） */
   api: WebApiFetch;
 }

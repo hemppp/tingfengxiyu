@@ -47,6 +47,8 @@ export const projects = sqliteTable('projects', {
   genre: text('genre'),
   targetWordCount: integer('target_word_count'),
   currentWordCount: integer('current_word_count').notNull().default(0),
+  /** 创作模式：'manual'（手写框架）| 'auto'（AI 写作框架）。NULL/旧数据按 'manual' 处理 */
+  mode: text('mode'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 }, (table) => ({

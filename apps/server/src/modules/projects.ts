@@ -14,6 +14,9 @@ import {
 } from '../services/project-service.js';
 import { requireAuth, type AuthVariables } from '../middleware/auth.js';
 
+/** 创作模式：manual = 手写框架 / auto = AI 写作框架 —— 决定该项目加载哪一套工作台 */
+const projectModeSchema = z.enum(['manual', 'auto']);
+
 const createProjectSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1, '项目名称不能为空'),
@@ -23,6 +26,7 @@ const createProjectSchema = z.object({
   genre: z.string().nullish(),
   targetWordCount: z.number().int().positive().nullish(),
   currentWordCount: z.number().int().min(0).nullish(),
+  mode: projectModeSchema.optional(),
 });
 
 const updateProjectSchema = z.object({
@@ -33,6 +37,8 @@ const updateProjectSchema = z.object({
   genre: z.string().nullish(),
   targetWordCount: z.number().int().positive().nullish(),
   currentWordCount: z.number().int().min(0).nullish(),
+  /** 允许创建后切换模式：两套 UI 互斥，切换只改变工作台形态，数据是同一份 */
+  mode: projectModeSchema.optional(),
 });
 
 const router = new Hono<{ Variables: AuthVariables }>();
@@ -64,6 +70,8 @@ router.post('/', requireAuth, zValidator('json', createProjectSchema), async (c)
     genre: data.genre ?? undefined,
     targetWordCount: data.targetWordCount ?? undefined,
     currentWordCount: data.currentWordCount ?? 0,
+    // 新建缺省「手写」：AI 写作需用户显式选择，避免误入 AI 工作台
+    mode: data.mode ?? 'manual',
   } as Parameters<typeof createProject>[1];
   const project = await createProject(user.id, payload);
   return c.json({ data: project }, 201);
@@ -86,6 +94,7 @@ router.put('/:id', requireAuth, zValidator('json', updateProjectSchema), async (
       genre: data.genre ?? undefined,
       targetWordCount: data.targetWordCount ?? undefined,
       currentWordCount: data.currentWordCount ?? 0,
+      mode: data.mode ?? 'manual',
     } as Parameters<typeof createProject>[1]);
     return c.json({ data: created }, 201);
   }
@@ -97,6 +106,8 @@ router.put('/:id', requireAuth, zValidator('json', updateProjectSchema), async (
     genre: data.genre ?? undefined,
     targetWordCount: data.targetWordCount ?? undefined,
     currentWordCount: data.currentWordCount ?? undefined,
+    // 仅在请求显式带了 mode 时才覆盖，避免编辑书名等操作把已有模式冲掉
+    ...(data.mode ? { mode: data.mode } : {}),
   };
   const ok = await updateProject(id, user.id, payload);
   if (!ok) return c.json({ error: { code: 'NOT_FOUND', message: '项目不存在' } }, 404);

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useStatsStore } from '@/stores';
-import { ArrowLeft, Lock, Trash2, Settings2, Bot, ShieldCheck, Plug, Keyboard, MonitorUp } from 'lucide-react';
+import { ArrowLeft, Lock, Trash2, Settings2, Palette, Bot, ShieldCheck, Plug, Keyboard, MonitorUp } from 'lucide-react';
+import { AppearancePanel } from '@/components/settings/AppearancePanel';
 import { safeConfirm } from '@/utils/safeConfirm';
 import { useNavigate } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
@@ -17,10 +18,11 @@ import {
 } from '@/services/security/encryptionService';
 
 /** 设置分类（栏目） */
-type CategoryKey = 'general' | 'ai' | 'security' | 'plugins' | 'updates';
+type CategoryKey = 'general' | 'appearance' | 'ai' | 'security' | 'plugins' | 'updates';
 
 const CATEGORIES: Array<{ key: CategoryKey; label: string; icon: ReactNode; desc: string }> = [
   { key: 'general', label: '通用', icon: <Settings2 size={15} />, desc: '每日目标 / 自动保存 / 快捷键' },
+  { key: 'appearance', label: '外观', icon: <Palette size={15} />, desc: '主题换肤 / 明暗' },
   { key: 'ai', label: 'AI 设置', icon: <Bot size={15} />, desc: '模型提供商与写作助手参数' },
   { key: 'security', label: '安全', icon: <ShieldCheck size={15} />, desc: '本地加密存储' },
   { key: 'plugins', label: '插件', icon: <Plug size={15} />, desc: '插件列表 / 开关 / 依赖检查' },
@@ -221,6 +223,8 @@ export function SettingsPage() {
                 </section>
               </>
             )}
+
+            {category === 'appearance' && <AppearancePanel />}
 
             {category === 'ai' && (
               <section className="nm-card p-6">

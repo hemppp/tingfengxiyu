@@ -1,6 +1,8 @@
 packages:
   - "apps/*"
   - "apps/plugins/*"
+  # local/ 下的本地插件若带 package.json（如 novel.autowrite）也纳入 workspace
+  - "apps/plugins/local/*"
   - "packages/*"
 # ★ hoisted 模式：依赖扁平化安装到根 node_modules（非符号链接）
 # 原因：Docker 多阶段构建时，pnpm 默认的符号链接跨容器 COPY 会丢失，

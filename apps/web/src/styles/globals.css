@@ -85,6 +85,40 @@
     --glass-modal-bg: 0.58;                /* 模态 */
     --glass-modal-border: 0.35;
     --glass-modal-highlight: 0.30;
+
+    /* ============================================================
+     * 语义扩展层 —— 换肤契约（2026-09-11）
+     *
+     * 为什么有这一层：组件里散落着大量硬编码色值（`#4F918C` 这类），
+     * 它们不会跟随主题切换 —— 所以"全局换肤"必须先把语义色收编成变量。
+     *
+     * 原则：
+     *   1. 这里**只放语义**，不放具体场景。换肤只改这一层的值。
+     *   2. 取值 = 收编前的现值，保证接入过程**零视觉变化**。
+     *   3. 数据可视化配色（关系图节点等）与用户自定义色**不进这里** ——
+     *      前者该跟着数据走，后者是用户选的，都不该被主题覆盖。
+     * ============================================================ */
+
+    /* —— 实体分类色（知识库 / 状态看板里的实体类型）—— */
+    --entity-character: 195 40% 32%;   /* 角色 · 深青 */
+    --entity-location: 88 30% 48%;     /* 地点 · 柳绿 */
+    --entity-item: 178 35% 42%;        /* 物品 · 远山青 */
+    --entity-foreshadow: 38 55% 52%;   /* 伏笔 · 赭石 */
+    --entity-event: 222 42% 52%;       /* 事件 · 雾靛 */
+    --entity-outline: 205 45% 68%;     /* 大纲 · 冰青 */
+
+    /* —— 智能体色（AI 写作工作台的四官 + 写作官）—— */
+    --agent-plot: 178 35% 42%;         /* 剧情设计师 */
+    --agent-character: 195 40% 32%;    /* 角色设计师 */
+    --agent-continuity: 38 55% 52%;    /* 设定管家 */
+    --agent-convener: 88 30% 48%;      /* 定稿官 */
+    --agent-writer: 168 65% 24%;       /* 写作官 */
+
+    /* —— 状态色（阶段推进 / 门槛结果）—— */
+    --state-idle: 220 10% 72%;         /* 待开始 */
+    --state-running: 38 55% 52%;       /* 进行中 */
+    --state-done: 168 65% 24%;         /* 已完成 */
+    --state-blocked: 0 72% 51%;        /* 被挡下 */
   }
 
   /* —— 暗色模式（靛夜玻璃）—— */
@@ -128,6 +162,25 @@
     --glass-modal-bg: 0.14;
     --glass-modal-border: 0.20;
     --glass-modal-highlight: 0.12;
+
+    /* —— 语义扩展层：暗底上必须提亮，否则深青/柳绿这类低明度色会糊在背景里 —— */
+    --entity-character: 195 45% 58%;
+    --entity-location: 88 35% 60%;
+    --entity-item: 178 35% 58%;
+    --entity-foreshadow: 38 60% 62%;
+    --entity-event: 222 45% 68%;
+    --entity-outline: 205 45% 72%;
+
+    --agent-plot: 178 35% 58%;
+    --agent-character: 195 45% 58%;
+    --agent-continuity: 38 60% 62%;
+    --agent-convener: 88 35% 60%;
+    --agent-writer: 168 45% 52%;
+
+    --state-idle: 220 10% 45%;
+    --state-running: 38 60% 62%;
+    --state-done: 168 45% 52%;
+    --state-blocked: 0 72% 62%;
   }
 }
 
@@ -696,20 +749,17 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   margin-right: auto;
 }
 
-/* 编辑器卡片容器 — 浮在氛围底上的近实体稿纸：
-   玻璃 HUD 下写作区必须保持高不透明底保证可读，
-   「书信纸」横线样式（.ProseMirror p）仍负责行线视觉 */
+/* 编辑器卡片容器 — 无框无底（2026-09-10 作者定稿：正文直接浮在氛围底上）：
+   卡片壳全部透明化，视觉只剩「书信纸横线」（.ProseMirror p 的行线仍在自身段落上）；
+   内边距归零，水平/垂直留白由 .nm-editor-scroll-host 的内联 clamp 提供 */
 .nm-editor-card {
-  background: hsl(var(--card) / 0.88);
-  backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  border: 0.5px solid hsl(var(--border) / 0.7);
-  border-radius: var(--radius-xl);
-  box-shadow:
-    0 24px 64px hsl(var(--glass-shadow) / 0.14),
-    0 6px 20px hsl(var(--glass-shadow) / 0.08),
-    inset 0 1px 0 rgb(var(--glass-highlight) / 0.65);
-  padding: clamp(20px, 3vw, 40px) clamp(18px, 3.5vw, 48px) clamp(24px, 3vw, 40px);
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
 }
 
 /* 编辑器顶部统计工具栏 — 透明，无边框线 */

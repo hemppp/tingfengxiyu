@@ -27,6 +27,8 @@ export interface FloatingPanelDef {
   order?: number;
   /** 'workspace'（缺省）进顶栏按钮组；'editor' 由编辑器内面板栏开关 */
   scope?: 'workspace' | 'editor';
+  /** 浮窗左缘外侧贴附的功能气泡栏（绝对定位由组件自理，参照 AI 对话气泡栏） */
+  rail?: React.ComponentType;
 }
 
 export interface CommandDef extends Omit<CoreCommandDef, never> {
@@ -85,6 +87,26 @@ export interface SelectionActionDef {
   color?: string;
   run: (payload: { text: string; editor: Editor }) => void | Promise<void>;
   order?: number;
+}
+
+// ---- AI 聊天气泡栏（chatRail 扩展点，插件可接管）----
+
+/** 宿主下发给气泡栏的状态与回调（状态机在 ProjectLayout，互斥在宿主处理） */
+export interface ChatRailProps {
+  syncInsert: boolean;
+  enableTools: boolean;
+  enableAgent: boolean;
+  activeSkillId: string | null;
+  onToggleSync: () => void;
+  onToggleTools: () => void;
+  onToggleAgent: () => void;
+  /** 技能选择（id 或 null=取消） */
+  onSkillChange: (id: string | null) => void;
+}
+
+export interface ChatRailDef {
+  key: string;
+  Component: React.ComponentType<ChatRailProps>;
 }
 
 // ---- 插件上下文 / 模块契约（re-export core）----

@@ -16,16 +16,47 @@ import PageFade from './routes/PageFade';
 import { usePluginRegistry } from './plugin/registry';
 import type { PluginRouteDef } from './plugin/types';
 
-// 路由：每个 lazy 路由走统一 fallback
-const ProjectLayout = lazyRoute(() => import('./components/layout/ProjectLayout').then(m => ({ default: m.ProjectLayout })));
-const ProjectIndexPage = lazyRoute(() => import('./pages/ProjectIndexPage').then(m => ({ default: m.ProjectIndexPage })));
-const ChapterEditor = lazyRoute(() => import('./components/editor/ChapterEditor').then(m => ({ default: m.ChapterEditor })));
-const BookshelfPage = lazyRoute(() => import('./pages/BookshelfPage').then(m => ({ default: m.BookshelfPage })));
-const SettingsPage = lazyRoute(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
-const AdminPage = lazyRoute(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
-const LoginPage = lazyRoute(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
-const RegisterPage = lazyRoute(() => import('./pages/RegisterPage').then(m => ({ default: m.RegisterPage })));
-const LandingPage = lazyRoute(() => import('./pages/LandingPage').then(m => ({ default: m.LandingPage })));
+// 路由：每个 lazy 路由走统一 fallback。
+// ★ loader 提为常量，供「空闲预取」复用 —— 同一个 import() 结果被浏览器/打包器缓存，
+//   预取过再导航即为命中缓存，省掉整段 chunk 下载 + 解析时间。
+const loadProjectLayout = () => import('./components/layout/ProjectLayout').then(m => ({ default: m.ProjectLayout }));
+const loadProjectIndex = () => import('./pages/ProjectIndexPage').then(m => ({ default: m.ProjectIndexPage }));
+const loadChapterEditor = () => import('./components/editor/ChapterEditor').then(m => ({ default: m.ChapterEditor }));
+const loadBookshelf = () => import('./pages/BookshelfPage').then(m => ({ default: m.BookshelfPage }));
+const loadSettings = () => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage }));
+const loadAdmin = () => import('./pages/AdminPage').then(m => ({ default: m.AdminPage }));
+const loadLogin = () => import('./pages/LoginPage').then(m => ({ default: m.LoginPage }));
+const loadRegister = () => import('./pages/RegisterPage').then(m => ({ default: m.RegisterPage }));
+const loadLanding = () => import('./pages/LandingPage').then(m => ({ default: m.LandingPage }));
+
+const ProjectLayout = lazyRoute(loadProjectLayout);
+const ProjectIndexPage = lazyRoute(loadProjectIndex);
+const ChapterEditor = lazyRoute(loadChapterEditor);
+const BookshelfPage = lazyRoute(loadBookshelf);
+const SettingsPage = lazyRoute(loadSettings);
+const AdminPage = lazyRoute(loadAdmin);
+const LoginPage = lazyRoute(loadLogin);
+const RegisterPage = lazyRoute(loadRegister);
+const LandingPage = lazyRoute(loadLanding);
+
+/**
+ * 跳转链路预取表：停在某段路由时，空闲预取「下一步最可能进入」的 chunk，
+ * 把「点击之后才开始下载」变成「点击即命中缓存」。
+ *
+ * /bookshelf → 进项目其实是四段**串行**：ProjectLayout chunk → ProjectIndexPage chunk
+ *   → 等章节数据到位 → ProjectIndexPage 自动 redirect → ChapterEditor chunk（编辑器依赖链最重）。
+ *   前三块 chunk 一次性预热掉，链路里就只剩数据请求的真实耗时。
+ * /project   → 章节编辑器（同上，兜住直接落在 /project 的情况）
+ */
+const PRELOAD_ON_PATH: Record<string, Array<() => Promise<unknown>>> = {
+  [PATHS.bookshelf]: [loadProjectLayout, loadProjectIndex, loadChapterEditor],
+  [PATHS.project]: [loadChapterEditor],
+};
+
+type IdleWindow = Window & {
+  requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number;
+  cancelIdleCallback?: (id: number) => void;
+};
 
 /** Cmd/Ctrl + K 打开命令面板的全局快捷键 */
 const CommandPaletteHotkey: React.FC = () => {
@@ -132,6 +163,21 @@ const AppRoutes: React.FC = () => {
 
   // ★ 插件化：订阅插件注册的路由，追加到路由表
   const pluginRoutes = usePluginRegistry(s => s.routes);
+
+  // ★ 空闲预取下一步最可能进入的路由 chunk（表见 PRELOAD_ON_PATH）。
+  //   放在 requestIdleCallback 里，不抢首屏；预取失败一律静默，绝不能影响正常流程。
+  useEffect(() => {
+    const loaders = PRELOAD_ON_PATH[routeKey];
+    if (!loaders || loaders.length === 0) return;
+    const run = () => { loaders.forEach(l => { void l().catch(() => {}); }); };
+    const w = window as IdleWindow;
+    if (typeof w.requestIdleCallback === 'function') {
+      const id = w.requestIdleCallback(run, { timeout: 1000 });
+      return () => { w.cancelIdleCallback?.(id); };
+    }
+    const t = window.setTimeout(run, 700);
+    return () => window.clearTimeout(t);
+  }, [routeKey]);
 
   const renderPluginRoute = (def: PluginRouteDef) => {
     const Comp = def.Component;

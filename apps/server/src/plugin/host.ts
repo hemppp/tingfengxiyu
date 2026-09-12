@@ -33,8 +33,12 @@ import {
   type ServerPluginContext,
   type DependencyAnalysis,
 } from '@novel/core';
-import { registerTool, unregisterTool, getAllToolDefinitions } from '../ai/tools/registry.js';
+import { registerTool, unregisterTool, getAllToolDefinitions, markPluginTool } from '../ai/tools/registry.js';
 import { registerSkill, unregisterSkill, SKILLS } from '../ai/agents/skills.js';
+import { Agent, Runner } from '@openai/agents';
+import { getAIConfig } from '../ai/providers/provider-factory.js';
+import { getSdkProvider } from '../ai/agents/sdk/provider.js';
+import { getAllSdkTools, type NovelAgentContext } from '../ai/agents/sdk/tools.js';
 import { createSqliteKvService } from './kv-service.js';
 import { createStaticFallback } from './frontend-static.js';
 import { createPluginGuardian, createGuardedPluginHandle, type GuardianSnapshot } from './guardian.js';
@@ -234,10 +238,67 @@ export function createServerPluginHost(options: ServerPluginHostOptions = {}): S
   // ---- AI 注册表（复用既有实现，暴露为 ctx.ai） ----
   const agentRegistry = new Map<string, unknown>();
   const providerRegistry = new Map<string, unknown>();
+
+  /**
+   * 子代理运行器（ctx.ai.agents.run / ctx.ai.complete 的实现底座）。
+   * SDK 装配与 runNovelAgentStream 同款：getSdkProvider + Runner（Chat Completions 强制）。
+   * tools 白名单缺省 = 纯生成；allowWriteChapter 只影响 write_chapter 是否进入候选集，
+   * 且 SDK 工具 handler 内还有二次拒绝兜底（tools.ts）。
+   */
+  async function runSubagent(o: {
+    system: string;
+    input: string;
+    tools?: string[];
+    model?: string;
+    temperature?: number;
+    maxTokens?: number;
+    maxTurns?: number;
+    projectId?: string;
+    userId?: string;
+    allowWriteChapter?: boolean;
+  }): Promise<{ text: string; model: string }> {
+    const config = await getAIConfig(o.userId);
+    const provider = await getSdkProvider(o.userId);
+    const model = o.model ?? config.model;
+    const allowed = o.tools ? new Set(o.tools) : undefined;
+    const sdkTools = allowed
+      ? getAllSdkTools({ allowWriteChapter: o.allowWriteChapter === true })
+          .filter((t) => allowed.has((t as { name: string }).name))
+      : [];
+    // ★ maxTokens 必须显式透传：不传时 SDK 不发送 max_tokens，由服务商默认值兜底；
+    //   推理模型（如 glm-5.3-flash）的思考 token 也计入该上限，默认值偏小时
+    //   模型会自行收短输出 —— 长文写作上表现为「总是写不到约定字数」。
+    const modelSettings = (o.temperature != null || o.maxTokens != null)
+      ? {
+          ...(o.temperature != null ? { temperature: o.temperature } : {}),
+          ...(o.maxTokens != null ? { maxTokens: o.maxTokens } : {}),
+        }
+      : undefined;
+    const agent = new Agent({
+      name: 'novel-subagent',
+      instructions: o.system,
+      tools: sdkTools,
+      model,
+      ...(modelSettings ? { modelSettings } : {}),
+    });
+    const runner = new Runner({ modelProvider: provider, tracingDisabled: true });
+    const context: NovelAgentContext = {
+      projectId: o.projectId ?? '',
+      userId: o.userId ?? '',
+      allowWriteChapter: o.allowWriteChapter === true,
+    };
+    const result = await runner.run(agent, o.input as any, {
+      context,
+      maxTurns: o.maxTurns ?? 8,
+    } as any);
+    return { text: String(result.finalOutput ?? ''), model };
+  }
+
   const aiService = {
     tools: {
       register(definition: import('@novel/core').ToolDefinition, handler: unknown) {
         registerTool(definition.function.name, definition, handler as Parameters<typeof registerTool>[2]);
+        markPluginTool(definition.function.name); // 聊天工具白名单动态纳入插件工具
         return () => unregisterTool(definition.function.name);
       },
       getAllDefinitions: () => getAllToolDefinitions(),
@@ -255,6 +316,17 @@ export function createServerPluginHost(options: ServerPluginHostOptions = {}): S
         agentRegistry.set(id, def);
         return () => agentRegistry.delete(id);
       },
+      run: (opts: import('@novel/core').AgentRunOptions) => runSubagent({
+        system: opts.system,
+        input: opts.input,
+        tools: opts.tools,
+        model: opts.model,
+        maxTokens: opts.maxTokens,
+        maxTurns: opts.maxTurns,
+        projectId: opts.context.projectId,
+        userId: opts.context.userId,
+        allowWriteChapter: opts.allowWriteChapter,
+      }),
     },
     providers: {
       register(def: { name: string }) {
@@ -263,6 +335,32 @@ export function createServerPluginHost(options: ServerPluginHostOptions = {}): S
         return () => providerRegistry.delete(id);
       },
     },
+    complete: (opts: {
+      messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+      model?: string;
+      json?: boolean;
+      temperature?: number;
+      maxTokens?: number;
+      userId?: string;
+    }) => {
+      const systemParts = opts.messages.filter((m) => m.role === 'system').map((m) => m.content);
+      if (opts.json) {
+        systemParts.push('只输出 JSON。不要输出 JSON 以外的任何文字（不要代码围栏、不要解释）。');
+      }
+      const input = opts.messages
+        .filter((m) => m.role !== 'system')
+        .map((m) => (m.role === 'assistant' ? `[上一轮助手回复]\n${m.content}` : m.content))
+        .join('\n\n');
+      return runSubagent({
+        system: systemParts.join('\n\n'),
+        input,
+        model: opts.model,
+        temperature: opts.temperature,
+        maxTokens: opts.maxTokens,
+        maxTurns: 1,
+        userId: opts.userId,
+      }).then((r) => r.text);
+    },
   };
 
   // ---- db / settings / scheduler / prompt / events ----
@@ -270,6 +368,9 @@ export function createServerPluginHost(options: ServerPluginHostOptions = {}): S
     global: () => getDb(),
     project: (projectId: string) => getProjectDbSync(projectId),
     kv,
+    // 注意：ctx.db.migrate 只在守护器包装层提供（guardian.wrapDb → migrations.ts），
+    // 按挂载条目归因 pluginId 并校验 db:global / db:project 权限；
+    // 内置插件不经包装层，数据请走 KV（plugin_kv）或直接使用 global()/project()。
   };
   // ★ events 服务（C7 附带修复）：插件 manifest 常 inject 'events'（如 worldbuilding 订阅
   //   chapter.saved）。此前宿主未提供该服务 → cordis 使插件停留在等待态，apply 永不执行、
@@ -361,7 +462,7 @@ export function createServerPluginHost(options: ServerPluginHostOptions = {}): S
         // 重挂场景：先清理上一次经包装层注册的资源
         guardedBags.get(entry.id)?.();
         guardedBags.delete(entry.id);
-        const handle = createGuardedPluginHandle(mod as PluginModule, entry.id, guardian);
+        const handle = createGuardedPluginHandle(mod as PluginModule, entry.id, guardian, entry.manifest?.permissions ?? []);
         mountedMod = handle.mod;
         guardedBags.set(entry.id, handle.disposeTracked);
       }

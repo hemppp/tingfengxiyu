@@ -187,9 +187,12 @@ export function BookshelfPage() {
       const description = data.description || '';
       const coverImage = data.coverImage || data.cover || '';
       const targetWordCount = data.targetWordCount ?? undefined;
+      // 创作模式：两套 UI 互斥，创建时定；编辑时允许切换（数据是同一份，只换工作台形态）
+      const mode = data.mode;
       if (editingBook) {
         const result = await apiClient.put<Project>(`/projects/${editingBook.id}`, {
           name, penName, description, coverImage, targetWordCount,
+          ...(mode ? { mode } : {}),
         });
         setBooks(prev => prev.map(b => b.id === editingBook.id ? (result ?? b) : b));
       } else {
@@ -201,6 +204,7 @@ export function BookshelfPage() {
           coverImage,
           currentWordCount: 0,
           targetWordCount,
+          mode: mode ?? 'manual',
         });
         if (result) setBooks(prev => [...prev, result]);
       }

@@ -17,6 +17,7 @@ import {
   getAllToolDefinitions,
   executeTool,
   ENTITY_TOOL_NAMES,
+  getPluginToolNames,
 } from '../../tools/index.js';
 import type { ToolHandlerResult } from '../../tools/registry.js';
 import { listChapters, updateChapter } from '../../../services/chapter-service.js';
@@ -224,7 +225,8 @@ const listChaptersTool = tool({
  *   （等同服务端代码执行的能力不进入通用 Agent 工具面）。
  */
 export function getAllSdkTools(opts: { allowWriteChapter?: boolean } = {}): Tool<NovelAgentContext>[] {
-  const allowed = new Set<string>(ENTITY_TOOL_NAMES);
+  // 内置实体工具 + 插件注册的工具（宿主 aiService.tools.register 时标记）
+  const allowed = new Set<string>([...ENTITY_TOOL_NAMES, ...getPluginToolNames()]);
   const tools: Tool<NovelAgentContext>[] = [
     ...wrapExistingTools(allowed),
     webSearchTool,

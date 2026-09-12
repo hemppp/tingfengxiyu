@@ -2,7 +2,14 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles/globals.css';
+// ★ 主题层在主样式之后引入。非默认主题的选择器写作 html[data-theme="..."]，
+//   特异性高于 .dark，所以不依赖引入顺序即可稳定覆盖 —— 这里只是双保险。
+import './styles/themes.css';
 import { registerProjectIdGetter } from './services/api/apiClient';
+import { applyStoredTheme } from './stores/themeStore';
+
+// ★ 首屏渲染前同步应用本地主题，否则会先闪一下默认配色再切换
+applyStoredTheme();
 import { useProjectStore } from './stores';
 import { mountWebPlugin } from './plugin/host';
 import type { WebPluginModule } from './plugin/types';

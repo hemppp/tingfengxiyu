@@ -64,6 +64,19 @@ export interface RegisteredTool {
 
 const registry = new Map<string, RegisteredTool>();
 
+/** 插件注册的工具名（经宿主 ctx.ai.tools.register 进入；聊天工具集自动包含） */
+const pluginToolNames = new Set<string>();
+
+/** 标记一个工具来自插件（宿主 aiService.tools.register 时调用） */
+export function markPluginTool(name: string): void {
+  pluginToolNames.add(name);
+}
+
+/** 获取全部插件工具名（聊天工具白名单动态纳入，插件注销时自动移除） */
+export function getPluginToolNames(): string[] {
+  return [...pluginToolNames].filter((n) => registry.has(n));
+}
+
 /** 注册一个工具 */
 export function registerTool(
   name: string,
@@ -98,6 +111,7 @@ export function getToolDefinitions(names: string[]): ToolDefinition[] {
 /** 注销一个工具（插件卸载时调用） */
 export function unregisterTool(name: string): void {
   registry.delete(name);
+  pluginToolNames.delete(name);
 }
 
 /** 执行工具调用 */

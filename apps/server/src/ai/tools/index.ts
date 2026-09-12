@@ -30,6 +30,8 @@ export {
   getToolDefinitions,
   executeTool,
   isRegisteredTool,
+  markPluginTool,
+  getPluginToolNames,
 } from './registry.js';
 
 /** 确保所有工具已注册（幂等，可多次调用） */

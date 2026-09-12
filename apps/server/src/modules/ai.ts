@@ -34,7 +34,7 @@ import {
 } from '../ai/index.js';
 import { runChatAgentWithTools } from '../ai/agents/chat-agent.js';
 import { runNovelAgentStream } from '../ai/agents/sdk/agent.js';
-import { ensureToolsRegistered, ENTITY_TOOL_NAMES, PLUGIN_TOOL_NAMES, getToolDefinitions } from '../ai/tools/index.js';
+import { ensureToolsRegistered, ENTITY_TOOL_NAMES, PLUGIN_TOOL_NAMES, getToolDefinitions, getPluginToolNames } from '../ai/tools/index.js';
 import { requireAuth, type AuthVariables } from '../middleware/auth.js';
 import { rateLimit } from '../middleware/rate-limiter.js';
 import { safeInternal } from '../lib/safe-error.js';
@@ -771,6 +771,7 @@ aiRouter.post('/chat-stream', requireAuth, ensureConfigMiddleware, aiRateLimit, 
   if (frozen) return frozen;
 
   const body = c.req.valid('json') as z.infer<typeof chatSchema>;
+  console.log(`[chat-stream] 入口: enableTools=${body.enableTools} enableAgent=${body.enableAgent} projectId=${body.projectId ?? '(空)'} skillId=${body.skillId ?? '(空)'}`);
   const project = await resolveAuthorizedProject(c, body.projectId);
   if (!project.ok) return project.response;
 
@@ -950,7 +951,8 @@ aiRouter.post('/chat-stream', requireAuth, ensureConfigMiddleware, aiRateLimit, 
             ensureToolsRegistered();
             // 获取实体写入工具 + 插件创建工具定义
             // ★ 权限过滤：create_plugin 等同服务端代码执行，仅对管理员暴露给 LLM
-            const toolDefs = getToolDefinitions([...ENTITY_TOOL_NAMES, ...(user?.isAdmin ? PLUGIN_TOOL_NAMES : [])]);
+            const toolDefs = getToolDefinitions([...ENTITY_TOOL_NAMES, ...getPluginToolNames(), ...(user?.isAdmin ? PLUGIN_TOOL_NAMES : [])]);
+            console.log('[chat-stream] 工具模式诊断: toolDefs=' + toolDefs.length, '插件工具=' + toolDefs.map((d) => d.function.name).filter((n) => n.startsWith('autowrite')).join(','));
 
             const gen = runChatAgentWithTools(chatStream, {
               conversationHistory: body.conversationHistory,

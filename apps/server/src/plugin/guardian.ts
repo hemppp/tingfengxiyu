@@ -11,8 +11,9 @@
 // 「观测 + 归因 + 熔断止损 + 可见性」，不是内存级沙箱。
 // ============================================================
 
-import type { KvService, PluginModule } from '@novel/core';
+import type { KvService, PluginMigration, PluginModule } from '@novel/core';
 import { DisposerBag } from '@novel/core';
+import { migrateForPlugin } from './migrations.js';
 
 export type GuardianState = 'quarantined' | 'trusted' | 'failed';
 
@@ -301,6 +302,8 @@ interface WrapEnv {
   pluginId: string;
   guardian: PluginGuardian;
   bag: DisposerBag;
+  /** manifest 声明的权限（db:migrate 按此放行 db:global / db:project） */
+  permissions: string[];
 }
 
 function wrapRoutes(raw: AnyRecord, env: WrapEnv): AnyRecord {
@@ -402,7 +405,7 @@ function wrapAi(raw: AnyRecord, env: WrapEnv): AnyRecord {
 }
 
 function wrapDb(raw: AnyRecord, env: WrapEnv): AnyRecord {
-  const { pluginId, guardian } = env;
+  const { pluginId, guardian, permissions } = env;
   const out: AnyRecord = { ...raw };
   const rawGlobal = raw.global as (() => unknown) | undefined;
   const rawProject = raw.project as ((projectId: string) => unknown) | undefined;
@@ -413,6 +416,14 @@ function wrapDb(raw: AnyRecord, env: WrapEnv): AnyRecord {
   out.project = (projectId: string) => {
     guardian.recordInvocation(pluginId, 'db:project');
     return rawProject ? rawProject.call(raw, projectId) : undefined;
+  };
+  // 正式表迁移通道（v2 数据扩展）：按挂载条目归因 pluginId，按 manifest 权限放行
+  out.migrate = (migrations: PluginMigration[], opts?: { scope?: 'global' | 'project' }) => {
+    guardian.recordInvocation(pluginId, 'db:migrate');
+    return migrateForPlugin({ pluginId, permissions, migrations, opts }).catch((err: unknown) => {
+      guardian.recordError(pluginId, 'db:migrate', err);
+      throw err;
+    });
   };
   return out;
 }
@@ -426,9 +437,14 @@ export interface GuardedPluginHandle {
   disposeTracked(): void;
 }
 
-export function createGuardedPluginHandle(mod: PluginModule, pluginId: string, guardian: PluginGuardian): GuardedPluginHandle {
+export function createGuardedPluginHandle(
+  mod: PluginModule,
+  pluginId: string,
+  guardian: PluginGuardian,
+  permissions: string[] = [],
+): GuardedPluginHandle {
   const bag = new DisposerBag();
-  const env: WrapEnv = { pluginId, guardian, bag };
+  const env: WrapEnv = { pluginId, guardian, bag, permissions };
   const rawApply = mod.apply;
   return {
     mod: {

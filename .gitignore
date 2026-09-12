@@ -78,6 +78,7 @@ apps/web/.tmp-build/
 .s0.js
 .s1.js
 .tmp-*.txt
+.tmp-*.json
 
 # Current session logs (live, in-use by dev server)
 # .dev-server.log and .dev-web.log are added here

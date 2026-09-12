@@ -942,6 +942,20 @@ async function _doInit(): Promise<DrizzleDb | null> {
     console.warn('[NovelMuse DB] 检查 projects.user_id 列失败', userIdErr);
   }
 
+  // 确保 projects 表有 mode 列（创作模式：manual = 手写框架 / auto = AI 写作框架）
+  // 旧库补列后为 NULL，读取侧统一按 'manual' 兜底，因此这里刻意不回填数据。
+  try {
+    const cols = _sqlite!.exec("PRAGMA table_info(projects)");
+    const hasMode = cols[0]?.values.some((row: unknown[]) => row[1] === 'mode');
+    if (!hasMode) {
+      console.log('[NovelMuse DB] projects 表缺少 mode 列，正在添加...');
+      _sqlite!.run('ALTER TABLE projects ADD COLUMN mode TEXT');
+      console.log('[NovelMuse DB] projects.mode 列添加成功。');
+    }
+  } catch (modeErr) {
+    console.warn('[NovelMuse DB] 检查 projects.mode 列失败', modeErr);
+  }
+
   // 确保 user_settings 表存在（迁移文件可能遗漏）
   try {
     _db.select().from(schema.userSettings).limit(1).all();
@@ -1372,6 +1386,9 @@ export {
   closeAllProjectDbs,
   deleteProjectDb,
   getOpenProjectDbCount,
+  onProjectDbInit,
+  listOpenProjectDbs,
+  getProjectSqliteRaw,
 } from './project-db.js';
 
 // ---- 主库 → 项目库 数据迁移 ----

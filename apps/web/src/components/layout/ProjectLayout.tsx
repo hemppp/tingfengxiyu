@@ -27,6 +27,11 @@ import { AiChatBubbleRail } from '@/components/ai/AiChatBubbleRail';
 // 章节与 AI 对话面板不受面板数上限限制（上限在 panelOpenStore）。
 const ChatPanel = lazy(() => import('@/components/ai/ChatPanel').then(m => ({ default: m.ChatPanel })));
 
+// AI 写作模式的工作台：独立懒加载 chunk —— 手写模式不会为它付出任何包体代价
+const AutoWriteWorkbench = lazy(() =>
+  import('@/components/layout/AutoWriteWorkbench').then(m => ({ default: m.AutoWriteWorkbench })),
+);
+
 function PanelFallback() {
   return (
     <div className="h-full flex items-center justify-center" aria-label="Loading" role="status">
@@ -355,6 +360,8 @@ function FloatingPanelWindow({
   var { pos, dragging, resizing, size, elRef, onHeaderMouseDown, onResizeStart } = useFloatingPanel(defaultX, defaultY, resizeCfg);
   // ★ AI 对话浮窗：功能开关/技能状态由浮窗持有，贴附气泡（左缘）切换
   var isAiChat = config.key === 'ai-chat';
+  // 气泡栏可被插件接管（chatRail 扩展点）：插件注册优先，宿主内置兜底
+  var pluginChatRail = usePluginRegistry(function(s) { return s.chatRail; });
   var [chatControls, setChatControls] = useState({ syncInsert: false, enableTools: false, enableAgent: false, skillId: null as string | null });
   var chatControlProps: ChatPanelControlProps | undefined = undefined;
   var aiRail: React.ReactNode = null;
@@ -377,8 +384,10 @@ function FloatingPanelWindow({
       onActiveSkillChange: function(id) { setChatControls(function(p) { return { ...p, skillId: id }; }); },
     };
     const ccp = chatControlProps; // const 窄化进闭包
+    const RailComponent = (pluginChatRail?.Component ?? AiChatBubbleRail) as typeof AiChatBubbleRail;
     aiRail = (
-      <AiChatBubbleRail
+      <RailComponent
+        key={pluginChatRail?.key ?? 'builtin-chat-rail'}
         syncInsert={ccp.syncInsert}
         enableTools={ccp.enableTools}
         enableAgent={ccp.enableAgent}
@@ -414,6 +423,8 @@ function FloatingPanelWindow({
     >
       {/* ★ AI 对话：功能气泡贴附在浮窗左缘外侧（根 div 是 absolute 定位基准，不受内容区裁剪） */}
       {aiRail}
+      {/* ★ 插件面板可选的左缘气泡栏（FloatingPanelDef.rail，如自动写作面板旁的技能入口） */}
+      {config.rail ? <config.rail /> : null}
       <PanelSection
         title={config.label}
         icon={config.icon}
@@ -475,6 +486,23 @@ export function ProjectLayout() {
   var navigate = useNavigate();
   var params = useParams<{ bookId: string }>();
   var urlBookId = params.bookId;
+  // ★「返回」策略（2026-09-12 重写）：统一为「退出项目、回书架」，**不再依赖历史栈**。
+  //
+  //   ⚠ 为什么不能用 navigate(-1)：
+  //     `/project` 是**瞬态页** —— 只要有章节，ProjectIndexPage 就会用 replace 跳到章节编辑器，
+  //     而 replace 会把 `/project` 这条历史记录**抹掉**。从书架进来时的历史栈实际是
+  //     [书架, 章节页]，于是 navigate(-1) 会越过「上一层」直接弹回书架。
+  //
+  //   ⚠ 为什么不能用 navigate(PATHS.project)：
+  //     ProjectIndexPage 挂载后立刻又把你 replace 回章节编辑器，表现为
+  //     「点了返回没反应、还在原界面」。
+  //
+  //   固定回书架后行为稳定可预测：无章节项目的首页本身就在 /project，返回同样出到书架。
+  var backTarget = PATHS.bookshelf;
+  var backLabel = '返回书架';
+  var handleBack = useCallback(function() {
+    navigate(backTarget);
+  }, [backTarget, navigate]);
   var project = useProjectStore(function(s) { return s.currentProject; });
   var setProject = useProjectStore(function(s) { return s.setProject; });
   var user = useAuthStore(function(s) { return s.user; });
@@ -517,7 +545,10 @@ export function ProjectLayout() {
   }, [urlBookId, setProject]);
 
   // ★ 优先用 URL 的 bookId 触发 syncService，避免 project 暂未恢复时 syncService 拿到 undefined
-  useSyncService(urlBookId || project?.id);
+  //   取回 reload 下传给 AI 写作工作台：交付后实体已在服务端落库，
+  //   需要这个实例（而**不能**在工作台里再挂一个 useSyncService —— 那会让每次 store
+  //   变更被两个订阅各写一遍，实体重复创建）把项目数据重新拉进 store。
+  var { reload: reloadProjectData } = useSyncService(urlBookId || project?.id);
 
   // ★ 加载参考书：当项目 ID 可用时从后端加载参考书列表
   // 参考书独立于 syncService 的实体同步，且 ReferenceReader 是惰性加载的浮窗面板，
@@ -549,6 +580,16 @@ export function ProjectLayout() {
     navigate(PATHS.login);
   }, [logout, navigate]);
 
+  // ★ 创作模式分流：AI 写作模式走固定工作台 —— 不渲染罗盘气泡，也不挂载任何手写浮窗面板。
+  //   刻意放在所有 hooks 之后，保证两种模式下 hooks 的调用顺序完全一致。
+  if ((project?.mode ?? 'manual') === 'auto') {
+    return (
+      <Suspense fallback={<PanelFallback />}>
+        <AutoWriteWorkbench project={project} onBack={handleBack} onProjectDataChanged={reloadProjectData} />
+      </Suspense>
+    );
+  }
+
   return (
     <div
       className="h-screen flex flex-col overflow-hidden relative"
@@ -563,18 +604,19 @@ export function ProjectLayout() {
         {/* 左侧：返回书架 + 项目名 */}
         <div className="flex items-center gap-2 justify-self-start">
           <button
-            onClick={function() { navigate(PATHS.bookshelf); }}
+            onClick={handleBack}
             className="nm-btn-apple-icon-sm"
-            title="返回书架"
-            aria-label="返回书架"
+            title="返回"
+            aria-label="返回"
           >
             <ArrowLeft size={15} />
           </button>
           <span
             className="text-[13px] font-semibold select-none cursor-pointer truncate max-w-[120px] sm:max-w-[200px]"
             style={{ color: 'hsl(var(--foreground))', letterSpacing: '-0.2px' }}
-            onClick={() => navigate(PATHS.root)}
-            title={project ? project.name : 'NovelMuse'}
+            onClick={() => navigate(backTarget)}
+            title={backLabel}
+            aria-label={backLabel}
           >
             {project ? project.name : 'NovelMuse'}
           </span>
@@ -660,11 +702,18 @@ export function ProjectLayout() {
         })}
       </main>
 
-      {/* 功能气泡层 — 放在 main 之外（main 的 z-10 层叠上下文会限制内部 z-index），确保真正全局最顶层 */}
+      {/* 功能转轮 — 放在 main 之外（main 的 z-10 层叠上下文会限制内部 z-index），确保真正全局最顶层。
+          待机 = 顶栏中央一颗罗盘泡；悬停花开出全部功能面板（开/关切换） */}
       <FloatingBubbles
         panels={bubblePanels}
         openKeys={openPanelKeys}
-        onOpen={openPanel}
+        onToggle={function(key) {
+          if (openPanelKeys.includes(key)) {
+            closePanel(key);
+          } else {
+            openPanel(key);
+          }
+        }}
       />
     </div>
   );

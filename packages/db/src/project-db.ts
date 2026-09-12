@@ -27,6 +27,31 @@ interface ProjectDbEntry {
 /** LRU 缓存：projectId → 项目库实例 */
 const _projectDbCache = new Map<string, ProjectDbEntry>();
 
+// ---- 项目库初始化钩子 ----
+// 用途：插件正式表迁移通道（ctx.db.migrate scope:'project'）——插件把迁移登记为
+// pending 后，任何「之后才创建/打开」的项目库由钩子自动补跑，无需全量重开旧库。
+type ProjectDbInitHook = (projectId: string) => void;
+const _projectDbInitHooks: ProjectDbInitHook[] = [];
+
+/** 注册项目库初始化回调（在应用自身 schema 迁移之后触发）；返回取消注册函数 */
+export function onProjectDbInit(cb: ProjectDbInitHook): () => void {
+  _projectDbInitHooks.push(cb);
+  return () => {
+    const i = _projectDbInitHooks.indexOf(cb);
+    if (i >= 0) _projectDbInitHooks.splice(i, 1);
+  };
+}
+
+/** 列出当前已打开项目库的原始 sqlite 连接（LRU 缓存内） */
+export function listOpenProjectDbs(): Array<{ projectId: string; sqlite: unknown }> {
+  return [..._projectDbCache.entries()].map(([projectId, e]) => ({ projectId, sqlite: e.sqlite }));
+}
+
+/** 按 projectId 取已打开项目库的原始 sqlite 连接（未打开返回 null） */
+export function getProjectSqliteRaw(projectId: string): unknown {
+  return _projectDbCache.get(projectId)?.sqlite ?? null;
+}
+
 /** 最大同时打开的项目库数量（超过则关闭最旧的） */
 const MAX_OPEN_PROJECT_DBS = 5;
 
@@ -187,6 +212,16 @@ export async function initProjectDb(projectId: string): Promise<DrizzleDb> {
   }
 
   console.log(`[ProjectDB] 已初始化项目库: ${projectId}`);
+  // 初始化钩子在应用自身 schema 迁移（runProjectMigrations）之后触发，
+  // 插件迁移只会叠在宿主表之上，不会与之竞争
+  for (const hook of _projectDbInitHooks) {
+    try {
+      hook(projectId);
+    } catch (e) {
+      // 钩子失败不阻断项目库初始化（调用方各自负责错误处理）
+      console.error('[ProjectDB] init 钩子执行失败:', e);
+    }
+  }
   return db;
 }
 

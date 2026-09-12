@@ -470,6 +470,15 @@ const TOOL_LABELS: Record<string, string> = {
   set_outline_core_conflict: '设置核心冲突',
   set_chapter_outline: '设置章节大纲',
   set_outline_section: '设置大纲分区',
+  // 自动写作引擎（novel.autowrite 插件）流程工具
+  autowrite_plan_batch: '规划写作批次',
+  autowrite_write_draft: '写作官出稿',
+  autowrite_check_draft: '一致性校对',
+  autowrite_polish_draft: '质量评审',
+  autowrite_confirm_chapter: '交付章节',
+  autowrite_resume_batch: '恢复批次',
+  autowrite_status: '查询写作进度',
+  autowrite_audit: '查审计台账',
 };
 
 function ToolCallBubble({ event }: {
@@ -881,7 +890,16 @@ export function SkillsBar({
   const [expanded, setExpanded] = useState(false);
   const navigate = useNavigate();
   // ★ 技能列表来自后端注册表（含插件技能）：首次展开时拉取
-  const skills = useSkillRegistry((s) => s.skills);
+  const allSkills = useSkillRegistry((s) => s.skills);
+  // ★ 双模块分离（2026-09-11）：手写模式下不暴露流程型「自动写作」技能 ——
+  //   否则用户能在手写框架里启动 AI 写作批次，两套框架又混在一起。
+  //   注意：技能元数据目前没有 kind/modes 字段，这里暂按 id 过滤；
+  //   日后应由服务端下发「适用模式」声明，前端按声明过滤。
+  const projectMode = useProjectStore((s) => s.currentProject?.mode ?? 'manual');
+  const skills = useMemo(
+    () => (projectMode === 'auto' ? allSkills : allSkills.filter((s) => s.id !== 'auto-write')),
+    [allSkills, projectMode],
+  );
   const ensureSkillsLoaded = useSkillRegistry((s) => s.ensureLoaded);
   const isExpanded = embedded || expanded;
   useEffect(() => {
@@ -1094,20 +1112,22 @@ export interface ChatPanelControlProps {
   onActiveSkillChange: (id: string | null) => void;
 }
 
-/** controls 缺失时的兜底（面板不崩，渲染可见标记便于定位调用方） */
-const FALLBACK_CONTROLS: ChatPanelControlProps = {
-  syncInsert: false,
-  enableTools: false,
-  enableAgent: false,
-  activeSkillId: null,
-  onSyncInsertChange: () => {},
-  onEnableToolsChange: () => {},
-  onEnableAgentChange: () => {},
-  onActiveSkillChange: () => {},
-};
+/** controls 缺失时各开关的兜底值在函数内联构造（no-op 回调），不再需要独立常量 */
 
-export function ChatPanel(props: { controls?: ChatPanelControlProps }) {
-  const controls = props.controls ?? FALLBACK_CONTROLS;
+export function ChatPanel(props: { controls?: ChatPanelControlProps } & Partial<ChatPanelControlProps>) {
+  // ★ 兼容两种传法：{ controls } 对象（契约形态）与平铺字段（PanelContent 展开 chatControls 的
+  //   实际传法）。此前只读 props.controls，平铺路径取不到 → 永远落在 FALLBACK（开关全 no-op），
+  //   工具调用/技能激活在聊天请求里全部丢失（2026-09-10 自动写作 E2E 实测定位）。
+  const controls: ChatPanelControlProps = props.controls ?? {
+    syncInsert: props.syncInsert ?? false,
+    enableTools: props.enableTools ?? false,
+    enableAgent: props.enableAgent ?? false,
+    activeSkillId: props.activeSkillId ?? null,
+    onSyncInsertChange: props.onSyncInsertChange ?? (() => {}),
+    onEnableToolsChange: props.onEnableToolsChange ?? (() => {}),
+    onEnableAgentChange: props.onEnableAgentChange ?? (() => {}),
+    onActiveSkillChange: props.onActiveSkillChange ?? (() => {}),
+  };
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);

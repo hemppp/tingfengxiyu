@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
-import type { Project } from '@novel/shared';
+import type { Project, ProjectMode } from '@novel/shared';
 import { modalEnter, modalExit } from '@/utils/gsap';
 import { dispatchToastEvent } from '@/utils/errors';
 
@@ -10,6 +10,8 @@ interface AddBookFormData {
   description?: string;
   cover?: string;
   targetWordCount?: number;
+  /** 创作模式：决定该项目加载哪一套工作台（两套 UI 互斥） */
+  mode?: ProjectMode;
 }
 
 interface AddBookModalProps {
@@ -25,6 +27,8 @@ export function AddBookModal({ isOpen, onClose, onSubmit, editBook }: AddBookMod
   const [description, setDescription] = useState('');
   const [targetWordCount, setTargetWordCount] = useState('');
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  /** 创作模式：新建默认「手写」，AI 写作需显式切换 */
+  const [mode, setMode] = useState<ProjectMode>('manual');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [focusedField, setFocusedField] = useState<string | null>(null);
@@ -97,12 +101,14 @@ export function AddBookModal({ isOpen, onClose, onSubmit, editBook }: AddBookMod
       setDescription(editBook.description || '');
       setTargetWordCount(editBook.targetWordCount?.toString() || '');
       setCoverPreview(editBook.coverImage || null);
+      setMode(editBook.mode ?? 'manual');
     } else {
       setTitle('');
       setAuthor('');
       setDescription('');
       setTargetWordCount('');
       setCoverPreview(null);
+      setMode('manual');
     }
     setError('');
      
@@ -131,6 +137,7 @@ export function AddBookModal({ isOpen, onClose, onSubmit, editBook }: AddBookMod
         description: description.trim() || undefined,
         targetWordCount: targetWordCount ? parseInt(targetWordCount) : undefined,
         cover: coverPreview || undefined,
+        mode,
       });
       onClose();
     } catch (err) {
@@ -242,6 +249,90 @@ export function AddBookModal({ isOpen, onClose, onSubmit, editBook }: AddBookMod
         {/* Form */}
         <form onSubmit={handleSubmit} style={{ padding: '20px 24px 24px 24px' }} className="addbook-form">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* 创作方式 —— 创建时的第一步决策：决定这个项目加载哪一套工作台（两套 UI 互斥） */}
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: 12,
+                fontWeight: 500,
+                color: 'hsl(var(--secondary-foreground))',
+                marginBottom: 6,
+              }}>
+                创作方式
+              </label>
+              <div
+                role="radiogroup"
+                aria-label="创作方式"
+                style={{
+                  position: 'relative',
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  padding: 3,
+                  borderRadius: 999,
+                  background: 'rgb(var(--glass-tint) / 0.45)',
+                  border: '0.5px solid hsl(var(--border) / 0.6)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                }}
+              >
+                {/* 滑动指示块：靠 translateX 在两项之间滑，而不是重新布局 */}
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    top: 3,
+                    bottom: 3,
+                    left: 3,
+                    width: 'calc(50% - 3px)',
+                    borderRadius: 999,
+                    background: 'linear-gradient(160deg, hsl(var(--primary)), hsl(var(--primary) / 0.78))',
+                    boxShadow: '0 2px 10px hsl(var(--primary) / 0.32), inset 0 1px 0 rgb(var(--glass-highlight) / 0.5)',
+                    transform: mode === 'auto' ? 'translateX(100%)' : 'translateX(0)',
+                    transition: 'transform 0.32s cubic-bezier(0.34, 1.4, 0.64, 1)',
+                  }}
+                />
+                {([
+                  { key: 'manual' as ProjectMode, label: '手写' },
+                  { key: 'auto' as ProjectMode, label: 'AI 写作' },
+                ]).map((opt) => {
+                  const active = mode === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => setMode(opt.key)}
+                      style={{
+                        position: 'relative',
+                        zIndex: 1,
+                        padding: '8px 0',
+                        border: 'none',
+                        background: 'transparent',
+                        cursor: 'pointer',
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: active ? '#fff' : 'hsl(var(--muted-foreground))',
+                        transition: 'color 0.2s',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p style={{
+                fontSize: 11,
+                lineHeight: 1.55,
+                color: 'hsl(var(--muted-foreground))',
+                margin: '6px 2px 0 2px',
+              }}>
+                {mode === 'manual'
+                  ? '自己执笔，AI 打辅助 —— 罗盘气泡 + 角色 / 地图 / 时间线等浮窗面板'
+                  : 'AI 主笔、你审稿 —— 智能体交流流 + 流式写文，手写面板不加载'}
+              </p>
+            </div>
+
             {/* Title */}
             <div>
               <label style={{

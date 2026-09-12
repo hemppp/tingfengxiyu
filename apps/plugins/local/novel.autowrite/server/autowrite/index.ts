@@ -1,0 +1,50 @@
+// ============================================================
+// 自动写作 flow 型技能 —— 装配
+//
+// FlowSpec（声明）+ 8 个流程工具（裁决式执行）。
+// 工具注册走 ctx.effect 包裹，插件禁用/卸载时随 DisposerBag 自动注销。
+// ============================================================
+
+import type { ServerPluginContext } from '@novel/core';
+import type { FlowSpec } from '../framework/types.js';
+import { planBatchDef, planBatchHandler } from './tool-plan.js';
+import { writeDraftDef, writeDraftHandler } from './tool-write.js';
+import { checkDraftDef, polishDraftDef, checkDraftHandler, polishDraftHandler } from './tool-review.js';
+import { confirmChapterDef, confirmChapterHandler } from './tool-deliver.js';
+import { resumeBatchDef, statusDef, auditDef, resumeBatchHandler, statusHandler, auditHandler } from './tools-admin.js';
+import { buildOrchestratorPrompt } from './prompts.js';
+import { GOVERNANCE } from './helpers.js';
+
+/** 自动写作 FlowSpec（治理见 helpers.ts GOVERNANCE） */
+export const AUTOWRITE_SPEC: FlowSpec = {
+  steps: ['plan', 'write', 'check', 'polish', 'deliver'],
+  gate: 'per-chapter',
+  governance: GOVERNANCE,
+};
+
+/** 自动写作技能定义（编排器协议由 FlowSpec 生成） */
+export const AUTOWRITE_SKILL = {
+  id: 'auto-write',
+  name: '自动写作',
+  description: 'AI 自动写作：按大纲多代理流水线逐章写作（规划→写作→校对→润色→交付）',
+  color: '#2383C7',
+  contextKeys: [],
+  systemPrompt: buildOrchestratorPrompt(AUTOWRITE_SPEC.gate),
+};
+
+/** 注册全部流程工具（每工具一个 effect，可独立注销） */
+export function registerAutowrite(ctx: ServerPluginContext): void {
+  const tools: Array<[typeof planBatchDef, ReturnType<typeof planBatchHandler>]> = [
+    [planBatchDef, planBatchHandler(ctx)],
+    [writeDraftDef, writeDraftHandler(ctx)],
+    [checkDraftDef, checkDraftHandler(ctx)],
+    [polishDraftDef, polishDraftHandler(ctx)],
+    [confirmChapterDef, confirmChapterHandler(ctx)],
+    [resumeBatchDef, resumeBatchHandler(ctx)],
+    [statusDef, statusHandler(ctx)],
+    [auditDef, auditHandler(ctx)],
+  ];
+  for (const [def, handler] of tools) {
+    ctx.effect(() => ctx.ai.tools.register(def, handler), `autowrite: ${def.function.name}`);
+  }
+}

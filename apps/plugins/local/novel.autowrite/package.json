@@ -1,0 +1,18 @@
+{
+  "name": "@novel-plugins/autowrite",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "自动写作引擎：写作技能框架 + 多代理流转 + 治理（插件 manifest 见 plugin.json）",
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@novel/core": "workspace:*",
+    "@novel/db": "workspace:*",
+    "lucide-react": "^0.468.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

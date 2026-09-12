@@ -1,0 +1,125 @@
+/* ============================================================
+ * NovelMuse · 主题层（2026-09-11）
+ *
+ * 换肤模型：**两个正交维度**
+ *   data-theme  →  主题性格（色彩性格 / 形态 / 材质）
+ *   class=dark  →  明暗
+ *
+ * 接入方式：默认主题（青霭玻璃）就在 globals.css 的 `:root` / `.dark` 里，
+ *   本文件只负责**非默认主题**。选中主题时给 <html> 挂 `data-theme="xxx"`，
+ *   选默认主题时**移除该属性**（回落到 :root）。
+ *
+ * ★ 选择器用 `html[data-theme="..."]`（元素+属性）而不是 `[data-theme="..."]`：
+ *   前者的特异性高于 `.dark`（0,1,1 > 0,1,0），因此**不依赖 CSS 引入顺序**即可稳定覆盖，
+ *   避免了「谁后加载谁生效」这种脆弱约定。
+ *
+ * ★ 主题必须**覆盖全套变量**：语义色板、项目专色（mountain/mist/ink/cinnabar/willow/ochre）、
+ *   玻璃 token、radius、以及语义扩展层（entity/agent/state）。
+ *   漏掉任何一组，都会从 :root 继承青霭玻璃的值 —— 表现为「换了一半皮」。
+ * ============================================================ */
+
+/* ============================================================
+ * 主题：arcade —— 电玩街机
+ *
+ * 设计取向：深空蓝紫底 + 霓虹青主色 + 硬边小圆角 + 实边面板。
+ *   · 底色压到 6% 明度，让霓虹有"发光"的余地
+ *   · 强调色不用大面积铺，只用于边框 / 状态 / 数据
+ *   · glass 组刻意调"实"（模糊 4px、不透明度拉高）—— 电玩面板是硬屏，不是毛玻璃
+ *   · radius 收到 4/6/8px，与青霭玻璃的 16/20/24px 形成明确对比
+ *
+ * 注：本主题本身即暗色。选它时 UI 会同时挂 dark，不提供浅色变体。
+ * ============================================================ */
+
+html[data-theme="arcade"] {
+  /* —— 基底：深空蓝紫 —— */
+  --background: 232 30% 6%;              /* #0a0d18 */
+  --foreground: 187 90% 92%;             /* #d6f7ff 青白 */
+  --card: 232 26% 10%;                   /* #12162a */
+  --card-foreground: 187 90% 92%;
+
+  /* —— 主色：霓虹青 —— */
+  --primary: 187 100% 50%;               /* #00e5ff */
+  --primary-foreground: 232 40% 7%;
+
+  /* —— 辅助 —— */
+  --secondary: 232 22% 17%;              /* #212640 */
+  --secondary-foreground: 187 60% 88%;
+  --muted: 232 20% 15%;
+  --muted-foreground: 200 22% 62%;       /* #7ba0b5 冷灰蓝 */
+  --accent: 327 100% 59%;                /* #ff2e88 品红 */
+  --accent-foreground: 0 0% 100%;
+  --destructive: 353 90% 61%;            /* #ff3b4e */
+  --destructive-foreground: 0 0% 100%;
+
+  /* —— 边框 / 输入 / 焦点：霓虹描边 —— */
+  --border: 199 55% 30%;                 /* #23566f */
+  --input: 232 22% 14%;
+  --ring: 187 100% 50%;
+
+  /* —— 圆角：硬边（与青霭玻璃的大圆角形成主题差异）—— */
+  --radius: 0.25rem;                     /* 4px */
+  --radius-lg: 0.375rem;                 /* 6px */
+  --radius-xl: 0.5rem;                   /* 8px */
+
+  /* —— 项目专色：全部改成霓虹变体，避免继承青霭玻璃的靛调 —— */
+  --mountain-cyan: 187 100% 50%;         /* 主强调 → 霓虹青 */
+  --mountain-light: 187 80% 68%;
+  --mountain-deep: 260 90% 66%;          /* 深锚点 → 电紫 */
+  --mountain-pale: 187 60% 22%;          /* 淡色在暗底上要"深"，否则面板会发灰 */
+  --mist-blue: 220 90% 70%;
+  --mist-pale: 220 50% 22%;
+  --mist-deep: 220 80% 55%;
+  --ink: 187 90% 92%;                    /* 文字类：暗底反相 */
+  --ink-light: 195 40% 72%;
+  --ink-pale: 200 25% 55%;
+  --cinnabar: 353 90% 61%;               /* 危险 → 霓虹红 */
+  --cinnabar-pale: 353 60% 20%;
+  --willow: 150 100% 61%;                /* 成功 → 荧光绿 */
+  --willow-pale: 150 60% 18%;
+  --ochre: 38 100% 56%;                  /* 警示 → 琥珀霓虹 */
+  --ochre-pale: 38 70% 18%;
+
+  /* —— 玻璃 token：电玩不是毛玻璃，是"硬屏 + 微透" —— */
+  --glass-blur: 4px;
+  --glass-saturate: 120%;
+  --glass-tint: 18 22 42;                /* 面板底色偏靛蓝 */
+  --glass-highlight: 0 229 255;          /* 高光染霓虹青 */
+  --glass-shadow: 187 100% 50%;          /* 投影色 → 辉光用青 */
+
+  --glass-surface-bg: 0.55;              /* 小控件：足够实，保证暗底可读 */
+  --glass-surface-border: 0.55;
+  --glass-surface-highlight: 0.10;
+  --glass-panel-bg: 0.60;
+  --glass-panel-border: 0.55;
+  --glass-panel-highlight: 0.10;
+  --glass-frost-bg: 0.72;
+  --glass-frost-border: 0.60;
+  --glass-frost-highlight: 0.12;
+  --glass-strong-bg: 0.82;
+  --glass-strong-border: 0.55;
+  --glass-strong-highlight: 0.12;
+  --glass-modal-bg: 0.90;
+  --glass-modal-border: 0.45;
+  --glass-modal-highlight: 0.14;
+
+  /* —— 语义扩展层：实体分类色（霓虹变体）—— */
+  --entity-character: 195 100% 62%;
+  --entity-location: 150 100% 58%;
+  --entity-item: 187 100% 50%;
+  --entity-foreshadow: 38 100% 58%;
+  --entity-event: 260 90% 70%;
+  --entity-outline: 220 90% 72%;
+
+  /* —— 语义扩展层：智能体色 —— */
+  --agent-plot: 187 100% 50%;
+  --agent-character: 195 100% 64%;
+  --agent-continuity: 38 100% 58%;
+  --agent-convener: 150 100% 58%;
+  --agent-writer: 327 100% 64%;
+
+  /* —— 语义扩展层：状态色 —— */
+  --state-idle: 220 18% 46%;
+  --state-running: 38 100% 58%;
+  --state-done: 150 100% 58%;
+  --state-blocked: 353 90% 64%;
+}

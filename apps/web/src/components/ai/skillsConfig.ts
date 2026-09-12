@@ -13,10 +13,10 @@
 
 import { create } from 'zustand';
 import {
-  Users, Lightbulb, Activity, Globe, MessageSquare, Network, PenTool, BookOpen,
   Puzzle, type LucideIcon,
 } from 'lucide-react';
 import { apiClient } from '@/services/api/apiClient';
+import { usePluginRegistry } from '@/plugin/registry';
 
 /** 技能上下文类型标识 —— 与后端 SkillContextKey 对齐 */
 export type SkillContextKey =
@@ -44,17 +44,9 @@ export interface SkillMeta {
   source: 'builtin' | 'plugin';
 }
 
-/** 内置技能的图标映射（仅展示用途；名称/描述/颜色以后端为准） */
-const SKILL_ICONS: Record<string, LucideIcon> = {
-  'character-analyst': Users,
-  'foreshadow-tracker': Lightbulb,
-  'rhythm-doctor': Activity,
-  'worldbuilder': Globe,
-  'dialogue-polisher': MessageSquare,
-  'plot-architect': Network,
-  'continue-writer': PenTool,
-  'outline-architect': BookOpen,
-};
+/** 技能图标：内容归插件所有（2026-09 剥离，docs/autowrite-plugin-framework.md §7），
+ *  经插件 web 面 ctx.registerSkillIcons 注册；此处只留兜底表（未知技能用 Puzzle）。 */
+const SKILL_ICONS: Record<string, LucideIcon> = {};
 
 const FALLBACK_ICON = Puzzle;
 
@@ -76,8 +68,9 @@ export const useSkillRegistry = create<SkillRegistryState>((set, get) => ({
     try {
       const resp = await apiClient.get<{ skills?: Array<Omit<SkillMeta, 'icon'>> }>('/ai/skills');
       const list = resp.skills ?? [];
+      const pluginIcons = usePluginRegistry.getState().skillIcons;
       set({
-        skills: list.map((s) => ({ ...s, icon: SKILL_ICONS[s.id] ?? FALLBACK_ICON })),
+        skills: list.map((s) => ({ ...s, icon: pluginIcons[s.id] ?? SKILL_ICONS[s.id] ?? FALLBACK_ICON })),
         loaded: true,
       });
     } catch (err) {

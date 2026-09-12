@@ -549,6 +549,18 @@ async function applyCompatPatches(sqlite: any): Promise<void> {
     console.warn('[better-sqlite3] 检查 projects.user_id 失败:', e);
   }
 
+  // 1b. projects.mode（创作模式：manual = 手写框架 / auto = AI 写作框架）
+  // 旧库补列后为 NULL，读取侧统一按 'manual' 兜底，因此刻意不回填数据。
+  try {
+    if (hasTable('projects') && !hasColumn('projects', 'mode')) {
+      console.log('[better-sqlite3] projects 表缺少 mode 列，正在添加...');
+      sqlite.exec('ALTER TABLE projects ADD COLUMN mode TEXT');
+      console.log('[better-sqlite3] projects.mode 列添加成功。');
+    }
+  } catch (e) {
+    console.warn('[better-sqlite3] 检查 projects.mode 失败:', e);
+  }
+
   // 2. user_settings.ai_provider_config
   try {
     if (hasTable('user_settings') && !hasColumn('user_settings', 'ai_provider_config')) {
