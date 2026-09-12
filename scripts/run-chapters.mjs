@@ -110,9 +110,10 @@ async function runBatch(startOrder, nChapters) {
     out.push(row);
     fs.appendFileSync(LOG, JSON.stringify(row) + '\n', 'utf8');
     const wc = cur.delivered?.wordCount ?? 0;
+    const warn = cur.delivered?.warnings?.length ? ` ⚠ ${cur.delivered.warnings.join('；')}` : '';
     say(
       delivered
-        ? `  ✔ 第 ${cur.order} 章交付 ${wc} 字｜意图门打回 ${cur.reviews} 次｜校对门 ${ck ? (ck.passed ? '过' : '有冲突(未拦)') : '未执行'}｜润色 ${cur.polishes.at(-1) ?? '-'} 分｜实体 ${cur.entities ? `${cur.entities.created}新/${cur.entities.updated}更` : '-'}`
+        ? `  ✔ 第 ${cur.order} 章交付 ${wc} 字｜意图门打回 ${cur.reviews} 次｜校对门 ${ck ? (ck.passed ? '过' : '有冲突(未拦)') : '未执行'}｜润色 ${cur.polishes.at(-1) ?? '-'} 分｜实体 ${cur.entities ? `${cur.entities.created}新/${cur.entities.updated}更` : '-'}${warn}`
         : `  ✘ 第 ${cur.order} 章未交付${cur.blocked ? `（${String(cur.blocked.reason).slice(0, 60)}）` : ''}`,
     );
     if (ck?.detail && !ck.passed) say(`     校对门说明：${String(ck.detail).slice(0, 200)}`);
@@ -153,7 +154,7 @@ async function runBatch(startOrder, nChapters) {
             break;
           case 'delivered':
             if (!cur.order) cur.order = e.order; // 单章模式没有 chapter_start，章号从交付事件补
-            cur.delivered = { order: e.order, title: e.title, wordCount: e.wordCount, created: e.created };
+            cur.delivered = { order: e.order, title: e.title, wordCount: e.wordCount, created: e.created, warnings: e.warnings };
             break;
           case 'deliver_blocked':
             if (!cur.order) cur.order = e.order;

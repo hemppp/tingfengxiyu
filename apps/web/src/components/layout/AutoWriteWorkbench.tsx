@@ -331,10 +331,13 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
             ? { ...s, check: e.passed ? 'done' : 'blocked', polish: 'running' }
             : { ...s, polish: e.passed ? 'done' : 'blocked', deliver: 'running' }));
         } else if (e.type === 'delivered') {
+          // warnings：交付了但需要人工复核（例如意图门打回上限用尽仍交付）——
+          // 连写时不丢章，但必须让作者知道哪一章要回头看
+          const warn = e.warnings?.length ? `\n⚠ ${e.warnings.join('；')}` : '';
           push({
             from: 'delivered', name: '交付', color: '#0F6E56', short: '✓',
-            text: `${e.created ? '已新建并写入' : '已写入'} ${e.title}（${e.wordCount} 字）`,
-            tone: 'ok',
+            text: `${e.created ? '已新建并写入' : '已写入'} ${e.title}（${e.wordCount} 字）${warn}`,
+            tone: e.warnings?.length ? 'warn' : 'ok',
           });
           setStages((s) => ({ ...s, deliver: 'done' }));
         } else if (e.type === 'deliver_blocked') {

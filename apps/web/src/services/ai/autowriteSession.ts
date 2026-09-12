@@ -40,8 +40,8 @@ export type SessionEvent =
    *   polish —— 软门评分（0–10，7 为通过线），从不阻塞交付。
    */
   | { type: 'gate'; name: 'check' | 'polish'; passed: boolean; detail: string; score?: number }
-  /** 交付成功：正文已写入章节 */
-  | { type: 'delivered'; order: number; title: string; wordCount: number; created: boolean }
+  /** 交付成功：正文已写入章节。warnings 非空 = 交付了但有需人工复核之处（如意图门未过） */
+  | { type: 'delivered'; order: number; title: string; wordCount: number; created: boolean; warnings?: string[] }
   /** 交付被拦：多为「该章已有正文，不自动覆盖」，或「没认出章号」 */
   | { type: 'deliver_blocked'; order: number; title: string; reason: string }
   /** 实体沉淀：交付后写入项目库的角色/物品/地点/伏笔条数 */

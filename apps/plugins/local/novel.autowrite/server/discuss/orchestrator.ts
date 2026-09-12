@@ -52,7 +52,12 @@ export type SessionEvent =
    *   polish —— 软门（质量评分）：**从不阻塞**，passed 表示是否达到 POLISH_PASS_SCORE。
    */
   | { type: 'gate'; name: 'check' | 'polish'; passed: boolean; detail: string; score?: number }
-  | { type: 'delivered'; order: number; title: string; wordCount: number; created: boolean }
+  /**
+   * 交付成功。`warnings` 非空 = 交付了但有需人工复核之处（例如意图门打回上限用尽）。
+   * **连写场景下不能因为门没过就丢章**：缺一章会让后面所有章失去前情，
+   * 比带瑕疵的一章糟得多（实测 30 章连写丢了 2/7 章，就是这么来的）。
+   */
+  | { type: 'delivered'; order: number; title: string; wordCount: number; created: boolean; warnings?: string[] }
   | { type: 'deliver_blocked'; order: number; title: string; reason: string }
   /** 实体沉淀结果：本章交付后写入项目库的角色/物品/地点/伏笔条数 */
   | { type: 'entities'; created: number; updated: number; skipped: number; notes: string[] }
@@ -131,7 +136,7 @@ function parseChapterOrder(message: string): number | null {
  */
 async function deliver(
   ctx: ServerPluginContext,
-  opts: { projectId: string; message: string; order?: number; draft: string },
+  opts: { projectId: string; message: string; order?: number; draft: string; warnings?: string[] },
   emit: (e: SessionEvent) => void,
 ): Promise<{ delivered: boolean; order: number; title: string }> {
   const order = opts.order ?? parseChapterOrder(opts.message);
@@ -174,7 +179,7 @@ async function deliver(
     await db.update(schema.chapters)
       .set({ content, wordCount, updatedAt: now })
       .where(eq(schema.chapters.id, row.id));
-    emit({ type: 'delivered', order, title: row.title, wordCount, created: false });
+    emit({ type: 'delivered', order, title: row.title, wordCount, created: false, ...(opts.warnings?.length ? { warnings: opts.warnings } : {}) });
     return { delivered: true, order, title: row.title };
   }
 
@@ -190,7 +195,7 @@ async function deliver(
     createdAt: now,
     updatedAt: now,
   });
-  emit({ type: 'delivered', order, title, wordCount, created: true });
+  emit({ type: 'delivered', order, title, wordCount, created: true, ...(opts.warnings?.length ? { warnings: opts.warnings } : {}) });
   return { delivered: true, order, title };
 }
 
@@ -429,14 +434,23 @@ export async function runDiscussion(
       );
       emit({ type: 'draft', text: currentDraft, revision: attempt });
     }
+    /**
+     * 未过意图门时的交付警示。
+     *
+     * ★ 这里曾经是「不通过就不交付」，实测 30 章连写时**丢了 2/7 章** —— 缺章会让
+     *   后面所有章失去前情（比带瑕疵的一章糟得多），而且脚本/后台跑的时候作者根本
+     *   看不到那份没入库的稿子。现在改为**带警示照常交付**，由作者事后复核。
+     */
+    const warnings: string[] = [];
     if (!approved) {
-      // 不交付 ≠ 白跑：最终稿已经通过 draft 事件送到前端（右栏正文方块），
-      // 作者可以自行取用。这里把话说清楚，别让人以为整轮浪费了。
+      warnings.push(`意图门未通过（打回 ${MAX_REVISIONS} 次），请人工复核本章`);
       emit({
         type: 'phase',
-        label: `未通过意图门（${MAX_REVISIONS} 次打回），本章不自动入库 —— 最终稿已送到上方正文方块，可复制到编辑器手动保存`,
+        label: `已达重写上限（${MAX_REVISIONS} 次）仍未通过意图门 —— 仍会交付（缺章比带瑕疵更糟），交付结果里会标注`,
       });
-    } else {
+    }
+
+    {
       /** 目标章号：后面两道门与交付都要用（deliver 内部会再算一次，规则相同） */
       const targetOrder = chapterOrder ?? parseChapterOrder(message) ?? 0;
 
