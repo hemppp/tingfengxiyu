@@ -12,6 +12,9 @@
 //   · 定稿官把讨论收敛成可比对的清单 —— 意图复核就靠对照它。
 // ============================================================
 
+/** 记忆权限类型（type-only 导入，运行时不引入、不会与 memory 模块成环） */
+import type { RoleMemoryPolicy } from '../framework/memory/types.js';
+
 export interface DesignRole {
   key: string;
   name: string;
@@ -22,6 +25,11 @@ export interface DesignRole {
   system: string;
   /** 允许调用的工具；设定管家需要读库 */
   tools?: string[];
+  /**
+   * 记忆权限（docs/multi-agent-memory-architecture.md §4.1 权限矩阵）。
+   * ★ **缺省 = 空集（fail-closed）**：新增角色忘记声明，读不到 L1，而不是默认全读。
+   */
+  memory?: RoleMemoryPolicy;
 }
 
 /** 剧情设计师 —— 这一章发生什么 */
@@ -30,6 +38,13 @@ export const ROLE_PLOT: DesignRole = {
   name: '剧情设计师',
   color: '#4F918C',
   short: '剧',
+  // ★ 宽度原则：凡「不注入就会编」的那几类都必须给（角色卡/伏笔/约束/前情）——
+  //   这条来自既有教训：让 agent 自己去查防不住幻觉，框架必须直接喂事实。
+  //   真正需要「刻意窄」的只有意图复核（它只对契约）。
+  memory: {
+    readL1: ['settings.projectName', 'settings.brief', 'settings.genre', 'entity.characters.*', 'outline.*', 'foreshadow.*', 'constraint.*', 'chapter.*'],
+    readNarrative: true,
+  },
   system: `你是「剧情设计师」，负责这一章**发生什么**。
 
 你的输出是一段说给同伴听的话，不是报告：
@@ -49,6 +64,11 @@ export const ROLE_CHARACTER: DesignRole = {
   name: '角色设计师',
   color: '#336C78',
   short: '角',
+  // 管人物动机：角色卡是核心；伏笔与前情也要（不然它不知道这人刚经历了什么）
+  memory: {
+    readL1: ['settings.projectName', 'settings.brief', 'entity.characters.*', 'foreshadow.*', 'constraint.*', 'chapter.*'],
+    readNarrative: true,
+  },
   system: `你是「角色设计师」，负责这一章里**人物为什么这样做**。
 
 你的输出是一段说给同伴听的话：
@@ -68,6 +88,8 @@ export const ROLE_CONTINUITY: DesignRole = {
   name: '设定管家',
   color: '#C18A3E',
   short: '设',
+  // ★ 唯一「查库」角色：宽权限读 L1 事实式，但每条都要带出处
+  memory: { l1Wide: true, readNarrative: true },
   system: `你是「设定管家」，负责这一章**会不会和既有设定打架**。
 
 你的输出是一段说给同伴听的话：
@@ -94,6 +116,11 @@ export const ROLE_CONVENER: DesignRole = {
   name: '定稿官',
   color: '#66944D',
   short: '定',
+  // 收敛契约：伏笔与约束是契约的一部分；大纲与前情用来判断这一章该落在哪儿
+  memory: {
+    readL1: ['settings.projectName', 'settings.brief', 'settings.genre', 'entity.characters.*', 'outline.*', 'foreshadow.*', 'constraint.*', 'chapter.*'],
+    readNarrative: true,
+  },
   system: `你是「定稿官」，负责把刚才的讨论**收敛成本章结论**。
 
 输入是这一轮的全部发言。产出一份**可比对的清单** —— 写作官据此写，复核据此查。
@@ -107,6 +134,7 @@ export const ROLE_CONVENER: DesignRole = {
 伏笔：<本章如何处理伏笔：埋 / 推进 / 不动，并写明为什么>
 禁项：<明确不许出现的内容>
 结束状态：<本章结束时人物知道了什么、世界变了什么>
+故事内时间：<本章结束时故事内是第几日/几时，如「第 3 日傍晚」。这一项必须写 —— 章号与故事时间不是一回事，它是判断「她说'昨天'对不对」的唯一依据>
 待定：<有分歧未决的写这里并说明分歧点；没有就写「无」>
 
 要求：
@@ -140,6 +168,11 @@ export const ROLE_WRITER: DesignRole = {
   name: '写作官',
   color: '#0F6E56',
   short: '写',
+  // 落笔前装配：契约相关的最宽一档（要写得出场景就得看到地点/物品）
+  memory: {
+    readL1: ['settings.projectName', 'settings.brief', 'settings.genre', 'entity.characters.*', 'entity.locations.*', 'entity.items.*', 'foreshadow.*', 'constraint.*', 'chapter.*', 'outline.*'],
+    readNarrative: true,
+  },
   system: `你是「写作官」，负责把刚才讨论出来的「本章结论」写成本章正文。
 
 要求：
@@ -174,6 +207,8 @@ export const ROLE_REVIEWER: DesignRole = {
   name: '意图复核',
   color: '#534AB7',
   short: '核',
+  // ★ 全表里**唯一刻意窄**的一处：只对契约。不给叙事式（读了正文容易被文笔带偏，就不是门了）
+  memory: { readL1: ['settings.projectName', 'settings.brief', 'constraint.*', 'foreshadow.*'], readNarrative: false },
   system: `你是「意图复核」，代表设计小组（剧情设计师 / 角色设计师 / 设定管家）对刚写完的正文做一次验收。
 你只回答一个问题：**写出来的，是不是我们商量的那一章。**
 

@@ -35,7 +35,45 @@ export function userIdOf(toolCtx: unknown): string | undefined {
 }
 
 /** 宽松 JSON 解析：截取首尾大括号之间内容，容忍模型输出围栏或前后缀 */
+/**
+ * 从自由文本里取出**第一个配平**的 JSON（对象或数组）。
+ *
+ * 为什么不能"第一个 { 到最后一个 }"：模型经常输出**两个 JSON**，
+ * 或者 JSON 后面跟一句带 `}` 的话 —— 那样切片会跨过两个对象，JSON.parse 直接报
+ * `Unexpected non-whitespace character after JSON`（实测在校对门上连撞 2/3 次）。
+ * 这里按括号配平扫描，字符串内的括号与转义都跳过。
+ */
+export function extractFirstJson(raw: string): string | null {
+  const open = raw.search(/[{[]/);
+  if (open < 0) return null;
+  const openCh = raw[open]!;
+  const closeCh = openCh === '{' ? '}' : ']';
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = open; i < raw.length; i++) {
+    const ch = raw[i]!;
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === openCh) depth += 1;
+    else if (ch === closeCh) {
+      depth -= 1;
+      if (depth === 0) return raw.slice(open, i + 1);
+    }
+  }
+  return null;   // 没配平（多半被 maxTokens 截断）
+}
+
 export function parseJsonLoose<T>(raw: string): T {
+  const first = extractFirstJson(raw);
+  if (first) {
+    try { return JSON.parse(first) as T; } catch { /* 落下去试老办法与更明确的报错 */ }
+  }
   const start = raw.indexOf('{');
   const end = raw.lastIndexOf('}');
   if (start < 0 || end <= start) throw new Error('输出中未找到 JSON 对象：' + raw.slice(0, 120));

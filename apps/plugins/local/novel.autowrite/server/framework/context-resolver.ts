@@ -22,6 +22,54 @@ export interface SettingsDigest {
   foreshadows: string;
   outline: string;
   chapters: string;
+  /**
+   * 开书设定（`projects.brief`）格式化后的文本，没有则为空串。
+   * 由新书向导收集：开局 / 世界观 / 笔风基调 / 主角 / 女主 / 流派。
+   */
+  brief?: string;
+}
+
+/** `projects.brief` 是 JSON 文本列，这里手动解析并兜底（不 import db 层的 parseJson，避免跨包耦合） */
+function parseBrief(raw: unknown): Record<string, unknown> | null {
+  if (typeof raw !== 'string' || raw.trim() === '') return null;
+  try {
+    const v = JSON.parse(raw);
+    return v && typeof v === 'object' ? (v as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 把开书设定格式化成可注入模型的一段文字。
+ *
+ * ★ 为什么要**强制注入**而不是让角色自己去查：`projects.brief` 在主库、不在项目库，
+ *   角色手里的工具（`list_chapters` / `read_chapter`）根本读不到；不注入的话，
+ *   作者在向导里填的开局 / 世界观 / 笔风 / 女主就是白填 —— 讨论现场只会看到书名。
+ * 没有设定（手写项目、旧项目）时返回空串，调用方据此整段跳过。
+ */
+export function formatBrief(raw: unknown): string {
+  const b = parseBrief(raw);
+  if (!b) return '';
+  const s = (k: string): string => (typeof b[k] === 'string' ? (b[k] as string).trim() : '');
+  const heroes = Array.isArray(b.heroines)
+    ? b.heroines.filter((h): h is string => typeof h === 'string' && h.trim() !== '').map((h) => h.trim())
+    : [];
+  const catLabel = b.genreCategory === 'system' ? '系统流' : b.genreCategory === 'none' ? '无系统流' : '';
+
+  const lines: string[] = [];
+  if (s('opening')) lines.push(`开局：${s('opening')}`);
+  if (s('worldview')) lines.push(`世界观：${s('worldview')}`);
+  if (s('style')) lines.push(`笔风基调：${s('style')}`);
+  if (s('protagonist')) lines.push(`主角：${s('protagonist')}`);
+  if (heroes.length > 0) {
+    lines.push(b.multipleHeroines === true
+      ? `女主（多女主，共 ${heroes.length} 位）：${heroes.join('、')}`
+      : `女主：${heroes[0]}`);
+  }
+  const genre = [catLabel, s('genre')].filter(Boolean).join(' · ');
+  if (genre) lines.push(`流派：${genre}`);
+  return lines.join('\n');
 }
 
 /** 拉取项目设定摘要（角色/伏笔/大纲/章节清单） */
@@ -81,7 +129,12 @@ export async function resolveSettingsDigest(
   // 项目基本信息在主库
   const gdb = ctx.db.global() as DrizzleDb;
   const projRows = await gdb
-    .select({ name: schema.projects.name, genre: schema.projects.genre, description: schema.projects.description })
+    .select({
+      name: schema.projects.name,
+      genre: schema.projects.genre,
+      description: schema.projects.description,
+      brief: schema.projects.brief,
+    })
     .from(schema.projects)
     .where(eq(schema.projects.id, projectId));
   const proj = projRows[0] ?? {};
@@ -104,6 +157,7 @@ export async function resolveSettingsDigest(
     foreshadows: fshLines.join('\n') || '（暂无伏笔）',
     outline: outlineLines.join('\n') || '（暂无大纲）',
     chapters: chapterLines.join('\n') || '（暂无章节）',
+    brief: formatBrief(proj.brief),
   };
 }
 
@@ -131,6 +185,8 @@ export interface PreviousChapter {
   content: string;
   /** 因超长被截断（只保留结尾） */
   truncated: boolean;
+  /** 故事内时间（如「第 3 日」）；没记过就是 undefined —— 水车第三层时间戳靠它 */
+  storyTime?: string;
 }
 
 /**
@@ -155,7 +211,10 @@ export async function resolvePreviousChapter(
   const scope = eq(schema.chapters.projectId, projectId);
   const alive = isNull(schema.chapters.deletedAt);
   const rows = await db
-    .select({ order: schema.chapters.order, title: schema.chapters.title, content: schema.chapters.content })
+    .select({
+      order: schema.chapters.order, title: schema.chapters.title, content: schema.chapters.content,
+      storyTime: schema.chapters.storyTime,
+    })
     .from(schema.chapters)
     .where(
       beforeOrder != null
@@ -168,13 +227,51 @@ export async function resolvePreviousChapter(
   const row = rows[0];
   const content = String(row?.content ?? '').trim();
   if (!row || !content) return null;
+  const storyTime = row.storyTime ? String(row.storyTime) : undefined;
   if (content.length <= maxChars) {
-    return { order: row.order, title: String(row.title ?? ''), content, truncated: false };
+    return { order: row.order, title: String(row.title ?? ''), content, truncated: false, storyTime };
   }
   return {
     order: row.order,
     title: String(row.title ?? ''),
     content: `（上一章原文过长，此处只保留结尾 ${maxChars} 字）\n…${content.slice(-maxChars)}`,
     truncated: true,
+    storyTime,
   };
+}
+
+/** 故事内时间的抽取（定稿官契约里常写成「故事内时间：第 3 日」这一行） */
+const STORY_TIME_RE = /(?:故事内时间|故事时间|时间线)[：:]\s*([^\n，。]{1,40})/;
+
+/** 纯函数：从契约文本里抽故事内时间；抽不到返回 null（**不猜** —— 猜错比没有更坏） */
+export function extractStoryTime(conclusion: string): string | null {
+  const m = STORY_TIME_RE.exec(conclusion ?? '');
+  return m?.[1]?.trim() || null;
+}
+
+/**
+ * 从定稿官的契约里抽出「故事内时间」并写进该章。
+ *
+ * 为什么要有它：章号与故事时间**不是一回事** —— 一章可能写三天，也可能一天写五章。
+ * 没有它，后面的角色只能按"上上章"推断时序，跳跃叙事必错（水车的第三层时间戳）。
+ * 抽不到就留 null，**不猜**（猜错比没有更坏）。
+ */
+export async function persistChapterStoryTime(
+  ctx: ServerPluginContext,
+  projectId: string,
+  order: number,
+  conclusion: string,
+): Promise<string | null> {
+  const storyTime = extractStoryTime(conclusion);
+  if (!storyTime) return null;
+  try {
+    const db = ctx.db.project(projectId) as DrizzleDb;
+    await db.update(schema.chapters)
+      .set({ storyTime })
+      .where(and(eq(schema.chapters.projectId, projectId), eq(schema.chapters.order, order)));
+    return storyTime;
+  } catch (e) {
+    console.warn('[context] 写入故事内时间失败（不影响交付）:', e);
+    return null;
+  }
 }

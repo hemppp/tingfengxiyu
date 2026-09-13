@@ -53,6 +53,42 @@ export interface GateDigest {
 export const POLISH_PASS_SCORE = 7;
 
 /**
+ * 调一次模型并解析成 JSON；**解析失败自动重试一次**（第二次附一句更硬的格式要求）。
+ *
+ * 为什么必须重试：解析失败 = 这一步**根本没执行**。校对门失败即放行，等于门是摆设 ——
+ * 而重试只多花一次调用，代价远低于"漏掉一次一致性检查"。
+ * （根因已同步修在 `parseJsonLoose`：原先是"第一个 { 到最后一个 }"，
+ *  模型输出两个 JSON 时会切错 → `Unexpected non-whitespace character after JSON`。）
+ * 重试后仍失败 → 返回 parsed=null，由调用方按既定策略处理（当前是 fail-open + 把 error 透给作者）。
+ */
+async function completeJson<T>(
+  ctx: ServerPluginContext,
+  opts: { system: string; user: string; maxTokens: number; temperature: number; userId?: string; label: string },
+): Promise<{ parsed: T | null; error?: string; attempts: number }> {
+  const NUDGE = '\n\n【格式要求（必须严格遵守）】只输出**一个** JSON 对象：不要解释、不要第二个对象、不要代码块标记。';
+  let lastErr = '';
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const raw = await ctx.ai.complete({
+        messages: [
+          { role: 'system', content: opts.system },
+          { role: 'user', content: attempt === 1 ? opts.user : opts.user + NUDGE },
+        ],
+        json: true,
+        temperature: opts.temperature,
+        maxTokens: opts.maxTokens,
+        userId: opts.userId,
+      });
+      return { parsed: parseJsonLoose<T>(raw), attempts: attempt };
+    } catch (e) {
+      lastErr = e instanceof Error ? e.message : String(e);
+      if (attempt === 1) console.warn(`[gates] ${opts.label} 第 1 次输出无法解析，重试一次：`, lastErr);
+    }
+  }
+  return { parsed: null, error: lastErr, attempts: 2 };
+}
+
+/**
  * 校对门：全文 × 设定库一致性机判。
  *
  * **不会抛错**。执行失败时返回带 `error` 的「通过」结论 —— 调用方据此照常交付，
@@ -62,47 +98,45 @@ export async function runConsistencyGate(
   ctx: ServerPluginContext,
   opts: { order: number; draft: string; digest: GateDigest; userId?: string },
 ): Promise<ConsistencyVerdict> {
-  try {
-    const raw = await ctx.ai.complete({
-      messages: [
-        { role: 'system', content: CHECKER_SYSTEM },
-        {
-          role: 'user',
-          content: [
-            '【设定摘要】',
-            '角色：',
-            opts.digest.characters,
-            '',
-            '伏笔：',
-            opts.digest.foreshadows,
-            '',
-            '大纲：',
-            opts.digest.outline,
-            '',
-            `【章节初稿（第${opts.order}章）】`,
-            opts.draft,
-          ].join('\n'),
-        },
-      ],
-      json: true,
-      temperature: 0.1,
+  const user = [
+    '【设定摘要】',
+    '角色：',
+    opts.digest.characters,
+    '',
+    '伏笔：',
+    opts.digest.foreshadows,
+    '',
+    '大纲：',
+    opts.digest.outline,
+    '',
+    `【章节初稿（第${opts.order}章）】`,
+    opts.draft,
+  ].join('\n');
+
+  const { parsed, error, attempts } = await completeJson<{ pass?: boolean; conflicts?: unknown; instructions?: unknown }>(
+    ctx,
+    {
+      system: CHECKER_SYSTEM,
+      user,
       // ★ 必须给足：校对官要逐条列出「冲突描述 + 出处」，正文一长输出就上千 token。
-      //   实测（2026-09-12）：设 2048 时多章跑下来会**间歇性截断** → JSON 解析失败 →
-      //   整个门静默跳过（还白烧一次调用）。与 entity-sink 同量级取 4096。
+      //   实测（2026-09-12）：设 2048 时多章跑下来会**间歇性截断**。与 entity-sink 同量级取 4096。
       maxTokens: 4096,
+      temperature: 0.1,
       userId: opts.userId,
-    });
-    const parsed = parseJsonLoose<{ pass?: boolean; conflicts?: unknown; instructions?: unknown }>(raw);
-    return {
-      pass: parsed.pass === true,
-      conflicts: Array.isArray(parsed.conflicts) ? parsed.conflicts.map(String).slice(0, 10) : [],
-      instructions: String(parsed.instructions ?? '').slice(0, 300),
-    };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.warn('[gates] 校对官调用失败（按通过处理，不拦交付）:', msg);
-    return { pass: true, conflicts: [], instructions: '', error: `校对门未能执行：${msg}` };
+      label: '校对官',
+    },
+  );
+
+  if (!parsed) {
+    console.warn(`[gates] 校对官调用失败（两次都不成，按通过处理，不拦交付）:`, error);
+    return { pass: true, conflicts: [], instructions: '', error: `校对门未能执行（已重试一次）：${error}` };
   }
+  if (attempts === 2) console.log('[gates] 校对官第二次输出才解析成功（第一次格式不合格）');
+  return {
+    pass: parsed.pass === true,
+    conflicts: Array.isArray(parsed.conflicts) ? parsed.conflicts.map(String).slice(0, 10) : [],
+    instructions: String(parsed.instructions ?? '').slice(0, 300),
+  };
 }
 
 /** 润色门：质量评分（软门，从不阻塞交付；执行失败同样返回带 error 的结果） */
@@ -110,25 +144,21 @@ export async function runPolishGate(
   ctx: ServerPluginContext,
   opts: { order: number; draft: string; userId?: string },
 ): Promise<PolishVerdict> {
-  try {
-    const raw = await ctx.ai.complete({
-      messages: [
-        { role: 'system', content: REVIEWER_SYSTEM },
-        { role: 'user', content: `【章节初稿（第${opts.order}章）】\n${opts.draft}` },
-      ],
-      json: true,
-      temperature: 0.2,
-      maxTokens: 1536,
-      userId: opts.userId,
-    });
-    const parsed = parseJsonLoose<{ score?: unknown; comments?: unknown }>(raw);
-    return {
-      score: Math.max(0, Math.min(10, Math.round(Number(parsed.score ?? 0)))),
-      comments: String(parsed.comments ?? '').slice(0, 200),
-    };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.warn('[gates] 评审官调用失败（跳过润色门）:', msg);
-    return { score: 0, comments: '', error: `润色门未能执行：${msg}` };
+  const { parsed, error } = await completeJson<{ score?: unknown; comments?: unknown }>(ctx, {
+    system: REVIEWER_SYSTEM,
+    user: `【章节初稿（第${opts.order}章）】\n${opts.draft}`,
+    maxTokens: 1536,
+    temperature: 0.2,
+    userId: opts.userId,
+    label: '评审官',
+  });
+
+  if (!parsed) {
+    console.warn('[gates] 评审官调用失败（两次都不成，跳过润色门）:', error);
+    return { score: 0, comments: '', error: `润色门未能执行（已重试一次）：${error}` };
   }
+  return {
+    score: Math.max(0, Math.min(10, Math.round(Number(parsed.score ?? 0)))),
+    comments: String(parsed.comments ?? '').slice(0, 200),
+  };
 }

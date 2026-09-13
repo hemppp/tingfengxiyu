@@ -13,7 +13,9 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { initProjectDb, deleteProjectDb, schema, eq, type DrizzleDb } from '@novel/db';
+import type { ServerPluginContext } from '@novel/core';
 import {
+  screenBatchConflicts,
   usableName,
   mapForeshadowAction,
   mapForeshadowType,
@@ -25,6 +27,8 @@ import {
 
 const PROJECT_ID = `entity-sink-test-${Date.now()}`;
 let db: DrizzleDb;
+/** screenBatchConflicts 只用 ctx.db.project()，其余字段本用例不碰 */
+let ctx: ServerPluginContext;
 
 function newResult(): SinkResult {
   return { created: 0, updated: 0, skipped: 0, notes: [] };
@@ -38,6 +42,7 @@ async function characters() {
 
 beforeAll(async () => {
   db = await initProjectDb(PROJECT_ID);
+  ctx = { db: { project: () => db, global: () => db } } as unknown as ServerPluginContext;
 }, 60_000);
 
 afterAll(async () => {
@@ -265,5 +270,31 @@ describe('实体沉淀 · 脏数据不入库', () => {
     const names = (await characters()).map((c) => c.name);
     expect(names).toContain('苏梨');
     expect(names).not.toContain('主角');
+  });
+});
+
+describe('沉淀前的批次矛盾筛查（同批次同槽位两个值 → 一条都不落库）', () => {
+  it('矛盾条目被摘掉、其余照常落库，并写进冲突队列', async () => {
+    const raw = {
+      characters: [
+        { name: '甲', role: 'supporting', change: { field: 'state', newValue: '断臂' } },
+        { name: '甲', change: { field: 'state', newValue: '完好' } },   // ★ 同一章里自相矛盾
+        { name: '乙', role: 'supporting', change: { field: 'state', newValue: '轻伤' } },
+      ],
+    } as never;
+    const blocked = await screenBatchConflicts(ctx, PROJECT_ID, raw, 9);
+    expect(blocked).toBe(1);
+    // 冲突的那个角色整条被摘掉，另一个留下
+    const names = (raw as { characters: Array<{ name: string }> }).characters.map((c) => c.name);
+    expect(names).toEqual(['乙']);
+    // 进了冲突队列
+    const open = await db.select().from(schema.factConflicts).where(eq(schema.factConflicts.projectId, PROJECT_ID));
+    expect(open.some((c) => c.slot === 'characters/甲/state')).toBe(true);
+  });
+
+  it('没有矛盾时原样返回（不动抽取结果）', async () => {
+    const raw = { characters: [{ name: '丙', change: { field: 'state', newValue: '好着' } }] } as never;
+    expect(await screenBatchConflicts(ctx, PROJECT_ID, raw, 10)).toBe(0);
+    expect((raw as { characters: unknown[] }).characters).toHaveLength(1);
   });
 });

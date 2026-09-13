@@ -157,6 +157,28 @@ async function runProjectMigrations(sqlite: any): Promise<void> {
   } catch (e) {
     console.warn('[ProjectDB] 检查 items.credit_price 列失败:', e);
   }
+
+  // 冲突裁决留痕列（fact_conflicts 是本轮新表，旧库可能只有早期版本）
+  try {
+    const conflictCols = sqlite.pragma('table_info(fact_conflicts)') as Array<{ name: string }>;
+    if (conflictCols.length > 0 && !conflictCols.some((c) => c.name === 'resolution')) {
+      console.log('[ProjectDB] fact_conflicts 表缺少 resolution 列，正在添加...');
+      sqlite.exec('ALTER TABLE fact_conflicts ADD COLUMN resolution text');
+    }
+  } catch (e) {
+    console.warn('[ProjectDB] 检查 fact_conflicts.resolution 列失败:', e);
+  }
+
+  // 同理补章的故事内时间（水车三层时间戳的第三层）
+  try {
+    const chapterCols = sqlite.pragma('table_info(chapters)') as Array<{ name: string }>;
+    if (!chapterCols.some((c) => c.name === 'story_time')) {
+      console.log('[ProjectDB] chapters 表缺少 story_time 列，正在添加...');
+      sqlite.exec('ALTER TABLE chapters ADD COLUMN story_time text');
+    }
+  } catch (e) {
+    console.warn('[ProjectDB] 检查 chapters.story_time 列失败:', e);
+  }
 }
 
 /**

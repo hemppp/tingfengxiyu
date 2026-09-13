@@ -561,6 +561,18 @@ async function applyCompatPatches(sqlite: any): Promise<void> {
     console.warn('[better-sqlite3] 检查 projects.mode 失败:', e);
   }
 
+  // 1c. projects.brief（AI 写作的开书设定，JSON 文本）
+  // 旧库补列后为 NULL，读取侧按「没有设定」兜底，刻意不回填。
+  try {
+    if (hasTable('projects') && !hasColumn('projects', 'brief')) {
+      console.log('[better-sqlite3] projects 表缺少 brief 列，正在添加...');
+      sqlite.exec('ALTER TABLE projects ADD COLUMN brief TEXT');
+      console.log('[better-sqlite3] projects.brief 列添加成功。');
+    }
+  } catch (e) {
+    console.warn('[better-sqlite3] 检查 projects.brief 失败:', e);
+  }
+
   // 2. user_settings.ai_provider_config
   try {
     if (hasTable('user_settings') && !hasColumn('user_settings', 'ai_provider_config')) {

@@ -20,6 +20,40 @@ export interface BaseEntity {
  */
 export type ProjectMode = 'manual' | 'auto';
 
+/**
+ * 小说流派大分类：
+ * - 'system'：**系统流** —— 主角带系统 / 金手指，世界围绕「面板、任务、奖励」运转
+ * - 'none'  ：**无系统流** —— 现实或纯架空，没有外挂装置，靠人物与世界自身推动
+ */
+export type GenreCategory = 'system' | 'none';
+
+/**
+ * 开书设定（AI 写作新书向导产出）。
+ *
+ * 只在 `mode === 'auto'` 的项目上有意义：手写模式的书由作者自己在编辑器里组织设定，
+ * 不走这套表单。这份数据会作为「创作设定」**强制注入**讨论链路（见
+ * `novel.autowrite/server/framework/context-resolver.ts`），
+ * 让设计角色与写作官在第一轮就拿到书名之外的开局 / 世界观 / 笔风 / 主角 / 女主 / 流派。
+ */
+export interface NovelBrief {
+  /** 开局：故事从哪一刻、哪个场景切入 */
+  opening: string;
+  /** 世界观：时代 / 舞台 / 规则 / 力量体系 */
+  worldview: string;
+  /** 笔风基调：叙事语气与节奏（如「冷硬克制、短句为主」） */
+  style: string;
+  /** 主角姓名 */
+  protagonist: string;
+  /** 是否多女主（true 时 heroines 是多位） */
+  multipleHeroines: boolean;
+  /** 女主姓名列表；单女主时长度 1 */
+  heroines: string[];
+  /** 流派大分类 */
+  genreCategory: GenreCategory;
+  /** 细分流派名（如「末日求生」） */
+  genre: string;
+}
+
 export interface Project extends BaseEntity {
   userId: string;
   name: string;
@@ -31,6 +65,8 @@ export interface Project extends BaseEntity {
   currentWordCount: number;
   /** 创作模式，见 ProjectMode；缺省 'manual' */
   mode?: ProjectMode;
+  /** 开书设定，见 NovelBrief；仅 AI 写作模式会写入 */
+  brief?: NovelBrief;
 }
 
 // ---- 章节 ----

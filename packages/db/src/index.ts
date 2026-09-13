@@ -956,6 +956,20 @@ async function _doInit(): Promise<DrizzleDb | null> {
     console.warn('[NovelMuse DB] 检查 projects.mode 列失败', modeErr);
   }
 
+  // 确保 projects 表有 brief 列（AI 写作的开书设定，JSON 文本）。
+  // 与 mode 同理：旧库补列后为 NULL，读取侧按「没有设定」兜底，不回填数据。
+  try {
+    const cols = _sqlite!.exec("PRAGMA table_info(projects)");
+    const hasBrief = cols[0]?.values.some((row: unknown[]) => row[1] === 'brief');
+    if (!hasBrief) {
+      console.log('[NovelMuse DB] projects 表缺少 brief 列，正在添加...');
+      _sqlite!.run('ALTER TABLE projects ADD COLUMN brief TEXT');
+      console.log('[NovelMuse DB] projects.brief 列添加成功。');
+    }
+  } catch (briefErr) {
+    console.warn('[NovelMuse DB] 检查 projects.brief 列失败', briefErr);
+  }
+
   // 确保 user_settings 表存在（迁移文件可能遗漏）
   try {
     _db.select().from(schema.userSettings).limit(1).all();

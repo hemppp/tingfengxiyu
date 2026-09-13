@@ -19,6 +19,7 @@
 import type { ServerPluginContext } from '@novel/core';
 import { schema, eq, type DrizzleDb } from '@novel/db';
 import { nowId, parseJsonLoose } from '../autowrite/helpers.js';
+import { detectBatchConflicts, recordConflicts, type FactWrite } from './memory/ingest.js';
 
 // ---- 存储结构（JSON 文本列的形状） ----
 // 与 @novel/shared 的 EntityState / ItemHolder 一致；插件不依赖 shared 包，
@@ -258,6 +259,40 @@ function currentHoldersOf(holders: ItemHolderJson[]): string[] {
  *
  * **不会抛错**：任何失败都收敛成 notes 返回。调用方只管回流展示，不必加 try/catch。
  */
+/**
+ * 沉淀前的「批次内自洽」筛查（分层记忆架构 §3 的防污染守卫，2026-09-13 接进真实路径）。
+ *
+ * 判据：**同一章里同一槽位出现两个不同值 = 模型自相矛盾**（跨章的值变化是正常演进，不算）。
+ * 处置：冲突的那几条**一条都不落库**，写进 `fact_conflicts` 等人裁；其余照常沉淀。
+ * 为什么必须拦：不拦的话"后写覆盖先写"，设定库里会留下一条谁都不知道哪来的值。
+ */
+export async function screenBatchConflicts(
+  ctx: ServerPluginContext,
+  projectId: string,
+  raw: RawExtraction,
+  order: number,
+): Promise<number> {
+  const facts: FactWrite[] = [];
+  for (const c of raw.characters ?? []) {
+    if (c?.name && c.change?.newValue) facts.push({ slot: `characters/${c.name}/state`, value: c.change.newValue, source: `ch${order}` });
+  }
+  for (const it of raw.items ?? []) {
+    if (it?.name && it.change?.newValue) facts.push({ slot: `items/${it.name}/state`, value: it.change.newValue, source: `ch${order}` });
+  }
+  const { conflicts } = detectBatchConflicts(facts);
+  if (conflicts.length === 0) return 0;
+
+  await recordConflicts(ctx, projectId, conflicts.map((c) => ({
+    slot: c.slot, existing: c.existing, incoming: c.incoming,
+  })), `ch${order}`);
+
+  // 冲突条目从抽取里摘掉（按槽位反查名字），剩下的才落库
+  const bad = new Set(conflicts.map((c) => c.slot));
+  raw.characters = (raw.characters ?? []).filter((c) => !c?.name || !bad.has(`characters/${c.name}/state`));
+  raw.items = (raw.items ?? []).filter((it) => !it?.name || !bad.has(`items/${it.name}/state`));
+  return conflicts.length;
+}
+
 export async function persistChapterEntities(
   ctx: ServerPluginContext,
   input: SinkInput,
@@ -289,6 +324,13 @@ export async function persistChapterEntities(
     if (!db) {
       result.notes.push('项目库未打开，实体未沉淀');
       return result;
+    }
+    // ★ 先筛矛盾，再落库：同批次自相矛盾的条目一条都不进去
+    try {
+      const blocked = await screenBatchConflicts(ctx, input.projectId, parsed, input.order);
+      if (blocked > 0) result.notes.push(`检测到 ${blocked} 处同批次矛盾，已拦下并进冲突队列（待裁决）`);
+    } catch (e) {
+      result.notes.push(`批次矛盾筛查失败（不影响本章沉淀）：${e instanceof Error ? e.message : String(e)}`);
     }
     await writeEntities(db, input, parsed, result);
   } catch (e) {

@@ -3,17 +3,24 @@
 // ============================================================
 
 import { schema, eq, isNull, saveToDisk, deleteProjectDb } from '@novel/db';
-import type { Project } from '@novel/shared';
-import { BaseService, normalizeTimestamps, toDbTimestamps } from './base-service.js';
+import type { NovelBrief, Project } from '@novel/shared';
+import { BaseService, normalizeTimestamps, toDbTimestamps, parseJson, jsonStringify } from './base-service.js';
 import { v4 as uuidv4 } from 'uuid';
 
 const service = new BaseService<Project>(schema.projects, {
-  rowToModel: (r) => normalizeTimestamps<Project>(r),
+  rowToModel: (r) => {
+    const model = normalizeTimestamps<Project>(r);
+    // brief 是 JSON 文本列，读出来要还原成对象（旧数据/手写项目为 NULL → undefined）
+    model.brief = parseJson<NovelBrief | undefined>(r.brief, undefined);
+    return model;
+  },
   modelToRow: (model) => {
     const row = { ...model } as unknown as Record<string, unknown>;
+    if (row.brief !== undefined && row.brief !== null) row.brief = jsonStringify(row.brief);
     toDbTimestamps(row);
     return row;
   },
+  jsonFields: ['brief'],
   loadByColumn: 'userId',
   entityLabel: 'Projects',
 });

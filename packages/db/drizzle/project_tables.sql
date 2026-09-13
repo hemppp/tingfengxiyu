@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS `chapters` (
 	`status` text DEFAULT 'draft' NOT NULL,
 	`label` text,
 	`pov` text,
+	`story_time` text,
 	`deleted_at` integer,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL
@@ -349,3 +350,52 @@ CREATE TABLE IF NOT EXISTS plugin_kv (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS idx_plugin_kv_unique ON plugin_kv (plugin_id, key, project_id);
+
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS agent_memory (
+	id text PRIMARY KEY NOT NULL,
+	project_id text NOT NULL,
+	agent_id text NOT NULL,
+	form text NOT NULL,
+	key text NOT NULL,
+	value text NOT NULL,
+	source_ref text,
+	created_at integer NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_memory_unique ON agent_memory (agent_id, form, key);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_agent_memory_agent ON agent_memory (agent_id, form);
+
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS memory_audit (
+	id text PRIMARY KEY NOT NULL,
+	project_id text NOT NULL,
+	agent_id text NOT NULL,
+	action text NOT NULL,
+	keys text NOT NULL,
+	reason text,
+	allow integer NOT NULL,
+	detail text,
+	at integer NOT NULL
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_memory_audit_at ON memory_audit (project_id, at DESC);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_memory_audit_agent ON memory_audit (project_id, agent_id, at DESC);
+
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS fact_conflicts (
+	id text PRIMARY KEY NOT NULL,
+	project_id text NOT NULL,
+	slot text NOT NULL,
+	existing_value text,
+	incoming_value text,
+	source text,
+	status text NOT NULL,
+	resolution text,
+	created_at integer NOT NULL,
+	resolved_at integer
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_fact_conflicts_open ON fact_conflicts (project_id, status, created_at DESC);

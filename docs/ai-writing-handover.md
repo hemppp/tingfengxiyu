@@ -110,6 +110,39 @@ node scripts/verify-autowrite-cleanup.mjs <username> <projectId>  # 参数由上
 - `EntityRail`：右栏存量视图（知识库 / 地点 / 物品 / 伏笔）。
 - 交付后收到 `entities` 事件 → 触发宿主 `reload()` 刷新 store，仪表盘与实体栏自动亮起。
 
+**开书设定（`projects.brief`，2026-09-13 新增）**
+
+- 新书向导（`AddBookModal` 的 AI 写作分支）：书名 / 开局 / 世界观 / 笔风基调 / 主角姓名 / 女主姓名
+  （「是否多女主」打开后是可增删的名单）→ 第二步选流派（系统流 6 组 / 无系统流 8 组，
+  目录是纯数据文件 `apps/web/src/components/ui/novelGenres.ts`，加流派只改它）。手写分支的旧表单原样保留。
+- 落库：`projects.brief`（JSON 文本列，见 `NovelBrief`）。服务端 zod 给每项都设了长度上限 ——
+  这些文本会被**注入每一轮模型输入**，不设限等于给模型塞垃圾。
+- 注入：`context-resolver.ts:formatBrief()` → `SettingsDigest.brief` → `orchestrator` 的
+  `【项目现状】` 里多出一段 `【创作设定】`。**为什么必须框架直给**：brief 在**主库**，
+  角色的工具（`list_chapters` / `read_chapter`）读不到 —— 让 agent「自己去查」等于向导白填。
+- 流派展示名同时写进 `projects.genre`（书卡顶部标签、书库搜索都用它），形如「系统流 · 末日求生」。
+- 验证：`scripts/verify-brief-api.mjs`（**Node 24**，用 `node:sqlite` 只读核对主库）；
+  `apps/web/src/components/ui/__tests__/AddBookModal.test.tsx` 8 例守 UI（含「手写分支字段不变」与多女主动态增删）。
+
+**多智能体协作流水线（M1，2026-09-13 新增并真机验证）**
+
+- 设计见 `docs/ai-writing-multiagent-pipeline.md`（7 段 + 4 道闸门 + 施工拆分 + 未决项），
+  **M1 已落地**：`brief → cast → bible → plot` 四段可跑，前三段有用户闸门，批准后落库。
+- 代码在 `server/pipeline/`（types / store / roles-phase / orchestrator / sink / store.test），
+  路由挂在同一个插件下：`GET /pipeline`、`POST /pipeline/{start,advance,decision}`、`GET /pipeline/ledger`。
+  前端：`services/ai/pipelineSession.ts` + `components/layout/PipelinePanel.tsx`（工作台中栏）。
+- **与现役单章链路的关系**：两条路各管一段 —— 「先立设定」走 pipeline，「已有设定、开始写章」走 `/session`。
+  `/session` 与三道门**一行未改**。
+- 已验：状态机单测 19 例；`scripts/verify-pipeline-api.mjs` 16 项（零模型成本）；
+  真机全链路（`.workbuddy/ui-checks/`）跑完 cast 段 → 闸门 → 批准 → 落库 3 个角色，零控制台报错。
+- **M1 的坑**（改代码前先看设计文档 §0）：`canRun` 必须判「不能超过游标」（曾放行跳段，真跑掉一段）；
+  reject 要连本段状态一起重置；错误体必须是 `{error:{code,message}}` 信封；
+  前端 apiClient 自带 `/api` 前缀而 SSE 走裸 fetch 要全路径；brief 段没有闸门。
+- **running 锁与僵死兜底**：跑之前 `store.beginStage()` 落盘 `running`（防两个标签页重复跑同一段）；
+  进程被杀留下的僵死 `running` 由 `store.load()` 自动收敛成「中断了，可重试」（阈值 20 分钟）。
+  验证脚本 `scripts/verify-pipeline-stage-lock.mjs`（★ 会调模型，约 5 次调用）。
+- **未做**：drift 核查 / 前三章试写 / 写作监工 / 每三章轨迹确认 / 断点续跑 / 台账回放（advance 到它们返回 501）。
+
 **治理/基础设施**
 
 - 插件挂载冒烟测试（真实 HTTP）：`apps/server/src/__tests__/plugin-mount.smoke.test.ts`、`autowrite-mount.test.ts` —— 这条关卡来自 08-30 的 `ctx.effect` 事故（曾导致所有 `/api/plugins/*` 路由启动即被熔断 404）。
@@ -216,6 +249,13 @@ apps/plugins/local/novel.autowrite/
 │   │   ├── roles.ts                     #   角色人设 + 定稿官格式 + 篇幅契约常量
 │   │   ├── orchestrator.ts              #   编排：讨论→收敛→落笔→字数自检→意图门→交付→沉淀
 │   │   └── roles.test.ts                #   篇幅契约同源回归
+│   ├── pipeline/                        # ★ 多智能体协作流水线（M1，见 §4）
+│   │   ├── types.ts                     #   7 段 / 闸门三态 / 事件 / 上限常量
+│   │   ├── store.ts                     #   KV 状态机 + briefHash + 台账 + canRun 守卫
+│   │   ├── roles-phase.ts               #   阶段档位（PHASE_SPEC/roleFor）+ 定稿官契约 + 策划官
+│   │   ├── orchestrator.ts              #   runStage（讨论→收敛→等确认）/ approveStage（落库）
+│   │   ├── sink.ts                      #   契约→结构化抽取→保守 upsert
+│   │   └── store.test.ts                #   19 例状态机单测（零模型成本）
 │   ├── framework/
 │   │   ├── entity-sink.ts               # ★ 实体沉淀（抽取 + 保守 upsert 五表）
 │   │   ├── entity-sink.test.ts          #   14 例：去重 / 幂等 / 伏笔三分支 / 脏数据
@@ -238,6 +278,9 @@ apps/web/src/components/layout/
 ├── WorldStateBoard.tsx                  # 本章计划 + 最近变动
 ├── WorkbenchPlan.tsx                    # 结论结构化解析（CONCERN_FIELDS 与定稿官格式对应）
 └── EntityRail.tsx                       # 右栏存量视图
+apps/web/src/components/ui/
+├── AddBookModal.tsx                     # 新建/编辑书籍：手写卡片表单 + AI 写作新书向导（开书设定 → 流派）
+└── novelGenres.ts                       # 流派目录（纯数据：系统流 / 无系统流，分组）
 apps/web/src/services/ai/autowriteSession.ts   # /session 的 SSE 客户端 + SessionEvent 类型
 
 apps/server/src/plugin/host.ts           # ctx.ai.agents.run / ctx.ai.complete 的宿主实现（含 maxTokens 透传）

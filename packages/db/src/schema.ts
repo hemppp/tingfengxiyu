@@ -49,6 +49,8 @@ export const projects = sqliteTable('projects', {
   currentWordCount: integer('current_word_count').notNull().default(0),
   /** 创作模式：'manual'（手写框架）| 'auto'（AI 写作框架）。NULL/旧数据按 'manual' 处理 */
   mode: text('mode'),
+  /** 开书设定（AI 写作新书向导产出），JSON 文本；手写项目为 NULL */
+  brief: text('brief'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 }, (table) => ({
@@ -68,6 +70,9 @@ export const chapters = sqliteTable('chapters', {
   status: text('status').notNull().default('draft'), // 草稿|已修订|已完成|已归档
   label: text('label'),
   pov: text('pov'), // 视角角色 ID
+  // 故事内时间（如「第 3 日」）。★ 与章号不是一回事：一章可能写三天，也可能一天写五章。
+  // 水车的三层时间戳靠它判断"她说'昨天'对不对"。由交付时从定稿官的契约里抽取，抽不到就是 null。
+  storyTime: text('story_time'),
   deletedAt: integer('deleted_at', { mode: 'timestamp' }), // 软删除时间戳，null = 未删除
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
@@ -476,3 +481,65 @@ export const userSettings = sqliteTable('user_settings', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 });
+
+// ============================================================
+// 分层记忆（docs/multi-agent-memory-architecture.md）
+//
+// 三张表对应架构里的三层关注点：
+//   agent_memory   L2 智能体专属记忆（agent_id 必填 = 隔离的物理保证）
+//   memory_audit   记忆访问审计（读 L1 / 被拒 / 写 L2 / 沉淀）
+//   fact_conflicts 事实冲突队列（同槽位两值 → 不覆盖，等人裁）
+// ============================================================
+
+export const agentMemory = sqliteTable('agent_memory', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull(),
+  /** ★ 隔离的物理保证：所有查询强制带它，句柄生成、不接受调用方拼 */
+  agentId: text('agent_id').notNull(),
+  /** 'fact_ref'（事实引用，存指针）| 'experience'（经历流，存原文） */
+  form: text('form').notNull(),
+  key: text('key').notNull(),
+  value: text('value').notNull(),
+  /** 事实式存 factId；叙事式存章号/发言 id —— 引用必须可回溯 */
+  sourceRef: text('source_ref'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+}, (table) => ({
+  uniqueKey: uniqueIndex('idx_agent_memory_unique').on(table.agentId, table.form, table.key),
+  byAgent: index('idx_agent_memory_agent').on(table.agentId, table.form),
+}));
+
+export const memoryAudit = sqliteTable('memory_audit', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull(),
+  agentId: text('agent_id').notNull(),
+  /** 'read_l1' | 'deny_l1' | 'write_l2' | 'ingest' | 'conflict' */
+  action: text('action').notNull(),
+  /** JSON 数组：本次涉及的键 */
+  keys: text('keys').notNull(),
+  reason: text('reason'),
+  allow: integer('allow', { mode: 'boolean' }).notNull(),
+  detail: text('detail'),
+  at: integer('at', { mode: 'timestamp' }).notNull(),
+}, (table) => ({
+  byTime: index('idx_memory_audit_at').on(table.projectId, table.at),
+  byAgent: index('idx_memory_audit_agent').on(table.projectId, table.agentId, table.at),
+}));
+
+export const factConflicts = sqliteTable('fact_conflicts', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull(),
+  /** 槽位，如 'characters/陈默/state' */
+  slot: text('slot').notNull(),
+  existingValue: text('existing_value'),
+  incomingValue: text('incoming_value'),
+  /** 来源（章号等），便于判断哪个更新 */
+  source: text('source'),
+  /** 'open' | 'resolved' */
+  status: text('status').notNull(),
+  /** 裁决留痕（JSON）：decision/chosenValue/resolver/needResink/at —— 只打标记等于没裁 */
+  resolution: text('resolution'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  resolvedAt: integer('resolved_at', { mode: 'timestamp' }),
+}, (table) => ({
+  openOn: index('idx_fact_conflicts_open').on(table.projectId, table.status, table.createdAt),
+}));
