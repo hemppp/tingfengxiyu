@@ -42,6 +42,11 @@ import { assertSafeOutboundUrl, assertSafeOutboundUrlDeep } from '../lib/ssrf-gu
 import { verifyProjectOwnership } from '../lib/ownership.js';
 import { buildProjectContext, checkOutlineExists } from '../ai/context-builder.js';
 import { listSkillMetas } from '../ai/agents/skills.js';
+// 集中式 Skills 库（docs/skills-library.md）：库的读写 + 每个智能体的开关
+import {
+  listLibrary, listOrphanOwners, installSkill, removeSkill,
+  listTargets, getTargetSkills, setToggle, setAllToggles,
+} from '../services/skill-library.js';
 
 /**
  * 统一判断错误是否为 AbortError（用户取消 / 请求超时）。
@@ -1653,6 +1658,148 @@ aiRouter.post('/config', requireAuth, ensureConfigMiddleware, zValidator('json',
  */
 aiRouter.get('/skills', requireAuth, (c) => {
   return c.json({ skills: listSkillMetas() });
+});
+
+// ============================================================
+// 集中式 Skills 库 + 每个智能体的技能开关
+//
+// 设计见 docs/skills-library.md。三处入口对应三个问题：
+//   · 库里有什么、归属谁     → /skill-library
+//   · 装了/删了              → /skill-library/install、/skill-library/:id
+//   · 某个智能体开了哪些     → /skill-targets、/skill-targets/:agentId、.../toggle
+//
+// 与上层 `/skills`（运行时注册表）的分工：注册表回答"这轮对话能激活什么"，
+// 本库回答"这些技能归属谁、开着还是关着"。
+// ============================================================
+
+/** GET /api/ai/skill-library —— 库里的全部技能（按两类分开给，前端不必再分组） */
+aiRouter.get('/skill-library', requireAuth, async (c) => {
+  try {
+    const skills = await listLibrary();
+    const orphans = await listOrphanOwners();
+    return c.json({
+      data: {
+        skills,
+        // ★ 分类存放是硬口径：前端按这两栏渲染，不要在前端重新判 category
+        byCategory: {
+          assistant: skills.filter((s) => s.category === 'assistant'),
+          agent: skills.filter((s) => s.category === 'agent'),
+        },
+        /** 归属写了但清单没声明 —— 不报出来就是"装了却看不见、且不知道为什么" */
+        orphans,
+      },
+    });
+  } catch (error) {
+    console.error('[skill-library] 读取失败:', error);
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: '读取技能库失败' } }, 500);
+  }
+});
+
+/** POST /api/ai/skill-library/install —— 安装（或重装）一个技能 */
+aiRouter.post('/skill-library/install', requireAuth, async (c) => {
+  const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+  try {
+    const skill = await installSkill({
+      id: String(body.id ?? ''),
+      name: String(body.name ?? ''),
+      description: body.description === undefined ? undefined : String(body.description),
+      color: body.color === undefined ? undefined : String(body.color),
+      iconKey: body.iconKey === undefined ? undefined : String(body.iconKey),
+      category: (body.category === 'assistant' ? 'assistant' : 'agent'),
+      ownerAgent: body.ownerAgent === undefined || body.ownerAgent === null ? null : String(body.ownerAgent),
+      systemPrompt: body.systemPrompt === undefined ? undefined : String(body.systemPrompt),
+      contextKeys: Array.isArray(body.contextKeys) ? body.contextKeys.map((x) => String(x)) : undefined,
+    });
+    return c.json({ data: skill }, 201);
+  } catch (error) {
+    // 安装失败基本都是**输入问题**（id 非法 / 未知智能体 / 缺归属），按 400 回，
+    // 并把原因原样给作者 —— 这里吞掉原因等于让人对着 500 猜。
+    const message = error instanceof Error ? error.message : String(error);
+    return c.json({ error: { code: 'BAD_REQUEST', message } }, 400);
+  }
+});
+
+/** DELETE /api/ai/skill-library/:id —— 删除（连带清掉所有开关记录） */
+aiRouter.delete('/skill-library/:id', requireAuth, async (c) => {
+  // 本版 Hono 的 param() 类型是 string | undefined —— 缺了要显式兜住
+  const id = c.req.param('id') ?? '';
+  if (!id) return c.json({ error: { code: 'BAD_REQUEST', message: '缺少技能 id' } }, 400);
+  try {
+    const ok = await removeSkill(id);
+    if (!ok) return c.json({ error: { code: 'NOT_FOUND', message: `技能库中没有 ${id}` } }, 404);
+    return c.json({ data: { id, removed: true } });
+  } catch (error) {
+    console.error('[skill-library] 删除失败:', error);
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: '删除技能失败' } }, 500);
+  }
+});
+
+/** GET /api/ai/skill-targets —— 全部智能体 + 各自的技能计数（面板左列） */
+aiRouter.get('/skill-targets', requireAuth, async (c) => {
+  const user = c.get('user');
+  if (!user?.id) return c.json({ error: { code: 'UNAUTHORIZED', message: '未认证' } }, 401);
+  try {
+    const targets = await listTargets(user.id);
+    return c.json({ data: { targets } });
+  } catch (error) {
+    console.error('[skill-targets] 读取失败:', error);
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: '读取智能体清单失败' } }, 500);
+  }
+});
+
+/** GET /api/ai/skill-targets/:agentId —— 该智能体的技能 + 开关状态（面板右列） */
+aiRouter.get('/skill-targets/:agentId', requireAuth, async (c) => {
+  const user = c.get('user');
+  if (!user?.id) return c.json({ error: { code: 'UNAUTHORIZED', message: '未认证' } }, 401);
+  const agentId = c.req.param('agentId') ?? '';
+  try {
+    const view = await getTargetSkills(agentId, user.id);
+    if (!view) return c.json({ error: { code: 'NOT_FOUND', message: `未知智能体 ${agentId}` } }, 404);
+    return c.json({ data: view });
+  } catch (error) {
+    console.error('[skill-targets] 读取失败:', error);
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: '读取该智能体的技能失败' } }, 500);
+  }
+});
+
+/**
+ * PUT /api/ai/skill-targets/:agentId/toggle —— 开/关某个技能（左关右开那个开关）
+ * body: { skillId, enabled }
+ */
+aiRouter.put('/skill-targets/:agentId/toggle', requireAuth, async (c) => {
+  const user = c.get('user');
+  if (!user?.id) return c.json({ error: { code: 'UNAUTHORIZED', message: '未认证' } }, 401);
+  const agentId = c.req.param('agentId') ?? '';
+  const body = await c.req.json().catch(() => ({})) as { skillId?: string; enabled?: unknown };
+  if (!body.skillId) return c.json({ error: { code: 'BAD_REQUEST', message: '缺少 skillId' } }, 400);
+  if (typeof body.enabled !== 'boolean') {
+    return c.json({ error: { code: 'BAD_REQUEST', message: 'enabled 必须是布尔值（开关只有开与关两态）' } }, 400);
+  }
+  try {
+    const r = await setToggle({ userId: user.id, agentId, skillId: String(body.skillId), enabled: body.enabled });
+    return c.json({ data: r });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return c.json({ error: { code: 'BAD_REQUEST', message } }, 400);
+  }
+});
+
+/** PUT /api/ai/skill-targets/:agentId/toggle-all —— 批量开/关（面板上的「全部开启」） */
+aiRouter.put('/skill-targets/:agentId/toggle-all', requireAuth, async (c) => {
+  const user = c.get('user');
+  if (!user?.id) return c.json({ error: { code: 'UNAUTHORIZED', message: '未认证' } }, 401);
+  const agentId = c.req.param('agentId') ?? '';
+  const body = await c.req.json().catch(() => ({})) as { enabled?: unknown };
+  if (typeof body.enabled !== 'boolean') {
+    return c.json({ error: { code: 'BAD_REQUEST', message: 'enabled 必须是布尔值' } }, 400);
+  }
+  try {
+    const n = await setAllToggles({ userId: user.id, agentId, enabled: body.enabled });
+    return c.json({ data: { agentId, enabled: body.enabled, count: n } });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return c.json({ error: { code: 'BAD_REQUEST', message } }, 400);
+  }
 });
 
 /**

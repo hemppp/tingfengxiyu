@@ -88,6 +88,19 @@ export function getSkillMeta(id?: string): SkillMeta | null {
 }
 
 /**
+ * 按「图标 key」解析图标组件。
+ *
+ * 给 skills 库面板用：库里的技能是**数据**（后端存 iconKey，组件跨不了 JSON），
+ * 与技能选择器共用同一套来源（插件注册的图标表 + 兜底 Puzzle），
+ * 这样同一条技能在选择器与库面板里长得一样。
+ */
+export function resolveSkillIcon(key?: string): LucideIcon {
+  if (!key) return FALLBACK_ICON;
+  const pluginIcons = usePluginRegistry.getState().skillIcons;
+  return pluginIcons[key] ?? SKILL_ICONS[key] ?? FALLBACK_ICON;
+}
+
+/**
  * 判断技能是否使用项目级独立对话历史（不绑定章节）。
  *
  * 大纲架构师等"跨章节"技能需要独立的历史 key，确保：

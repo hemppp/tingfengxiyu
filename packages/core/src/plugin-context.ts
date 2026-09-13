@@ -128,6 +128,31 @@ export interface ServerPluginContext extends BasePluginContext {
       }): () => void;
       getAll(): Record<string, unknown>;
     };
+    /**
+     * 声明「技能目标」（智能体清单）—— 供集中的 skills 库把技能归属到具体智能体。
+     *
+     * 为什么需要它：技能要标 `ownerAgent`，而界面左列要把所有智能体列出来。
+     * 声明是**可扩展**的（后续加入其他 agent 的 skills 只需 declare，不必改核心）。
+     * ★ id 必须与该 agent 在别处使用的标识一致（例如写作流水线角色的 `DesignRole.key`），
+     *   否则将来把开关接到执行链路上时两边对不上。
+     */
+    skillTargets: {
+      declare(def: {
+        id: string;
+        name: string;
+        /** 'assistant' = 智能体本体；'agent' = 子智能体 */
+        kind: 'assistant' | 'agent';
+        /** 头像字（单字） */
+        short: string;
+        /** 主题色（hex） */
+        color: string;
+        /** 一句话职责 */
+        description: string;
+        /** 界面分组（如「写作流水线」） */
+        group: string;
+      }): () => void;
+      getAll(): Array<{ id: string; name: string; kind: 'assistant' | 'agent' }>;
+    };
     /** 注册 AI 智能体 */
     agents: {
       register(def: { name: string; description?: string; handler: (args: Record<string, unknown>, ctx: Record<string, unknown>) => Promise<unknown> }): () => void;

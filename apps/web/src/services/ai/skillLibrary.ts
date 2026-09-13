@@ -1,0 +1,113 @@
+// ============================================================
+// 集中式 Skills 库 —— 前端客户端
+//
+// 对接后端路由（设计见 docs/skills-library.md）：
+//   GET    /api/ai/skill-library              库里全部技能（按两类分开）+ 孤儿归属
+//   POST   /api/ai/skill-library/install      安装 / 重装
+//   DELETE /api/ai/skill-library/:id          删除
+//   GET    /api/ai/skill-targets              全部智能体 + 技能计数
+//   GET    /api/ai/skill-targets/:agentId     某智能体的技能 + 开关
+//   PUT    /api/ai/skill-targets/:agentId/toggle       单条开关
+//   PUT    /api/ai/skill-targets/:agentId/toggle-all   批量开关
+//
+// ★ apiClient 自带 `/api` 前缀并自动解包 `{data:...}`，所以这里只写 `/ai/...`
+//   （与 pipelineSession 的 SSE 不同 —— 那要走裸 fetch 写全路径）。
+// ============================================================
+
+import { apiClient } from '../api/apiClient';
+
+/** 'assistant' = 智能体 skills；'agent' = agent skills（按用户口径的分类存放） */
+export type SkillCategory = 'assistant' | 'agent';
+
+export interface LibrarySkill {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  iconKey: string;
+  category: SkillCategory;
+  ownerAgent: string | null;
+  ownerAgentName: string | null;
+  systemPrompt: string;
+  contextKeys: string[];
+  source: 'builtin' | 'installed';
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SkillTargetView {
+  id: string;
+  name: string;
+  kind: 'assistant' | 'agent';
+  short: string;
+  color: string;
+  description: string;
+  group: string;
+  source: 'core' | 'plugin';
+  total: number;
+  enabled: number;
+}
+
+export interface TargetSkill extends LibrarySkill {
+  enabled: boolean;
+  /** 是否被显式配置过 —— 没配过就是"默认关"，界面要能区分 */
+  configured: boolean;
+}
+
+export interface TargetSkillsView {
+  target: SkillTargetView;
+  skills: TargetSkill[];
+}
+
+/** 归属写了但智能体清单里没声明 —— 界面必须显式提示，否则"装了却看不见"无从排查 */
+export interface OrphanOwner { agentId: string; count: number; skillIds: string[] }
+
+const BASE = '/ai';
+
+export function fetchSkillLibrary(): Promise<{
+  skills: LibrarySkill[];
+  byCategory: { assistant: LibrarySkill[]; agent: LibrarySkill[] };
+  orphans: OrphanOwner[];
+}> {
+  return apiClient.get(`${BASE}/skill-library`);
+}
+
+export interface InstallSkillInput {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string;
+  iconKey?: string;
+  category: SkillCategory;
+  ownerAgent?: string | null;
+  systemPrompt?: string;
+  contextKeys?: string[];
+}
+
+export function installSkillOnLibrary(input: InstallSkillInput): Promise<LibrarySkill> {
+  return apiClient.post(`${BASE}/skill-library/install`, input);
+}
+
+export function removeSkillFromLibrary(id: string): Promise<{ id: string; removed: boolean }> {
+  return apiClient.delete(`${BASE}/skill-library/${encodeURIComponent(id)}`);
+}
+
+export function fetchSkillTargets(): Promise<{ targets: SkillTargetView[] }> {
+  return apiClient.get(`${BASE}/skill-targets`);
+}
+
+export function fetchTargetSkills(agentId: string): Promise<TargetSkillsView> {
+  return apiClient.get(`${BASE}/skill-targets/${encodeURIComponent(agentId)}`);
+}
+
+export function toggleAgentSkill(
+  agentId: string, skillId: string, enabled: boolean,
+): Promise<{ agentId: string; skillId: string; enabled: boolean }> {
+  return apiClient.put(`${BASE}/skill-targets/${encodeURIComponent(agentId)}/toggle`, { skillId, enabled });
+}
+
+export function toggleAllAgentSkills(
+  agentId: string, enabled: boolean,
+): Promise<{ agentId: string; enabled: boolean; count: number }> {
+  return apiClient.put(`${BASE}/skill-targets/${encodeURIComponent(agentId)}/toggle-all`, { enabled });
+}

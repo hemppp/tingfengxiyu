@@ -1,0 +1,386 @@
+// ============================================================
+// 「智能体 Skills」面板（输入栏上方的第二个入口）
+//
+// 用户口径（2026-09-13）：
+//   · 点击后展示**当前全部智能体**，并可为每个智能体单独配置 skills；
+//   · 点某个智能体 → 看到**左关右开**的开关，用于开启/关闭该智能体的 skills；
+//   · 添加技能的方式是一个**集中的 skills 库**：只支持安装与删除，
+//     内部按「智能体 skills」与「agent skills」两类分开存放。
+//
+// 因此本面板两个页签：
+//   按智能体 —— 智能体清单 → 下钻到某一个 → 它的技能 + 开关（复用 AgentSkillList）
+//   技能库   —— 库的全部内容（按两类分组）+ 安装 / 删除
+//
+// ★ 不做成"左列智能体 + 右列技能"的左右分栏：这个面板挂在 AI 交流栏上方，
+//   宽度只有三百来像素，两栏会挤到看不清技能名。下钻式在窄栏里更好用，
+//   而且与"点击某个智能体后即可看到开关"这句描述完全一致。
+// ============================================================
+
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ChevronLeft, ChevronRight, Loader2, AlertCircle, Trash2, Plus, X, PackageOpen,
+} from 'lucide-react';
+import { AgentSkillList } from './AgentSkillList';
+import { resolveSkillIcon } from './skillsConfig';
+import {
+  fetchSkillTargets, fetchSkillLibrary, installSkillOnLibrary, removeSkillFromLibrary,
+  type SkillTargetView, type LibrarySkill, type OrphanOwner, type SkillCategory,
+} from '@/services/ai/skillLibrary';
+import { dispatchToastEvent } from '@/utils/errors';
+
+type Tab = 'agents' | 'library';
+
+/** 智能体头像（色底 + 单字）—— 与交流流里的头像同一套视觉语言 */
+function AgentAvatar({ short, color, size = 22 }: { short: string; color: string; size?: number }) {
+  return (
+    <span
+      className="shrink-0 flex items-center justify-center rounded-full font-semibold"
+      style={{ width: size, height: size, background: `${color}22`, color, fontSize: size * 0.5, border: `1px solid ${color}55` }}
+      aria-hidden="true"
+    >
+      {short}
+    </span>
+  );
+}
+
+export function AgentSkillsPanel() {
+  const [tab, setTab] = useState<Tab>('agents');
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const [targets, setTargets] = useState<SkillTargetView[] | null>(null);
+  const [lib, setLib] = useState<{ skills: LibrarySkill[]; byCategory: { assistant: LibrarySkill[]; agent: LibrarySkill[] }; orphans: OrphanOwner[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [installOpen, setInstallOpen] = useState(false);
+
+  const loadTargets = useCallback(async () => {
+    try {
+      const r = await fetchSkillTargets();
+      setTargets(r.targets);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
+  const loadLibrary = useCallback(async () => {
+    try {
+      setLib(await fetchSkillLibrary());
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
+  useEffect(() => { void loadTargets(); }, [loadTargets]);
+  useEffect(() => { if (tab === 'library') void loadLibrary(); }, [tab, loadLibrary]);
+
+  /** 开关改动后：左列计数与库都要刷新（同一个数据源，别让两处显示不一致） */
+  const refreshAll = useCallback(() => {
+    void loadTargets();
+    if (tab === 'library') void loadLibrary();
+  }, [loadTargets, loadLibrary, tab]);
+
+  const handleDelete = useCallback(async (skill: LibrarySkill) => {
+    if (!window.confirm(`从技能库删除「${skill.name}」？\n\n这会同时清掉所有智能体对它的开关记录。`)) return;
+    setPendingDelete(skill.id);
+    try {
+      await removeSkillFromLibrary(skill.id);
+      dispatchToastEvent({ type: 'success', message: `已删除「${skill.name}」`, duration: 2500 });
+      await loadLibrary();
+      await loadTargets();
+    } catch (e) {
+      dispatchToastEvent({ type: 'error', message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setPendingDelete(null);
+    }
+  }, [loadLibrary, loadTargets]);
+
+  // ---- 库视图 ----
+  const LibraryView = () => {
+    if (!lib) {
+      return (
+        <div className="flex items-center justify-center gap-2 py-6 text-[11px] text-muted-foreground" role="status">
+          <Loader2 size={13} className="animate-spin" aria-hidden="true" /> 正在读取技能库…
+        </div>
+      );
+    }
+    const Section = ({
+      label, note, items,
+    }: { label: string; note: string; items: LibrarySkill[] }) => (
+      <div className="flex flex-col gap-1">
+        <div className="flex items-baseline gap-2 px-1">
+          <span className="text-[11px] font-semibold">{label}</span>
+          <span className="text-[10px] text-muted-foreground">{items.length}</span>
+          <span className="text-[10px] text-muted-foreground truncate">{note}</span>
+        </div>
+        {items.length === 0 && (
+          <div className="px-2 py-2 text-[10px] text-muted-foreground">（这一类还没有技能）</div>
+        )}
+        {items.map((s) => {
+          const Icon = resolveSkillIcon(s.iconKey || s.id);
+          return (
+            <div key={s.id} className="flex items-center gap-2 rounded-xl px-2 py-1.5 border" data-skill={s.id}>
+              <Icon size={14} style={{ color: s.color }} className="shrink-0" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <div className="text-[12px] font-medium truncate">{s.name}</div>
+                <div className="text-[10px] text-muted-foreground truncate">
+                  {s.ownerAgentName ? `归属 ${s.ownerAgentName}` : (s.category === 'assistant' ? '归属 对话智能体' : '未归属')}
+                  {s.description ? ` · ${s.description}` : ''}
+                </div>
+              </div>
+              <button
+                onClick={() => void handleDelete(s)}
+                disabled={pendingDelete === s.id}
+                className="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-40"
+                aria-label={`删除技能 ${s.name}`}
+                title="从技能库删除"
+              >
+                {pendingDelete === s.id
+                  ? <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                  : <Trash2 size={12} aria-hidden="true" />}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    );
+
+    return (
+      <div className="flex flex-col gap-3">
+        <button
+          onClick={() => setInstallOpen((v) => !v)}
+          className="flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-xl border text-[11px] hover:bg-muted/60"
+        >
+          {installOpen ? <X size={12} aria-hidden="true" /> : <Plus size={12} aria-hidden="true" />}
+          {installOpen ? '收起安装表单' : '安装技能'}
+        </button>
+        {installOpen && <InstallForm
+          targets={targets ?? []}
+          busy={busy}
+          onSubmit={async (input) => {
+            setBusy(true);
+            try {
+              const s = await installSkillOnLibrary(input);
+              dispatchToastEvent({ type: 'success', message: `已安装「${s.name}」`, duration: 2500 });
+              setInstallOpen(false);
+              await loadLibrary();
+              await loadTargets();
+            } catch (e) {
+              // 后端会把"为什么装不上"说清楚（id 非法 / 未知智能体），原样转达
+              dispatchToastEvent({ type: 'error', message: e instanceof Error ? e.message : String(e), duration: 6000 });
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />}
+        {lib.orphans.length > 0 && (
+          <div className="flex items-start gap-1.5 rounded-xl px-2 py-1.5 text-[10px] border" style={{ borderColor: 'hsl(var(--destructive) / 0.4)' }} role="alert">
+            <AlertCircle size={11} className="shrink-0 mt-0.5 text-destructive" aria-hidden="true" />
+            <span>
+              有 {lib.orphans.map((o) => `${o.count} 条技能归属到「${o.agentId}」`).join('、')}，
+              但智能体清单里没有它 —— 这些技能在「按智能体」里**永远看不到**。
+              请改归属，或把该智能体声明出来。
+            </span>
+          </div>
+        )}
+        <Section label="智能体 skills" note="归对话智能体本体" items={lib.byCategory.assistant} />
+        <Section label="agent skills" note="归各子智能体" items={lib.byCategory.agent} />
+      </div>
+    );
+  };
+
+  // ---- 主渲染 ----
+  if (selected) {
+    const t = targets?.find((x) => x.id === selected);
+    return (
+      <div className="flex flex-col gap-2 p-2.5">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSelected(null)}
+            className="shrink-0 flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground"
+          >
+            <ChevronLeft size={12} aria-hidden="true" /> 全部智能体
+          </button>
+          <div className="flex-1" />
+          {t && <span className="text-[10px] text-muted-foreground">{t.group}</span>}
+        </div>
+        {t && (
+          <div className="flex items-center gap-2">
+            <AgentAvatar short={t.short} color={t.color} size={26} />
+            <div className="min-w-0">
+              <div className="text-[12px] font-semibold truncate">{t.name}</div>
+              <div className="text-[10px] text-muted-foreground truncate">{t.description}</div>
+            </div>
+          </div>
+        )}
+        <AgentSkillList agentId={selected} onChanged={refreshAll} compact />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 p-2.5">
+      {/* 两个页签：智能体 / 技能库 —— 库只做安装与删除，配置在智能体那边 */}
+      <div className="flex gap-1 p-0.5 rounded-xl" style={{ background: 'hsl(var(--muted) / 0.5)' }} role="tablist">
+        {([['agents', '按智能体'], ['library', '技能库']] as Array<[Tab, string]>).map(([k, label]) => (
+          <button
+            key={k}
+            role="tab"
+            aria-selected={tab === k}
+            onClick={() => setTab(k)}
+            className="flex-1 px-2 py-1 rounded-lg text-[11px] transition-all"
+            style={{
+              background: tab === k ? 'hsl(var(--background))' : 'transparent',
+              fontWeight: tab === k ? 600 : 400,
+              color: tab === k ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
+            }}
+          >{label}</button>
+        ))}
+      </div>
+
+      {error && (
+        <div className="flex items-start gap-1.5 text-[10px] text-muted-foreground" role="alert">
+          <AlertCircle size={11} className="shrink-0 mt-0.5 text-destructive" aria-hidden="true" />
+          <span className="text-destructive">{error}</span>
+        </div>
+      )}
+
+      {tab === 'library' && <LibraryView />}
+
+      {tab === 'agents' && (
+        targets === null ? (
+          <div className="flex items-center justify-center gap-2 py-6 text-[11px] text-muted-foreground" role="status">
+            <Loader2 size={13} className="animate-spin" aria-hidden="true" /> 正在读取智能体…
+          </div>
+        ) : targets.length === 0 ? (
+          <div className="flex flex-col items-center gap-1.5 py-6 text-[11px] text-muted-foreground" role="status">
+            <PackageOpen size={16} aria-hidden="true" />
+            <div>没有已声明的智能体</div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {[...new Set(targets.map((t) => t.group))].map((group) => (
+              <div key={group} className="flex flex-col gap-1">
+                <div className="px-1 text-[10px] text-muted-foreground">{group}</div>
+                {targets.filter((t) => t.group === group).map((t) => (
+                  <button
+                    key={t.id}
+                    data-agent={t.id}
+                    onClick={() => setSelected(t.id)}
+                    className="flex items-center gap-2 rounded-xl px-2 py-1.5 border text-left transition-colors hover:bg-muted/50"
+                  >
+                    <AgentAvatar short={t.short} color={t.color} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[12px] font-medium truncate">{t.name}</div>
+                      <div className="text-[10px] text-muted-foreground truncate">{t.description}</div>
+                    </div>
+                    {/* 计数直接写出来：不显示就没法一眼看出"这个智能体配了几条" */}
+                    <span className="shrink-0 text-[10px]" style={{ color: t.enabled > 0 ? t.color : 'hsl(var(--muted-foreground))' }}>
+                      {t.enabled}/{t.total}
+                    </span>
+                    <ChevronRight size={12} className="shrink-0 text-muted-foreground" aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+/** 安装表单 —— 库只支持安装与删除，所以这是"唯一的入口" */
+function InstallForm({
+  targets, busy, onSubmit,
+}: {
+  targets: SkillTargetView[];
+  busy: boolean;
+  onSubmit: (input: {
+    id: string; name: string; description?: string; category: SkillCategory;
+    ownerAgent?: string | null; systemPrompt?: string;
+  }) => void | Promise<void>;
+}) {
+  const [id, setId] = useState('');
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [systemPrompt, setSystemPrompt] = useState('');
+  const [category, setCategory] = useState<SkillCategory>('agent');
+  const [ownerAgent, setOwnerAgent] = useState('writer');
+
+  const agentTargets = targets.filter((t) => t.kind === 'agent');
+  const canSubmit = id.trim() && name.trim() && !busy
+    && (category === 'assistant' || !!ownerAgent);
+
+  return (
+    <form
+      className="flex flex-col gap-1.5 rounded-xl p-2 border"
+      onSubmit={(e) => {
+        e.preventDefault();
+        // ★ 主按钮是 type="submit"（不是按各步渲染不同节点）——
+        //   这条踩过：React 同步换完 DOM 后浏览器才执行默认动作，会按换上去的节点解析
+        void onSubmit({
+          id: id.trim(), name: name.trim(),
+          description: description.trim() || undefined,
+          category,
+          ownerAgent: category === 'agent' ? ownerAgent : null,
+          systemPrompt: systemPrompt.trim() || undefined,
+        });
+      }}
+    >
+      <div className="flex gap-1">
+        {([['agent', 'agent skills'], ['assistant', '智能体 skills']] as Array<[SkillCategory, string]>).map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setCategory(k)}
+            className="flex-1 px-2 py-1 rounded-lg text-[10px] border"
+            style={{
+              background: category === k ? 'hsl(var(--primary) / 0.12)' : 'transparent',
+              borderColor: category === k ? 'hsl(var(--primary) / 0.5)' : 'hsl(var(--border))',
+              fontWeight: category === k ? 600 : 400,
+            }}
+          >{label}</button>
+        ))}
+      </div>
+      {category === 'agent' && (
+        <label className="flex items-center gap-1.5 text-[10px]">
+          <span className="text-muted-foreground shrink-0">归属智能体</span>
+          <select
+            value={ownerAgent}
+            onChange={(e) => setOwnerAgent(e.target.value)}
+            className="flex-1 min-w-0 px-1.5 py-1 rounded-md border bg-background text-[10px]"
+          >
+            {agentTargets.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </label>
+      )}
+      <input
+        value={id} onChange={(e) => setId(e.target.value)} placeholder="技能 id（字母数字，如 foreshadow-doctor）"
+        className="px-2 py-1 rounded-md border bg-background text-[11px]"
+      />
+      <input
+        value={name} onChange={(e) => setName(e.target.value)} placeholder="展示名称"
+        className="px-2 py-1 rounded-md border bg-background text-[11px]"
+      />
+      <input
+        value={description} onChange={(e) => setDescription(e.target.value)} placeholder="一句话描述"
+        className="px-2 py-1 rounded-md border bg-background text-[11px]"
+      />
+      <textarea
+        value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)}
+        placeholder="技能正文：叠加到 system prompt 的专家指导" rows={3}
+        className="px-2 py-1 rounded-md border bg-background text-[11px] resize-y"
+      />
+      <button
+        type="submit"
+        disabled={!canSubmit}
+        className="px-2 py-1.5 rounded-lg text-[11px] text-primary-foreground disabled:opacity-50 mc-auth-btn-primary"
+      >
+        {busy ? '安装中…' : '安装到技能库'}
+      </button>
+    </form>
+  );
+}

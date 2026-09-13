@@ -35,6 +35,7 @@ import {
 } from '@novel/core';
 import { registerTool, unregisterTool, getAllToolDefinitions, markPluginTool } from '../ai/tools/registry.js';
 import { registerSkill, unregisterSkill, SKILLS } from '../ai/agents/skills.js';
+import { declareSkillTarget, undeclareSkillTarget, listSkillTargets } from '../ai/agents/skill-targets.js';
 import { Agent, Runner } from '@openai/agents';
 import { getAIConfig } from '../ai/providers/provider-factory.js';
 import { getSdkProvider } from '../ai/agents/sdk/provider.js';
@@ -309,6 +310,14 @@ export function createServerPluginHost(options: ServerPluginHostOptions = {}): S
         return () => unregisterSkill((skill as { id: string }).id);
       },
       getAll: () => ({ ...SKILLS }),
+    },
+    skillTargets: {
+      // 插件声明自己的 agent（"后续还要继续加入其他 agent 的 skills"靠这个入口）
+      declare(def: Omit<import('../ai/agents/skill-targets.js').SkillTarget, 'source'>) {
+        declareSkillTarget({ ...def, source: 'plugin' });
+        return () => undeclareSkillTarget(def.id);
+      },
+      getAll: () => listSkillTargets().map((t) => ({ id: t.id, name: t.name, kind: t.kind })),
     },
     agents: {
       register(def: { name: string }) {

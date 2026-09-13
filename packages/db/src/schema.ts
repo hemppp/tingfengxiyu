@@ -543,3 +543,65 @@ export const factConflicts = sqliteTable('fact_conflicts', {
 }, (table) => ({
   openOn: index('idx_fact_conflicts_open').on(table.projectId, table.status, table.createdAt),
 }));
+
+// ============================================================
+// 集中式 Skills 库（主库，全局）
+//
+// 口径（docs/skills-library.md）：
+//   · 一处集中存放**所有**技能，智能体与各 agent 都从这里取自己那一类；
+//   · 库**只支持安装与删除**（不提供编辑）—— 技能正文属于"装进来的东西"，
+//     就地改会让库与技能来源脱节；
+//   · 内部按两类分开存放：`category='assistant'`（智能体 skills）与
+//     `category='agent'`（agent skills，带 owner_agent 指明归属哪个 agent）。
+// ============================================================
+
+export const skillLibrary = sqliteTable('skill_library', {
+  /** 技能 id（沿用注册表里的 id，如 'worldbuilder'） */
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  color: text('color').notNull().default('#94a3b8'),
+  /** 前端图标 key（本地映射到 lucide 图标，后端不下发组件） */
+  iconKey: text('icon_key').notNull().default('sparkles'),
+  /**
+   * ★ 分类存放（用户口径）：
+   *   'assistant' = 智能体 skills（对话智能体本体用）
+   *   'agent'     = agent skills（写作官等子智能体用，必须带 ownerAgent）
+   */
+  category: text('category').notNull(),
+  /** category='agent' 时必填：归属的 agent id（与 DesignRole.key 对齐） */
+  ownerAgent: text('owner_agent'),
+  /** 技能正文（叠加到 system prompt 的专家指导） */
+  systemPrompt: text('system_prompt').notNull().default(''),
+  /** 需要前端注入的上下文类型（JSON 数组） */
+  contextKeys: text('context_keys').notNull().default('[]'),
+  /** 'builtin'（随产品带）/ 'installed'（用户装进来的） */
+  source: text('source').notNull().default('installed'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+}, (table) => ({
+  byCategory: index('idx_skill_library_category').on(table.category, table.ownerAgent),
+}));
+
+/**
+ * 每个智能体的技能开关（**按用户**存：同一台机器上不同用户各自配自己的）。
+ *
+ * 为什么单独一张表而不是往 skill_library 上加列：
+ * 同一条技能可以同时属于多个智能体（例如"世界观顾问"给对话智能体一个、给策划官一个），
+ * 开关是 (用户, 智能体, 技能) 三元组的属性，不是技能自身的属性。
+ */
+export const agentSkillToggles = sqliteTable('agent_skill_toggles', {
+  /** `${userId}:${agentId}:${skillId}` —— 直接当主键，避免依赖复合唯一索引的实现差异 */
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  /** 智能体 id：'chat'（智能体本体）或 agent id（如 'writer'） */
+  agentId: text('agent_id').notNull(),
+  skillId: text('skill_id').notNull(),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+}, (table) => ({
+  uniqueToggle: uniqueIndex('idx_agent_skill_toggles_unique').on(table.userId, table.agentId, table.skillId),
+  byAgent: index('idx_agent_skill_toggles_agent').on(table.userId, table.agentId),
+}));
+

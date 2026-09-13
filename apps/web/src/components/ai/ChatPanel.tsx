@@ -1988,6 +1988,11 @@ export function ChatPanel(props: { controls?: ChatPanelControlProps } & Partial<
         {/* 技能 / 快捷语 / 模式开关已移至浮窗左缘的贴附气泡（AiChatBubbleRail）；
             技能与快捷语选择通过事件桥回传（nm-chat:skill / nm-chat:pick-prompt） */}
 
+        {/* ★ 技能库/智能体技能入口**不在这里**（2026-09-13）：本面板是**手写模式**的 AI 对话，
+            而技能的归属对象（写作官等）是 AI 写作链路里的 agent —— 手写模式不共用那套，
+            摆在这里会指向一个当前模式下不存在的智能体。
+            入口在 AutoWriteWorkbench 的「智能体对话」输入栏上方（见 EntrySkillPanel / AgentSkillsPanel）。 */}
+
         <div className="flex gap-2 items-center">
           {/* ★ 扫榜拆书：列出扫榜收藏的书，选择后就地发起拆书（报告回存参考书） */}
           <div className="relative shrink-0">

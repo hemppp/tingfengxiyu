@@ -26,7 +26,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Send, Sparkles,
-  Workflow, ClipboardList, Boxes, ShieldCheck,
+  Workflow, ClipboardList, Boxes, ShieldCheck, Wand2, Bot, ChevronDown, X,
 } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import type { Project } from '@novel/shared';
@@ -41,6 +41,8 @@ import { WorkspacePane, clampPaneHeight, type PaneMode } from '@/components/layo
 import { TabBar } from '@/components/layout/TabBar';
 import { QuickOpen } from '@/components/layout/QuickOpen';
 import { MemoryAuditPanel } from '@/components/layout/MemoryAuditPanel';
+import { EntrySkillPanel } from '@/components/ai/EntrySkillPanel';
+import { AgentSkillsPanel } from '@/components/ai/AgentSkillsPanel';
 import { fetchMemoryView, type MemoryView } from '@/services/ai/memorySession';
 import {
   BODY_MIN_SOFT, BODY_MIN_WIDTH, BODY_PAD_X, EDITOR_BG, PANE_H_DEFAULT, PANE_W_MIN_SOFT, RAIL_WIDTH,
@@ -142,6 +144,13 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
   const [busy, setBusy] = useState(false);
   /** 当前阶段（来自后端 phase 事件），显示在输入框上方 */
   const [phase, setPhase] = useState('');
+  /**
+   * 输入栏上方的技能面板（2026-09-13）：
+   *   'writer' = 写作 Skills（这个 agent 的 skills，面板本身与写作无关，换 agentId 即可复用）
+   *   'agents' = 智能体 Skills（全部智能体 + 每个的左关右开开关 + 技能库的安装/删除）
+   * 与浮窗气泡里的"技能徽章"是两件事：徽章管「本轮用哪条」，这里管「这个智能体启用哪些」。
+   */
+  const [skillsPanel, setSkillsPanel] = useState<'writer' | 'agents' | null>(null);
   /** 讨论收敛出的本章结论 —— 同时落进交流流卡片与中栏「本章计划」卡 */
   const [conclusion, setConclusion] = useState<string | null>(null);
   /** 写作官产出的正文 —— 落在中上方的正文方块里（命名避开输入框的 `draft`） */
@@ -794,6 +803,71 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                         </div>
                       )
                     ))}
+                  </div>
+                )}
+              </div>
+
+              {/*
+                两个技能入口 —— 位置就是**输入栏上方**（作者口径：入口放在对话框输入栏上方）。
+                · 写作 Skills  ：直接展示写作 agent 的 skills
+                · 智能体 Skills：先列全部智能体 → 点进去看左关右开的开关；技能库（安装/删除）也在这
+              */}
+              <div className="shrink-0 px-2.5 pt-2">
+                <div className="flex items-center gap-1.5">
+                  {([
+                    ['writer', '写作 Skills', Wand2],
+                    ['agents', '智能体 Skills', Bot],
+                  ] as Array<['writer' | 'agents', string, typeof Wand2]>).map(([key, label, Icon]) => {
+                    const open = skillsPanel === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setSkillsPanel((v) => (v === key ? null : key))}
+                        aria-expanded={open}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] transition-colors"
+                        style={{
+                          border: '0.5px solid hsl(var(--border) / 0.7)',
+                          background: open ? 'hsl(var(--muted) / 0.7)' : 'transparent',
+                          color: open ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
+                        }}
+                        title={key === 'writer' ? '写作智能体的技能开关' : '全部智能体 + 技能库（安装/删除）'}
+                      >
+                        <Icon size={12} aria-hidden="true" />
+                        {label}
+                        <ChevronDown size={11} className={open ? 'rotate-180 transition-transform' : 'transition-transform'} aria-hidden="true" />
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {skillsPanel && (
+                  <div
+                    className="mt-1.5 rounded-2xl overflow-hidden"
+                    style={{ border: '0.5px solid hsl(var(--border) / 0.7)', background: 'hsl(var(--background))' }}
+                  >
+                    <div
+                      className="flex items-center justify-between px-2.5 py-1.5"
+                      style={{ borderBottom: '0.5px solid hsl(var(--border) / 0.6)' }}
+                    >
+                      <span className="text-[11px] font-semibold">
+                        {skillsPanel === 'writer' ? '写作 Skills' : '智能体 Skills'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSkillsPanel(null)}
+                        className="w-5 h-5 flex items-center justify-center rounded-md"
+                        style={{ color: 'hsl(var(--muted-foreground))' }}
+                        aria-label="收起技能面板"
+                      >
+                        <X size={12} aria-hidden="true" />
+                      </button>
+                    </div>
+                    <div className="max-h-[42vh] overflow-y-auto">
+                      {skillsPanel === 'writer'
+                        ? <EntrySkillPanel agentId="writer" title="写作 Skills" hint="写作官 · 按本章结论落笔成文" />
+                        : <AgentSkillsPanel />}
+                    </div>
                   </div>
                 )}
               </div>

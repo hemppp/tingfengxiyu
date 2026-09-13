@@ -401,6 +401,35 @@ function bootstrapTables(sqlite: any): void {
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     )`,
+
+    // 集中式 Skills 库（docs/skills-library.md）+ 每个智能体的技能开关
+    // ★ 必须与 drizzle/0001_skills_library.sql 保持一致（打包版没有迁移目录，走这里）
+    `CREATE TABLE IF NOT EXISTS skill_library (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '' NOT NULL,
+      color TEXT DEFAULT '#94a3b8' NOT NULL,
+      icon_key TEXT DEFAULT 'sparkles' NOT NULL,
+      category TEXT NOT NULL,
+      owner_agent TEXT,
+      system_prompt TEXT DEFAULT '' NOT NULL,
+      context_keys TEXT DEFAULT '[]' NOT NULL,
+      source TEXT DEFAULT 'installed' NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_skill_library_category ON skill_library(category, owner_agent)`,
+    `CREATE TABLE IF NOT EXISTS agent_skill_toggles (
+      id TEXT PRIMARY KEY NOT NULL,
+      user_id TEXT NOT NULL,
+      agent_id TEXT NOT NULL,
+      skill_id TEXT NOT NULL,
+      enabled INTEGER DEFAULT 0 NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_skill_toggles_unique ON agent_skill_toggles(user_id, agent_id, skill_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_agent_skill_toggles_agent ON agent_skill_toggles(user_id, agent_id)`,
   ];
 
   for (const sql of statements) {
@@ -435,10 +464,23 @@ async function runMigrations(sqlite: any): Promise<void> {
     )
   `);
 
-  const appliedResult = sqlite.exec('SELECT filename FROM __novelmuse_migrations');
+  /**
+   * ★ 必须用 prepare().all() 读，**不能用 exec()**。
+   *
+   * better-sqlite3 的 `exec()` 只负责执行语句、**不返回结果行**（它是 sql.js 的同名 API 的
+   * 语义差异；sql.js 的 exec 会返回 [{columns, values}]）。此前这里写的是
+   * `sqlite.exec('SELECT filename FROM ...')` 再去读 `[0].values` —— 永远拿到 undefined，
+   * 于是 `applied` 恒为空集，每次都命中下面的「历史库兼容」分支：
+   * **新迁移一行都不会执行，却全部被 INSERT 成"已应用"**。
+   * 症状极隐蔽：日志看着正常、迁移记录一条不少、表就是没有（实测踩到：
+   * 新增 0001_skills_library.sql 后 `skill_library` 表不存在，而它已被记为 applied）。
+   */
   const applied = new Set<string>();
-  for (const row of (appliedResult[0]?.values as unknown[]) ?? []) {
-    applied.add((row as unknown[])[0] as string);
+  try {
+    const rows = sqlite.prepare('SELECT filename FROM __novelmuse_migrations').all() as Array<{ filename: string }>;
+    for (const row of rows) applied.add(row.filename);
+  } catch (e) {
+    console.warn('[better-sqlite3] 读取迁移记录失败（按空处理）:', e);
   }
 
   const migrationsDir = path.resolve(_moduleDir, '../drizzle');
