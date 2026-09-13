@@ -397,6 +397,30 @@ L2 ：key 形如 exp.ch4.turn10（带章号）—— 不再互相覆盖
 意图复核：水车空、无叙事经历（readNarrative=false，符合权限矩阵）
 ```
 
+### 8.8 第三轮：未完成清单「逐个全量修复」（2026-09-13 晚）
+
+先把清单里**逐条核实**（有类型/文档但无调用方的"语义空洞"最容易被误判成已完成），再逐条落地：
+
+| 项 | 修法 | 运行时证据 |
+|---|---|---|
+| **A1 L2-F 事实引用**（此前零写入方） | 设定管家（`l1Wide`）每章把它获准读到的全局事实族记成自己的**事实引用** | `continuity-keeper fact_ref fref.ch1.chapters` |
+| **A2 按需回读**（`recall-by-need` 零调用方） | 接到**补写**触发点：篇幅不足时回读"比最老一斗更早"的一章（过闸门 + 记账） | 走通了（3 章无补写触发，故未产生行） |
+| **A3 故事内时间**（第三层时间戳从未赋值） | 加 `chapters.story_time`（新库/旧库补列/drizzle 三处）+ `extractStoryTime()` 从契约抽 + 交付后写库 + 水车渲染带它；**并在定稿官模板里要求写这一项**（此前契约里根本没有，抽不到是正确行为） | 列已通；模板已要求 |
+| **A4 I6 装配可复现** | `fingerprintOf()`（djb2 + 字数）→ 新增 `assemble` 审计动作 | `assemble … 注入 7483 字 \| fp:1tlw46e-7483`，**同授权集的两个角色指纹相同** |
+| **B5 冲突裁决闭环** | 三态决策（用库里那个/用本批那个/都不算）+ 记 `resolution`（决策、采用值、裁决人、是否需要重跑沉淀）+ 审计；面板三个按钮 + 后端提示 | 接口已验（无冲突项目 → 无按钮，属正常） |
+| **B6 冲突去重** | 同项目同槽位已有 open 就更新 incoming，不再重复入队 | 单测覆盖 |
+| **C1 标签拖拽重排** | TabBar HTML5 dnd → `moveTab`（注意与分隔条的 `onMove` 重名，改名 `onMoveTab`） | 真机可拖 |
+| **C2 向导创建后直接进书** | `BookshelfPage` 创建成功后 `navigate('/project/<id>')`（编辑不跳） | GUI 已验 |
+| **C3 面板显示水车斗位** | `/memory` 的 `agents[]` 带 `wheel`/`summaries`，面板按角色显示 `水车 ch2 ch1` | `{agents:6, wheelChips:['ch2','ch1',…], assembleRows:16}` |
+| **E2 抽查进 CI** | 新增 `scripts/verify-all.mjs`（两侧单测 + 抽查，串行、server 用 Node 24）→ `verify:all` | `verify:all exit=0`（server **129** / web **123**） |
+| **D1 24 个文件未进版本库** ⚠️ | 分两次提交入库（后端+文档、前端），工作树已干净 | `git status` 0 未跟踪 |
+
+**残留（本轮未做，属特性不是缺陷）**：流水线 M2/M3（drift / pilot / production 仍是占位）；
+`apps/desktop` 空壳；README 过时；安全审计高危项未逐条复核。
+
+**又踩了一次同类坑**：把 server 启动**写在另一个会结束的任务里** → 任务收尾时它的进程树被清掉，server 随之消失。
+规矩：**server 必须用自己的长驻后台任务启动**，不能寄生在别的命令里。
+
 ---
 
 ## 9. 与《ai-writing-architecture.md §6 水车》的关系

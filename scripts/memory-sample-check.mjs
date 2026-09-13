@@ -20,7 +20,7 @@ const COUNT = Number(process.argv[3] ?? 5);
 const ONLY = process.argv[2];
 
 /** 合法枚举（与 types.ts 保持一致；这里是**独立抄一份**，故意如此：让代码与校验互为对照） */
-const AUDIT_ACTIONS = new Set(['read_l1', 'deny_l1', 'write_l2', 'deny_write_l2', 'ingest', 'conflict']);
+const AUDIT_ACTIONS = new Set(['assemble', 'read_l1', 'deny_l1', 'write_l2', 'deny_write_l2', 'ingest', 'conflict']);
 const REASONS = new Set(['discuss-context', 'continuity-check', 'assemble-before-write', 'gate-review', 'recall-by-need', 'ingest']);
 const FORMS = new Set(['fact_ref', 'experience']);
 const WHEEL_CAPACITY = 3;
