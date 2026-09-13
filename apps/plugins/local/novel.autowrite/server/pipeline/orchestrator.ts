@@ -17,7 +17,7 @@ import { getProjectDb } from '@novel/db';
 import type { DesignRole } from '../discuss/roles.js';
 import { formatBrief, resolveSettingsDigest, type SettingsDigest } from '../framework/context-resolver.js';
 import { readDigestFor } from '../framework/memory/digest-gate.js';
-import { createAgentMemory, createMemoryGate, experience } from '../framework/memory/index.js';
+import { createAgentMemory, createMemoryGate, experience, writeAudit, fingerprintOf } from '../framework/memory/index.js';
 import { REVISION_LIMIT, STAGE_LABEL, type PipelineEvent, type PipelineState, type SinkStats, type StageKey } from './types.js';
 import { STAGE_SPEAK_MAX_TOKENS, specFor } from './roles-phase.js';
 import { PipelineStore, computeBriefHash } from './store.js';
@@ -115,6 +115,19 @@ export async function runStage(
       state: store.load(), stage, extra: opts.extra, revisionNote: opts.revisionNote,
     });
     headerCache.set(agentId, text);
+
+    // ★ A4：装配指纹（与写章链路同一口径）。此前只接在 discuss 侧，
+    //   流水线这边漏了 → 面板上一条 assemble 都没有（GUI 走查发现）。
+    try {
+      await writeAudit(ctx, {
+        projectId, agentId, action: 'assemble', keys: Object.keys(allowed),
+        reason: 'discuss-context', allow: true,
+        detail: `注入 ${text.length} 字（${stage}）`,
+        fingerprint: fingerprintOf(text),
+      });
+    } catch (e) {
+      console.warn('[pipeline] 装配指纹写入失败（不影响本段）:', e);
+    }
     return text;
   };
   /** L2：记「这个角色这一轮说了什么」（失败不影响本段讨论） */

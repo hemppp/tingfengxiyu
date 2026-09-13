@@ -219,7 +219,11 @@ export function BookshelfPage() {
           //   只在**新建**时跳；编辑既有书不跳（改完名字不想被带走）。
           setShowAddModal(false);
           setEditingBook(null);
-          navigate(`/project/${result.id}`);
+          // ★ 必须**先设当前项目**再跳：路由只有 /project（index=ProjectIndexPage）与
+          //   /project/:bookId/:chapterId 两种形状，`/project/<id>` 单段会落到 404
+          //   （2026-09-13 GUI 走查实测踩到）。书卡点击也是这两步，保持一致。
+          setCurrentProject(result);
+          navigate('/project');
           return;
         }
       }
