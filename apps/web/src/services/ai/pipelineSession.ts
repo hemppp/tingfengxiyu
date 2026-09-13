@@ -1,0 +1,194 @@
+// ============================================================
+// 多智能体协作流水线 —— 前端客户端
+//
+// 对接插件路由（设计见 docs/ai-writing-multiagent-pipeline.md）：
+//   GET  /api/plugins/autowrite/pipeline           读状态
+//   POST /api/plugins/autowrite/pipeline/start     启动 / 续跑
+//   POST /api/plugins/autowrite/pipeline/advance   跑一段（SSE）
+//   POST /api/plugins/autowrite/pipeline/decision  闸门决策
+//
+// ★ 推进走 SSE、决策走普通 POST：需要用户输入的东西绝不放长连接里等 ——
+//   连接一断状态就悬空，刷新页面更说不清「我到底批没批」。
+// ============================================================
+
+import { apiClient, getToken, getCurrentProjectId } from '../api/apiClient';
+import { forEachSSEDataLine } from './sseStream';
+
+export type StageKey = 'brief' | 'cast' | 'bible' | 'plot' | 'drift' | 'pilot' | 'production';
+export type StageStatus = 'idle' | 'running' | 'awaiting_user' | 'approved' | 'failed';
+export type DecisionAction = 'approve' | 'revise' | 'reject';
+
+export interface PipelineStageView {
+  key: StageKey;
+  label: string;
+  status: StageStatus;
+  /** 被打回 / 退回的次数 */
+  revision: number;
+  /** 这一段有没有用户闸门（决定要不要弹审批卡） */
+  gated: boolean;
+  /** 这一段是否已实现（未实现的只展示，不给跑） */
+  implemented: boolean;
+  /** 契约文本（人可读） */
+  artifact?: string;
+  error?: string;
+}
+
+export interface PipelineDecisionEntry {
+  stage: StageKey;
+  at: number;
+  by: string;
+  action: DecisionAction;
+  note?: string;
+}
+
+export interface PipelineView {
+  projectId: string;
+  stage: StageKey;
+  stageLabel: string;
+  briefHash: string;
+  /** 开书设定改过 → 已批准但基于旧基线的阶段（UI 要提醒"建议重跑"） */
+  staleStages: StageKey[];
+  stages: PipelineStageView[];
+  decisions: PipelineDecisionEntry[];
+  reviewEvery: number;
+  updatedAt: number;
+}
+
+export interface PipelineStatus {
+  started: boolean;
+  hasBrief: boolean;
+  view: PipelineView | null;
+}
+
+export interface SinkStats {
+  characters: { created: number; updated: number };
+  outline: number;
+  foreshadows: number;
+  skipped: number;
+  notes: string[];
+}
+
+export interface DecisionResult {
+  view: PipelineView;
+  movedTo: StageKey | null;
+  invalidated: StageKey[];
+  stats: SinkStats | null;
+  revisionLimit: number;
+  /** 撞上修订上限：把选择交回作者（按现状继续 / 放弃这段） */
+  hitRevisionLimit: boolean;
+}
+
+/** SSE 事件（与后端 pipeline/types.ts 的 PipelineEvent 一一对应） */
+export type PipelineEvent =
+  | { type: 'stage_start'; stage: StageKey; revision: number }
+  | { type: 'stage_phase'; stage: StageKey; label: string }
+  | {
+      type: 'stage_turn';
+      stage: StageKey;
+      agent: string;
+      name: string;
+      color: string;
+      short: string;
+      text: string;
+      meta?: string;
+    }
+  | { type: 'stage_summary'; stage: StageKey; text: string }
+  | { type: 'awaiting_user'; stage: StageKey; summary: string; revision: number; revisionLimit: number }
+  | { type: 'stage_sinked'; stage: StageKey; stats: SinkStats }
+  | { type: 'stage_skipped'; stage: StageKey; reason: string }
+  | { type: 'stage_failed'; stage: StageKey; message: string }
+  | { type: 'baseline_changed'; from: string; to: string; stale: StageKey[] }
+  | { type: 'error'; message: string }
+  | { type: 'done' };
+
+/**
+ * ★ 两个 base 不能混用：
+ *   - `API_BASE` 给 apiClient —— 它自己会补 `/api` 前缀，这里写 `/api/...` 会变成 `/api/api/...`（实测 404）
+ *   - `RAW_BASE` 给裸 fetch（SSE 要自己读流，走不了 apiClient），必须写全路径
+ */
+const API_BASE = '/plugins/autowrite/pipeline';
+const RAW_BASE = '/api/plugins/autowrite/pipeline';
+
+export async function fetchPipeline(): Promise<PipelineStatus> {
+  return apiClient.get<PipelineStatus>(API_BASE);
+}
+
+export async function startPipeline(note?: string): Promise<{ view: PipelineView; baselineMismatch: boolean }> {
+  return apiClient.post<{ view: PipelineView; baselineMismatch: boolean }>(`${API_BASE}/start`, { note });
+}
+
+export async function decidePipeline(
+  stage: StageKey,
+  action: DecisionAction,
+  note?: string,
+): Promise<DecisionResult> {
+  return apiClient.post<DecisionResult>(`${API_BASE}/decision`, { stage, action, note });
+}
+
+/**
+ * 跑一个阶段（SSE）。
+ *
+ * 走裸 fetch —— SSE 要自己读流，而 apiClient 会把响应体整个吞掉。
+ * ★ 所以要手动补 X-Project-Id：后端缺这个头直接 400。
+ */
+export async function runPipelineStage(
+  stage: StageKey,
+  opts: { extra?: string; signal?: AbortSignal } = {},
+  onEvent: (e: PipelineEvent) => void,
+): Promise<void> {
+  const token = getToken();
+  const projectId = getCurrentProjectId();
+  const resp = await fetch(`${RAW_BASE}/advance`, {
+    method: 'POST',
+    credentials: 'include', // 会话走 HttpOnly Cookie
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(projectId ? { 'X-Project-Id': projectId } : {}),
+    },
+    body: JSON.stringify({ stage, extra: opts.extra }),
+    signal: opts.signal,
+  });
+
+  if (!resp.ok || !resp.body) {
+    // 错误体是信封 { error: { code, message } }（apiClient 同款约定），把 message 抬出来
+    let detail = `HTTP ${resp.status}`;
+    try {
+      const j = (await resp.json()) as { error?: string | { message?: string } };
+      if (typeof j?.error === 'string') detail = j.error;
+      else if (j?.error?.message) detail = j.error.message;
+    } catch {
+      // 非 JSON：保留状态码
+    }
+    throw new Error(detail);
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  const handleBlock = (block: string) => {
+    forEachSSEDataLine(block, (dataStr) => {
+      try {
+        onEvent(JSON.parse(dataStr) as PipelineEvent);
+      } catch {
+        // 单行解析失败不中断整条流
+      }
+    });
+  };
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx: number;
+      while ((idx = buffer.indexOf('\n\n')) >= 0) {
+        handleBlock(buffer.slice(0, idx));
+        buffer = buffer.slice(idx + 2);
+      }
+    }
+    buffer += decoder.decode();
+    handleBlock(buffer);
+  } finally {
+    reader.releaseLock?.();
+  }
+}

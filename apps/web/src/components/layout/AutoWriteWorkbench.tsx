@@ -26,14 +26,28 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Send, Sparkles,
+  Workflow, ClipboardList, Boxes, ShieldCheck,
 } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import type { Project } from '@novel/shared';
-import { useChapterStore } from '@/stores';
+import { useChapterStore, useCharacterStore, useItemStore, useLocationStore, useForeshadowStore } from '@/stores';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { WorldStateBoard } from '@/components/layout/WorldStateBoard';
 import type { StageKey, StageState } from '@/components/layout/WorkbenchPlan';
 import { EntityRail } from '@/components/layout/EntityRail';
+import { PipelinePanel, type PipelineTurn } from '@/components/layout/PipelinePanel';
+import { BubbleRail, type PanelSignal } from '@/components/layout/BubbleRail';
+import { WorkspacePane, clampPaneHeight, type PaneMode } from '@/components/layout/WorkspacePane';
+import { TabBar } from '@/components/layout/TabBar';
+import { QuickOpen } from '@/components/layout/QuickOpen';
+import { MemoryAuditPanel } from '@/components/layout/MemoryAuditPanel';
+import { fetchMemoryView, type MemoryView } from '@/services/ai/memorySession';
+import {
+  BODY_MIN_SOFT, BODY_MIN_WIDTH, BODY_PAD_X, EDITOR_BG, PANE_H_DEFAULT, PANE_W_MIN_SOFT, RAIL_WIDTH,
+  type WorkbenchPanel,
+} from '@/components/layout/workspaceDefs';
 import { runSession, type SessionEvent } from '@/services/ai/autowriteSession';
+import type { PipelineView } from '@/services/ai/pipelineSession';
 
 /**
  * 底部花名册 —— 设计讨论层阵容，与后端 `discuss/roles.ts` 一一对应。
@@ -112,22 +126,15 @@ interface AutoWriteWorkbenchProps {
 const RAIL_MIN = 260;
 const RAIL_MAX = 520;
 const RAIL_DEFAULT = 320;
-
-const SIDE_MIN = 200;
-const SIDE_MAX_W = 380;
-const SIDE_DEFAULT = 252;
-
-/** 窗口再窄也要给中间仪表盘留出的最小宽度 */
-const CENTER_MIN = 340;
+// 右侧实体栏并入分页区后，原来的 SIDE_* 三个常量与右分隔条一并删除
 
 export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: AutoWriteWorkbenchProps) {
   const chapters = useChapterStore((s) => s.chapters);
 
   const [railOpen, setRailOpen] = useState(true);
   const [railWidth, setRailWidth] = useState(RAIL_DEFAULT);
-  const [sideOpen, setSideOpen] = useState(true);
-  const [sideWidth, setSideWidth] = useState(SIDE_DEFAULT);
-  const [hotSplitter, setHotSplitter] = useState<null | 'left' | 'right'>(null);
+  // 右侧实体栏已并入分页区（作为「实体与设定」面板），原来的 sideOpen/sideWidth 与右分隔条一并删掉
+  const [hotSplitter, setHotSplitter] = useState<null | 'left'>(null);
 
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [draft, setDraft] = useState('');
@@ -155,11 +162,188 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
   const [revision, setRevision] = useState(0);
 
   const leftSplitRef = useRef<null | { sx: number; ow: number }>(null);
-  const rightSplitRef = useRef<null | { sx: number; ow: number }>(null);
   const streamRef = useRef<HTMLDivElement | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
+  /** 交流流发言推送（定义在下方，这里留 ref 供分页区的面板回调） */
+  const onTurnRef = useRef<(t: PipelineTurn) => void>(() => {});
+
+  // ============================================================
+  // 分页工作区（AI 写作模式专用，设计见 docs/ui-tab-workspace-design.md）
+  //
+  //   结构：AI 交流栏 │ 气泡列 │ 正文（常驻，永不卸载）│ 辅助分页区
+  //
+  // 三条不变量：
+  //   ① **正文不进 tabs** —— 它不在分页区里，所以切标签永远不会"替换"它
+  //   ② **气泡是显示/隐藏开关** —— 二次点击只收起分页区，不销毁面板（面板里的筛选/滚动都留着）
+  //   ③ **任何档位都不覆盖正文** —— 宽度不够时按「收 AI 栏 → 压分页区 → 挪到下方」逐级让位
+  // ============================================================
+  const tabs = useWorkspaceStore((s) => s.tabs);
+  const activePane = useWorkspaceStore((s) => s.active);
+  const paneOpen = useWorkspaceStore((s) => s.paneOpen);
+  const paneWidth = useWorkspaceStore((s) => s.paneWidth);
+  const toggleBubble = useWorkspaceStore((s) => s.toggleBubble);
+  const activatePane = useWorkspaceStore((s) => s.activate);
+  const openPanel = useWorkspaceStore((s) => s.openPanel);
+  /** 双击气泡 = 固定打开（把预览标签晋级；IDE 里双击文件就是这个语义） */
+  const openPanelPinned = useCallback((key: string) => openPanel(key, { preview: false }), [openPanel]);
+  const closePane = useWorkspaceStore((s) => s.closePanel);
+  const closeOthers = useWorkspaceStore((s) => s.closeOthers);
+  const closeToRight = useWorkspaceStore((s) => s.closeToRight);
+  const promotePane = useWorkspaceStore((s) => s.promote);
+  const movePaneTab = useWorkspaceStore((s) => s.moveTab);
+  const setPaneOpen = useWorkspaceStore((s) => s.setPaneOpen);
+  const setPaneWidth = useWorkspaceStore((s) => s.setWidth);
+  const previewKey = useWorkspaceStore((s) => s.previewKey);
+
+  const [quickOpen, setQuickOpen] = useState(false);
+
+  const [paneHeight, setPaneHeight] = useState(PANE_H_DEFAULT);
+  const [pipelineView, setPipelineView] = useState<PipelineView | null>(null);
+  const [viewport, setViewport] = useState(() => ({
+    w: typeof window === 'undefined' ? 1600 : window.innerWidth,
+    h: typeof window === 'undefined' ? 900 : window.innerHeight,
+  }));
+
+  useEffect(() => {
+    const onResize = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  /**
+   * 让位阶梯（**绝不覆盖正文**，且**优先让看板留在正文旁边**）。
+   *   ① 放得下就并排（用户设的宽度）
+   *   ② 放不下 → 自动收 AI 交流栏（空间回来后自动恢复，不改写作者的 railOpen 偏好）
+   *   ③ 还放不下 → **先把侧组压窄**（最低 PANE_W_MIN_SOFT）——作者的诉求是"在正文旁边打开"，
+   *      所以压窄侧组比把它甩到下方角落更符合预期
+   *   ④ 压到最窄仍放不下（窗口极窄）→ 才把侧组挪到正文下方（正文宽度完整，仍**不覆盖**）
+   *
+   * ★ 预算要含正文外框的内边距（BODY_PAD_X）：漏算的话判定"放得下"、正文实测却比最小宽还窄。
+   */
+  const bodyBudget = BODY_MIN_WIDTH + BODY_PAD_X;
+  const bodyBudgetSoft = BODY_MIN_SOFT + BODY_PAD_X;
+  const paneWanted = paneOpen ? paneWidth : 0;
+  let aiVisible = railOpen;
+  let paneMode: PaneMode = 'right';
+  let effectivePaneWidth = paneWidth;
+  if (paneOpen) {
+    if (viewport.w - RAIL_WIDTH - railWidth - paneWanted < bodyBudget) {
+      // ② 收 AI 栏
+      aiVisible = false;
+      if (viewport.w - RAIL_WIDTH - paneWanted < bodyBudget) {
+        // ③ 压窄侧组，保住"在正文旁边"
+        effectivePaneWidth = Math.max(
+          PANE_W_MIN_SOFT,
+          Math.min(paneWanted, viewport.w - RAIL_WIDTH - bodyBudget),
+        );
+        if (viewport.w - RAIL_WIDTH - effectivePaneWidth < bodyBudgetSoft) {
+          // ④ 实在放不下：落到下方（仍不覆盖正文）
+          paneMode = 'bottom';
+          effectivePaneWidth = paneWanted;
+          aiVisible = railOpen && (viewport.w - RAIL_WIDTH - railWidth >= bodyBudgetSoft);
+        }
+      }
+    }
+  }
+  /** 下方档也要给正文留高：窗口很矮时把分页区压回去，而不是把正文挤没 */
+  const effectivePaneHeight = Math.min(paneHeight, Math.max(160, viewport.h - 320));
+
+  // ---- AI 模式的看板清单（**不挂手写面板**：两套 UI 互斥的既有约定不变）----
+  const aiPanels = useMemo<WorkbenchPanel[]>(() => [
+    { key: 'pipeline', label: '流水线', icon: Workflow, group: 'live', Component: PipelinePanel as WorkbenchPanel['Component'] },
+    { key: 'chapterPlan', label: '本章计划', icon: ClipboardList, group: 'live', Component: WorldStateBoard as WorkbenchPanel['Component'] },
+    { key: 'entities', label: '实体与设定', icon: Boxes, group: 'data', Component: EntityRail as WorkbenchPanel['Component'] },
+    // M-e：记忆审计 / 冲突（分层记忆架构的用户可见面）
+    { key: 'memory', label: '记忆审计', icon: ShieldCheck, group: 'data', Component: MemoryAuditPanel as WorkbenchPanel['Component'] },
+  ], []);
+
+  /** 面板实时 props：宿主把工作台的状态绑进去（面板本身不接 props 的那套是插件浮窗，不是这里） */
+  // ★ onTurn 走 ref 转发：`pushTurn` 在本文件里定义得更靠后（它依赖交流流的滚动收尾），
+  //   直接写进依赖数组会撞 TDZ。用 ref 让它在调用时取最新值，既避免时序问题又不丢依赖。
+  const hasChaptersInProject = project ? chapters.some((c) => c.projectId === project.id) : false;
+  const panelProps = useMemo(() => ({
+    projectId: project?.id ?? null,
+    hasChapters: hasChaptersInProject,
+    conclusion,
+    running: busy,
+    stages,
+    onProjectDataChanged,
+    onTurn: (t: PipelineTurn) => onTurnRef.current(t),
+    onStatus: (v: PipelineView | null) => setPipelineView(v),
+  }), [project?.id, hasChaptersInProject, conclusion, busy, stages, onProjectDataChanged]);
+
+  // 记忆视图（只为徽标服务：有未裁决冲突时提醒）。触发点：项目变化 / 流水线阶段状态变化。
+  // ★ 不轮询：审计不是实时指标，每次都要读三张表，为徽标常驻开销不值得。
+  const [memoryView, setMemoryView] = useState<MemoryView | null>(null);
+  const pipelineSig = pipelineView?.stages.map((st) => st.status).join(',') ?? '';
+  useEffect(() => {
+    let cancelled = false;
+    void fetchMemoryView()
+      .then((v) => { if (!cancelled) setMemoryView(v); })
+      .catch(() => { /* 徽标失败就算了，不影响工作台 */ });
+    return () => { cancelled = true; };
+  }, [project?.id, pipelineSig]);
+
+  const entityCount = useCharacterStore((s) => s.characters.length)
+    + useLocationStore((s) => s.locations.length)
+    + useItemStore((s) => s.items.length)
+    + useForeshadowStore((s) => s.foreshadows.length);
+
+  const bubbleSignals = useMemo<Record<string, PanelSignal>>(() => {
+    const done = pipelineView?.stages.filter((s) => s.status === 'approved').length ?? 0;
+    const total = pipelineView?.stages.length ?? 0;
+    return {
+      pipeline: {
+        ...(total > 0 ? { badge: `${done}/${total}` } : {}),
+        ...(pipelineView?.stages.some((s) => s.status === 'running') || busy ? { running: true } : {}),
+      },
+      chapterPlan: { ...(busy ? { running: true } : {}) },
+      // 0 不显示徽标（空项目上挂个「0」是纯噪音）
+      entities: { ...(entityCount > 0 ? { badge: entityCount } : {}) },
+      // 记忆审计：只在**有未裁决冲突**时挂徽标（这是真正的"记忆污染预警"）
+      memory: {
+        ...((memoryView?.conflicts.length ?? 0) > 0 ? { badge: memoryView!.conflicts.length } : {}),
+      },
+    };
+  }, [pipelineView, busy, entityCount]);
+
+  // ---- 快捷键（IDE 习惯）：Ctrl+P 快速打开 / Ctrl+B 收起侧组 / Ctrl+\ 分栏 / Ctrl+W 关标签 ----
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const target = e.target as HTMLElement | null;
+      const inSide = !!target?.closest('[data-pane-mode]');
+      const k = e.key.toLowerCase();
+
+      if (k === 'p') {
+        // Ctrl+P 快速打开（IDE 的 Quick Open）
+        e.preventDefault();
+        setQuickOpen(true);
+      } else if (k === 'b') {
+        e.preventDefault();
+        setPaneOpen(!paneOpen);
+      } else if (e.key === '\\') {
+        // Ctrl+\ 分栏：有看板就收起/展开侧编辑器组（IDE 里是 split editor）
+        e.preventDefault();
+        setPaneOpen(!paneOpen);
+      } else if (k === 'w' && activePane && paneOpen) {
+        // ★ 只在焦点位于侧编辑器组时拦截：否则会和浏览器「关闭标签页」抢
+        if (inSide) {
+          e.preventDefault();
+          closePane(activePane);
+        }
+      } else if (/^[1-9]$/.test(e.key)) {
+        const idx = Number(e.key) - 1;
+        if (idx === 0) activatePane(null);
+        else if (tabs[idx - 1]) activatePane(tabs[idx - 1]!);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [paneOpen, activePane, tabs, closePane, activatePane, setPaneOpen]);
 
   const projChapters = useMemo(
     () => (project
@@ -176,18 +360,17 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
     el.style.height = `${Math.min(96, el.scrollHeight)}px`;
   }, [draft]);
 
-  // 窗口变窄时收钳两栏，保证中间仪表盘不被挤没
+  // 窗口变窄时收钳 AI 栏宽度，保证正文不被挤没（分页区的高度/宽度各自有自己的钳制）
   useEffect(() => {
     const onResize = () => {
-      const avail = window.innerWidth - CENTER_MIN;
-      setRailWidth((cur) => Math.min(cur, Math.max(RAIL_MIN, avail - SIDE_MIN)));
-      setSideWidth((cur) => Math.min(cur, Math.max(SIDE_MIN, avail - RAIL_MIN)));
+      const avail = window.innerWidth - BODY_MIN_WIDTH;
+      setRailWidth((cur) => Math.min(cur, Math.max(RAIL_MIN, avail)));
     };
     window.addEventListener('resize', onResize);
     return () => { window.removeEventListener('resize', onResize); };
   }, []);
 
-  // ---- 左分隔条（对话 | 状态）：向右拖 = 变宽 ----
+  // ---- 左侧分隔条（对话栏 | 气泡列+正文）：向右拖 = 对话栏变宽 ----
   const onLeftDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     leftSplitRef.current = { sx: e.clientX, ow: railWidth };
@@ -197,38 +380,14 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
   const onLeftMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const d = leftSplitRef.current;
     if (!d) return;
-    // 上限同时受「中间最小宽」约束：别把仪表盘挤没
-    const room = window.innerWidth - CENTER_MIN - (sideOpen ? sideWidth : 0);
+    // 上限同时受「正文最小宽」与「分页区当前宽度」约束：别把正文挤没
+    const room = window.innerWidth - BODY_MIN_WIDTH - (paneOpen ? paneWidth : 0);
     const next = Math.min(RAIL_MAX, Math.max(RAIL_MIN, d.ow + (e.clientX - d.sx)), Math.max(RAIL_MIN, room));
     setRailWidth(next);
-  }, [sideOpen, sideWidth]);
+  }, [paneOpen, paneWidth]);
 
   const onLeftUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     leftSplitRef.current = null;
-    e.currentTarget.releasePointerCapture?.(e.pointerId);
-  }, []);
-
-  // ---- 右分隔条（状态 | 正文）：向左拖 = 正文变宽，故取反 ----
-  const onRightDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    rightSplitRef.current = { sx: e.clientX, ow: sideWidth };
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-  }, [sideWidth]);
-
-  const onRightMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const d = rightSplitRef.current;
-    if (!d) return;
-    const room = window.innerWidth - CENTER_MIN - (railOpen ? railWidth : 0);
-    const next = Math.min(
-      SIDE_MAX_W,
-      Math.max(SIDE_MIN, d.ow - (e.clientX - d.sx)),
-      Math.max(SIDE_MIN, room),
-    );
-    setSideWidth(next);
-  }, [railOpen, railWidth]);
-
-  const onRightUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    rightSplitRef.current = null;
     e.currentTarget.releasePointerCapture?.(e.pointerId);
   }, []);
 
@@ -238,6 +397,17 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
       if (el) el.scrollTop = el.scrollHeight;
     });
   }, []);
+
+  /**
+   * 往交流流里推一条发言。
+   * 提到组件作用域（原先只在 runAgent 内部）是因为**设定流水线也要往里推** ——
+   * 它的 stage_turn 事件与单章讨论的 turn 是同一种东西，都该出现在同一交流流里。
+   */
+  const pushTurn = useCallback((turn: Omit<ChatTurn, 'id' | 'time'>) => {
+    setTurns((prev) => [...prev, { ...turn, id: nanoid(), time: nowHHMM() }]);
+    scrollStreamToEnd();
+  }, [scrollStreamToEnd]);
+  onTurnRef.current = pushTurn;
 
   /** 一轮设计讨论：后端逐个扮演角色把发言推回来，事件自带身份（不再靠前端猜） */
   const runAgent = useCallback(async (text: string) => {
@@ -249,10 +419,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
     setStages({ discuss: 'running' });
     setProgress(chapterCount > 1 ? { index: 1, total: chapterCount } : null);
 
-    const push = (turn: Omit<ChatTurn, 'id' | 'time'>) => {
-      setTurns((prev) => [...prev, { ...turn, id: nanoid(), time: nowHHMM() }]);
-      scrollStreamToEnd();
-    };
+    const push = pushTurn;
 
     try {
       await runSession(text, { signal: ac.signal, chapterCount }, (e: SessionEvent) => {
@@ -380,7 +547,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
       setPhase('');
       scrollStreamToEnd();
     }
-  }, [scrollStreamToEnd, onProjectDataChanged, chapterCount]);
+  }, [pushTurn, scrollStreamToEnd, onProjectDataChanged, chapterCount]);
 
   /** 作者发言：先落到流里，再交给编排器 */
   const send = useCallback(() => {
@@ -488,21 +655,21 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
           </button>
           <button
             type="button"
-            onClick={() => setSideOpen((v) => !v)}
+            onClick={() => setPaneOpen(!paneOpen)}
             className="nm-btn-apple-icon-sm"
-            title={sideOpen ? '收起实体栏' : '展开实体栏'}
-            aria-label={sideOpen ? '收起实体栏' : '展开实体栏'}
-            aria-pressed={sideOpen}
+            title={paneOpen ? '收起分页区（Ctrl+B）' : '展开分页区（Ctrl+B）'}
+            aria-label={paneOpen ? '收起分页区' : '展开分页区'}
+            aria-pressed={paneOpen}
           >
-            {sideOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
+            {paneOpen ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
           </button>
         </div>
       </header>
 
       <div className="flex-1 flex overflow-hidden relative z-10">
 
-        {/* ── 左栏：智能体对话 ── */}
-        {railOpen && (
+        {/* ── 侧栏：智能体对话（aiVisible = 作者的偏好 且 让位阶梯允许） ── */}
+        {aiVisible && (
           <>
             <section
               className="shrink-0 flex flex-col overflow-hidden"
@@ -735,52 +902,74 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                 </div>
               </div>
             </section>
-
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="调整对话栏宽度"
-              onPointerDown={onLeftDown}
-              onPointerMove={onLeftMove}
-              onPointerUp={onLeftUp}
-              onPointerCancel={onLeftUp}
-              onMouseEnter={() => setHotSplitter('left')}
-              onMouseLeave={() => setHotSplitter(null)}
-              className="shrink-0"
-              style={{
-                width: 5,
-                cursor: 'col-resize',
-                touchAction: 'none',
-                background: hotSplitter === 'left' ? 'hsl(var(--primary) / 0.35)' : 'transparent',
-                borderLeft: '0.5px solid hsl(var(--border) / 0.6)',
-                transition: 'background 0.15s',
-              }}
-            />
           </>
         )}
 
-        {/* ── 中栏：上＝正文方块，下＝数据面板 ── */}
-        <div
-          className="flex-1 min-w-0 flex flex-col overflow-hidden"
-          style={{ padding: '14px 16px 16px', gap: 12 }}
-        >
-          {/* 正文方块：只占中上这一块，不与数据面板争高 */}
-          <section
-            className="shrink-0 flex flex-col overflow-hidden rounded-xl"
+        {/* ── 功能看板气泡列：紧贴 AI 对话区**右边**，竖直漂浮 ──
+            单击 = 预览打开（会被下一个预览顶掉）；双击 = 固定打开 */}
+        <BubbleRail
+          panels={aiPanels}
+          openKeys={tabs}
+          activeKey={activePane}
+          previewKey={previewKey}
+          signals={bubbleSignals}
+          onToggle={toggleBubble}
+          onPin={(key) => openPanelPinned(key)}
+        />
+
+        {/* AI 栏与（气泡列 + 编辑器区）之间的分隔条：向右拖 = 对话栏变宽 */}
+        {aiVisible && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="调整对话栏宽度"
+            onPointerDown={onLeftDown}
+            onPointerMove={onLeftMove}
+            onPointerUp={onLeftUp}
+            onPointerCancel={onLeftUp}
+            onMouseEnter={() => setHotSplitter('left')}
+            onMouseLeave={() => setHotSplitter(null)}
+            className="shrink-0"
             style={{
-              height: '42%',
-              minHeight: 150,
-              background: 'hsl(var(--card) / 0.45)',
-              border: '0.5px solid hsl(var(--border) / 0.5)',
+              width: 5,
+              cursor: 'col-resize',
+              touchAction: 'none',
+              background: hotSplitter === 'left' ? 'hsl(var(--primary) / 0.35)' : 'transparent',
+              borderLeft: '0.5px solid hsl(var(--border) / 0.6)',
+              transition: 'background 0.15s',
             }}
-            aria-label="正文"
-          >
+          />
+        )}
+
+        {/* ── 主区：编辑器组 1（正文，常驻）+ 下方的编辑器组 2（宽度不够时才落下来）── */}
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            {/* ★ 编辑器组 1 的标签栏：只有一个固定的「正文」项，不可关闭。
+                它是"主编辑器里打开的那份稿子" —— 组 2 怎么切都动不到这里 */}
+            <TabBar
+              panels={aiPanels}
+              tabs={tabs}
+              active={activePane}
+              variant="main"
+              onActivate={() => activatePane(null)}
+              onBackToBody={() => activatePane(null)}
+              bodyFocused={!paneOpen || activePane === null}
+              bodySubtitle={viewChapter ? `第 ${viewChapter.order} 章 · ${viewChapter.wordCount ?? 0} 字` : undefined}
+            />
+            {/* 正文区域：占据剩余全部高度。★ **永不参与分页、永不卸载** ——
+                切标签只影响侧编辑器组，这里的 DOM 与滚动位置一个字节都不动 */}
+            <section
+              className="flex-1 min-h-0 flex flex-col overflow-hidden"
+              style={{ background: EDITOR_BG }}
+              aria-label="正文"
+            >
             <div
               className="shrink-0 flex items-center gap-2"
               style={{ height: 30, padding: '0 14px', borderBottom: '0.5px solid hsl(var(--border) / 0.45)' }}
             >
+              {/* 编辑器头部：章节切换 + 稿件状态（IDE 这里放的是面包屑，我们放章号） */}
               <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))', letterSpacing: '0.06em' }}>
-                正文
+                {viewChapter ? `第 ${viewChapter.order} 章` : '未建章'}
               </span>
               {/* 章节切换：AI 模式没有章节编辑器，这里就是唯一的「读已写章节」入口 */}
               {projChapters.length > 0 && (
@@ -845,92 +1034,107 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
               )}
             </div>
           </section>
-
-          {/* 中下：数据面板（本章计划 + 最近变动）—— 从下方包住正文 */}
-          <div className="flex-1 min-h-0">
-            {project ? (
-              <WorldStateBoard projectId={project.id} conclusion={conclusion} running={busy} stages={stages} />
-            ) : (
-              <div className="text-[12px] text-center mt-6" style={{ color: 'hsl(var(--muted-foreground))' }}>
-                未加载项目
-              </div>
-            )}
           </div>
+
+          {/* 下方分页区：只有宽度真的不够（收掉 AI 栏也放不下正文）时才落到这里 ——
+              正文保持**完整宽度**，只是高度变小；**绝不覆盖正文** */}
+          {paneMode === 'bottom' && (
+            <WorkspacePane
+              mode="bottom"
+              open={paneOpen}
+              height={effectivePaneHeight}
+              onHeightChange={(h) => setPaneHeight(clampPaneHeight(h))}
+              panels={aiPanels}
+              tabs={tabs}
+              active={activePane}
+              previewKey={previewKey}
+              onActivate={activatePane}
+              onClose={closePane}
+              onCloseOthers={closeOthers}
+              onCloseRight={closeToRight}
+              onPromote={promotePane}
+              onOpenQuick={() => setQuickOpen(true)}
+              onMoveTab={movePaneTab}
+              panelProps={panelProps}
+            />
+          )}
         </div>
 
-        {/* ── 右栏：实体栏（知识库 / 地点 / 物品 / 伏笔）—— 从右侧包住正文 ── */}
-        {sideOpen && (
-          <>
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="调整实体栏宽度"
-              onPointerDown={onRightDown}
-              onPointerMove={onRightMove}
-              onPointerUp={onRightUp}
-              onPointerCancel={onRightUp}
-              onMouseEnter={() => setHotSplitter('right')}
-              onMouseLeave={() => setHotSplitter(null)}
-              className="shrink-0"
-              style={{
-                width: 5,
-                cursor: 'col-resize',
-                touchAction: 'none',
-                background: hotSplitter === 'right' ? 'hsl(var(--primary) / 0.35)' : 'transparent',
-                borderLeft: '0.5px solid hsl(var(--border) / 0.6)',
-                transition: 'background 0.15s',
-              }}
-            />
-
-            <section
-              className="shrink-0 overflow-hidden"
-              style={{
-                width: sideWidth,
-                padding: '14px 10px 16px',
-                background: 'rgb(var(--glass-tint) / 0.18)',
-              }}
-              aria-label="实体栏"
-            >
-              {project ? (
-                <EntityRail projectId={project.id} />
-              ) : (
-                <div className="text-[11px] text-center mt-6" style={{ color: 'hsl(var(--muted-foreground))' }}>
-                  未加载项目
-                </div>
-              )}
-            </section>
-          </>
+        {/* ── 编辑器组 2（侧组）：看板在这里以标签方式打开 ── */}
+        {paneMode === 'right' && (
+          <WorkspacePane
+            mode="right"
+            open={paneOpen}
+            width={effectivePaneWidth}
+            onWidthChange={setPaneWidth}
+            panels={aiPanels}
+            tabs={tabs}
+            active={activePane}
+            previewKey={previewKey}
+            onActivate={activatePane}
+            onClose={closePane}
+            onCloseOthers={closeOthers}
+            onCloseRight={closeToRight}
+            onPromote={promotePane}
+            onOpenQuick={() => setQuickOpen(true)}
+            onMoveTab={movePaneTab}
+            panelProps={panelProps}
+          />
         )}
       </div>
 
-      {/* ── 底：花名册 + 会话状态 ── */}
+      {/* ── 状态栏（IDE 的底条）：左＝花名册，右＝当前状态 ── */}
       <footer
         className="shrink-0 flex items-center gap-4 flex-wrap"
         style={{
-          height: 42,
+          height: 26,
           padding: '0 14px',
           borderTop: '0.5px solid hsl(var(--border) / 0.6)',
-          background: 'rgb(var(--glass-tint) / 0.3)',
+          background: 'rgb(var(--glass-tint) / 0.42)',
         }}
+        aria-label="状态栏"
       >
         {AGENTS.map((a) => (
           <span key={a.key} className="flex items-center gap-1.5" title={a.desc}>
             <span
               className="inline-flex items-center justify-center rounded-full text-white"
-              style={{ width: 16, height: 16, background: a.color, fontSize: 9 }}
+              style={{ width: 14, height: 14, background: a.color, fontSize: 8 }}
             >
               {a.short}
             </span>
-            <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
+            <span className="text-[10.5px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
               {a.name}
             </span>
           </span>
         ))}
-        {/* 会话状态：当前是单章会话（连续多章尚未实现），如实显示，别再摆一个恒为 0 的批次计数 */}
-        <span className="ml-auto text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
-          单章会话 · 库中 <span style={{ color: 'hsl(var(--foreground))' }}>{chapters.length}</span> 章
+        <span className="ml-auto flex items-center gap-3 text-[10.5px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
+          {pipelineView && (
+            <span title="设定流水线进度">
+              流水线 <span style={{ color: 'hsl(var(--foreground))' }}>
+                {pipelineView.stages.filter((s) => s.status === 'approved').length}/{pipelineView.stages.length}
+              </span>
+            </span>
+          )}
+          <span title="库中章节数">
+            库中 <span style={{ color: 'hsl(var(--foreground))' }}>{chapters.length}</span> 章
+          </span>
+          <span title="侧编辑器组当前看板">
+            组 2：<span style={{ color: 'hsl(var(--foreground))' }}>
+              {activePane ? (aiPanels.find((p) => p.key === activePane)?.label ?? activePane) : '未打开'}
+            </span>
+          </span>
+          <span style={{ opacity: 0.75 }}>Ctrl+P 快速打开 · Ctrl+\ 分栏 · Ctrl+W 关标签</span>
         </span>
       </footer>
+
+      {/* Ctrl+P 快速打开（IDE 的 Quick Open） */}
+      <QuickOpen
+        open={quickOpen}
+        panels={aiPanels}
+        openKeys={tabs}
+        onPick={(key) => openPanelPinned(key)}
+        onClose={() => setQuickOpen(false)}
+      />
     </div>
   );
 }

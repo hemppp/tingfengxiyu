@@ -39,7 +39,11 @@ export type SessionEvent =
    *             所以这里收到 false 不代表本章没交出去。
    *   polish —— 软门评分（0–10，7 为通过线），从不阻塞交付。
    */
-  | { type: 'gate'; name: 'check' | 'polish'; passed: boolean; detail: string; score?: number }
+  | {
+      type: 'gate'; name: 'check' | 'polish'; passed: boolean; detail: string; score?: number;
+      /** ★ true = 这一步**根本没执行**（模型调用/解析失败），与"通过"必须区分显示 */
+      skipped?: boolean;
+    }
   /** 交付成功：正文已写入章节。warnings 非空 = 交付了但有需人工复核之处（如意图门未过） */
   | { type: 'delivered'; order: number; title: string; wordCount: number; created: boolean; warnings?: string[] }
   /** 交付被拦：多为「该章已有正文，不自动覆盖」，或「没认出章号」 */

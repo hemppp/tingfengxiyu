@@ -187,26 +187,41 @@ export function BookshelfPage() {
       const description = data.description || '';
       const coverImage = data.coverImage || data.cover || '';
       const targetWordCount = data.targetWordCount ?? undefined;
+      // 流派：AI 写作向导选出来的展示名（如「系统流 · 末日求生」），手写模式为 undefined
+      const genre = data.genre || undefined;
+      // 开书设定：仅 AI 写作向导产出，服务端会把它注入每一章的讨论
+      const brief = data.brief;
       // 创作模式：两套 UI 互斥，创建时定；编辑时允许切换（数据是同一份，只换工作台形态）
       const mode = data.mode;
       if (editingBook) {
         const result = await apiClient.put<Project>(`/projects/${editingBook.id}`, {
-          name, penName, description, coverImage, targetWordCount,
+          name, penName, description, coverImage, targetWordCount, genre,
           ...(mode ? { mode } : {}),
+          ...(brief ? { brief } : {}),
         });
         setBooks(prev => prev.map(b => b.id === editingBook.id ? (result ?? b) : b));
       } else {
         const result = await apiClient.post<Project>('/projects', {
           name,
-          genre: data.genre || '',
+          genre,
           description,
           penName,
           coverImage,
           currentWordCount: 0,
           targetWordCount,
           mode: mode ?? 'manual',
+          ...(brief ? { brief } : {}),
         });
-        if (result) setBooks(prev => [...prev, result]);
+        if (result) {
+          setBooks(prev => [...prev, result]);
+          // ★ 新建后**直接进书**：向导刚填完开书设定，作者的下一步就是「立设定 / 开写」，
+          //   停在书架还得再点一次卡片 —— 实测这是个明显的体验断点（2026-09-13 走查发现）。
+          //   只在**新建**时跳；编辑既有书不跳（改完名字不想被带走）。
+          setShowAddModal(false);
+          setEditingBook(null);
+          navigate(`/project/${result.id}`);
+          return;
+        }
       }
       setShowAddModal(false);
       setEditingBook(null);

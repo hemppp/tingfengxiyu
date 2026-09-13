@@ -12,7 +12,9 @@
     "lint": "pnpm -r lint",
     "lint:server": "pnpm --filter @novel/server lint",
     "type-check": "pnpm -r type-check",
-    "type-check:server": "pnpm --filter @novel/server type-check"
+    "type-check:server": "pnpm --filter @novel/server type-check",
+    "verify:memory": "node scripts/memory-sample-check.mjs",
+    "verify:all": "node scripts/verify-all.mjs"
   },
   "engines": {
     "node": ">=20"
