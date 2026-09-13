@@ -277,10 +277,14 @@ export class PipelineStore {
         gated: GATED_STAGES.includes(k),
         implemented: IMPLEMENTED_STAGES.includes(k),
         artifact: state.stages[k].artifact,
+        ...(state.stages[k].driftCounts ? { driftCounts: state.stages[k].driftCounts } : {}),
+        ...(state.stages[k].pilotChapters ? { pilotChapters: state.stages[k].pilotChapters } : {}),
+        ...(state.stages[k].premiereVerdict ? { premiereVerdict: state.stages[k].premiereVerdict } : {}),
         error: state.stages[k].error,
       })),
       decisions: this.getDecisions().slice(-20).reverse(),
       reviewEvery: state.cursor.reviewEvery,
+      lastDelivered: state.cursor.lastDelivered ?? 0,
       updatedAt: state.updatedAt,
     };
   }

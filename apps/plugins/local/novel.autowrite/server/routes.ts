@@ -452,7 +452,8 @@ export function createAutowriteRouter(ctx: ServerPluginContext): Hono {
     // 顺序有讲究：**先判"这段实现了没"**，再判游标。
     // 反过来的话，跳着跑一个还没实现的阶段会得到「不能跳着跑」这种误导性提示。
     if (!IMPLEMENTED_STAGES.includes(stage)) {
-      return fail(c, 501, 'NOT_IMPLEMENTED', `「${STAGE_LABEL[stage]}」在 M2/M3 才实现（当前只到「剧情总纲」）`);
+      return fail(c, 501, 'NOT_IMPLEMENTED',
+        `「${STAGE_LABEL[stage]}」尚未实现（当前可用到「${STAGE_LABEL[IMPLEMENTED_STAGES[IMPLEMENTED_STAGES.length - 1] as StageKey]}」）`);
     }
     const guard = canRun(state, stage);
     // 校验一律在建立 SSE 之前完成：一旦开始流式，报错就没法用状态码表达了

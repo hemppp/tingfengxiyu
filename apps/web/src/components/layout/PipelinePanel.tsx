@@ -47,8 +47,22 @@ interface PipelinePanelProps {
   onStatus?: (view: PipelineView | null, status: PipelineStatus | null) => void;
 }
 
+/** 阶段产出物的名字（收敛成一句话念出来时用；别在下标里写三元链） */
+const STAGE_ARTIFACT: Partial<Record<string, string>> = {
+  cast: '角色与节奏宪章',
+  bible: '世界圣经',
+  plot: '剧情总纲',
+  drift: '偏离报告',
+  pilot: '前三章审阅报告',
+};
+const STAGE_LABEL_UI: Partial<Record<string, string>> = {
+  brief: '开书信息',
+  production: '长跑与监工',
+};
+
 const STATUS_DOT: Record<PipelineStageView['status'], string> = {
   approved: 'hsl(var(--state-done))',
+
   awaiting_user: 'hsl(var(--primary))',
   running: 'hsl(var(--state-running))',
   failed: 'hsl(var(--destructive))',
@@ -161,8 +175,55 @@ export function PipelinePanel({ projectId, onProjectDataChanged, onTurn, hasChap
           });
         } else if (e.type === 'stage_summary') {
           onTurn?.({
-            from: 'conclusion', name: `《${e.stage === 'cast' ? '角色与节奏宪章' : e.stage === 'bible' ? '世界圣经' : '剧情总纲'}》`,
+            from: 'conclusion', name: `《${STAGE_ARTIFACT[e.stage] ?? STAGE_LABEL_UI[e.stage] ?? '本段结论'}》`,
             color: 'hsl(var(--agent-convener))', short: '稿', text: e.text, tone: 'ok',
+          });
+        } else if (e.type === 'pilot_chapter') {
+          // 试写三章：每章插一条分段卡 —— 一章一次"开写/交稿"，作者能看清交到第几章了
+          if (e.phase === 'start') {
+            setPhase(`试写第 ${e.order} 章（${e.index}/${e.total}）…`);
+            onTurn?.({
+              from: 'pilot', name: `第 ${e.order} 章`, color: 'hsl(var(--primary))', short: String(e.order),
+              text: `开始试写第 ${e.order} 章（${e.index}/${e.total}）。`,
+            });
+          } else {
+            // ★ 没落库的章要显眼 —— 报告会写得像三章都交了
+            const warn = e.delivered === false || (e.warnings?.length ?? 0) > 0;
+            onTurn?.({
+              from: 'pilot', name: `第 ${e.order} 章`, color: warn ? 'hsl(var(--state-blocked))' : 'hsl(var(--state-done))',
+              short: String(e.order),
+              text: e.delivered
+                ? `第 ${e.order} 章已入项目库（${e.wordCount ?? 0} 字）${e.warnings?.length ? `\n⚠️ ${e.warnings.join('；')}` : ''}`
+                : `⚠️ 第 ${e.order} 章**未入项目库**${e.warnings?.length ? `：${e.warnings.join('；')}` : ''}`,
+              tone: warn ? 'warn' : 'ok',
+            });
+          }
+        } else if (e.type === 'premiere_review') {
+          const label = e.verdict === 'pass' ? '跨章审阅：通过' : e.verdict === 'major' ? '跨章审阅：建议停下重写' : '跨章审阅：可继续（按报告修正）';
+          onTurn?.({
+            from: 'premiere-reviewer', name: '《前三章审阅报告》',
+            color: e.verdict === 'major' ? 'hsl(var(--state-blocked))' : 'hsl(var(--primary))',
+            short: '阅', text: e.text, tone: e.verdict === 'major' ? 'warn' : 'ok',
+          });
+          dispatchToastEvent({
+            type: e.verdict === 'major' ? 'error' : 'info',
+            message: `${label}（${e.issues} 处问题）`,
+            duration: e.verdict === 'major' ? 10000 : 5000,
+          });
+        } else if (e.type === 'stage_auto_approved') {
+          // 无闸门阶段（drift）：报告已出、自动过 —— 要说明"不用你点确认"，否则作者会等
+          onTurn?.({
+            from: 'system', name: '偏离核查', color: 'hsl(var(--primary))', short: '查',
+            text: `核查完成（无需确认，自动进入下一段）：${e.summary}`, tone: 'ok',
+          });
+        } else if (e.type === 'stage_drift_blocked') {
+          // ★ 硬偏离：这是偏离核查唯一会拦人的地方，必须显眼
+          dispatchToastEvent({ type: 'error', message: e.message, duration: 10000 });
+          onTurn?.({
+            from: 'system', name: '偏离核查', color: 'hsl(var(--state-blocked))', short: '!',
+            text: `⚠️ ${e.message}
+硬偏离 ${e.hard} 条 · 软偏离 ${e.soft} 条（详见《偏离报告》）`,
+            tone: 'warn',
           });
         } else if (e.type === 'awaiting_user') {
           setPhase('');

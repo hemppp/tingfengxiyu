@@ -39,6 +39,16 @@ export const ROLE_WORLD: DesignRole = {
   name: '策划官',
   color: '#7A6BA8',
   short: '策',
+  // ★ 记忆策略（2026-09-13 补）：此前这个角色**没有 `memory` 字段** ——
+  //   闸门 fail-closed，`digestFieldsFor(undefined)` 返回空集，于是它拿到的是
+  //   **空的项目现状**（连【创作设定】都是空字符串）。而立世界观恰恰是最不能凭空造的一段。
+  //   要规则自洽就必须看得见"已有的地点/物品/势力"，所以给到与设定管家接近的宽度。
+  //   不给 chapter.*：立设定与偏离核查都对照契约，正文靠编排层按需注入。
+  memory: {
+    readL1: ['settings.projectName', 'settings.brief', 'settings.genre', 'entity.characters.*',
+      'entity.locations.*', 'entity.items.*', 'outline.*', 'constraint.*', 'foreshadow.*'],
+    readNarrative: false,
+  },
   system: `你是「策划官」，负责这部小说的**世界观、势力与力量体系**。
 
 你的输出是一段说给同伴听的话：
@@ -246,7 +256,112 @@ const CONVENER_CAST_ROLE = withSystem(ROLE_CONVENER, CONVENER_CAST);
 const CONVENER_BIBLE_ROLE = withSystem(ROLE_CONVENER, CONVENER_BIBLE);
 const CONVENER_PLOT_ROLE = withSystem(ROLE_CONVENER, CONVENER_PLOT);
 
+
+// ---- Stage4 偏离核查（drift）：三位分头查，定稿官合并成《偏离报告》----
+
+/** 所有核查角色共用的输出契约 —— **逐条判定**，这就是"核查"与"看看有没有跑偏"的区别 */
+const DRIFT_COMMON = `你在做**偏离核查**，不是写建议。
+
+上面给了「断言清单」（每条有 L1-x 这样的 id）。你要**逐条**给出判定，只输出 JSON：
+{"judgments":[{"id":"L1-1","verdict":"符合|偏离|库中无依据","evidence":"正文或契约里的原句","backTo":"cast|bible|plot|"}]}
+
+判定口径（必须严格）：
+- 符合：有明确依据，且与断言一致
+- 偏离：与断言**冲突**（违背作者原话，或与已批准契约冲突）→ 必须给出冲突的原句作为 evidence，并写 backTo 指向该回修的段
+- 库中无依据：现有材料里**没有**能判断的信息（这是"空白"，不是"错"）
+规则：
+- 每条断言**都要有判定**，不许跳过、不许合并
+- 没有 evidence 的「偏离」等于没查（编不出来就判「库中无依据」）
+- 不要写客套话、不要复述断言，只给 JSON`;
+
+const DRIFT_CHARACTER = `你是「角色设计师」，本轮负责**查角色偏离**。
+
+重点：主角弧光是否还按《角色与节奏宪章》走；女主名单与数量是否被动过；配角是否抢戏或消失。
+
+${DRIFT_COMMON}`;
+
+const DRIFT_WORLD = `你是「策划/世界架构」，本轮负责**查设定偏离**。
+
+重点：世界观/力量规则有没有被违反（例如设定说"供电只有晚上"，某处却写成全天有电）；
+势力关系与已批准的世界圣经是否冲突。
+
+${DRIFT_COMMON}`;
+
+const DRIFT_PLOT = `你是「剧情设计师」，本轮负责**查剧情偏离**。
+
+重点：主线走向与节拍是否还落在《剧情总纲》上；伏笔是否只埋不收或提前收；
+张力曲线是否被压平。
+
+${DRIFT_COMMON}`;
+
+const CONVENER_DRIFT = `你是「定稿官」，负责把三份核查判定合并成《偏离报告》。
+
+严格按下面的格式输出纯文本（不要 JSON、不要额外解释）：
+硬偏离：<逐条列出 L1/L2 的偏离，写清：断言 → 冲突在哪 → 建议回修哪一段；没有就写「无」>
+软偏离：<逐条列出"库中无依据"与 L3 偏离；没有就写「无」>
+待定：<需要作者拍板的空白项；没有就写「无」>
+结论：<一句话：可以继续，或必须先回修哪一段>`;
+
+const DRIFT_CHARACTER_ROLE = withSystem(ROLE_CHARACTER, DRIFT_CHARACTER);
+const DRIFT_WORLD_ROLE = withSystem(ROLE_WORLD, DRIFT_WORLD);
+const DRIFT_PLOT_ROLE = withSystem(ROLE_PLOT, DRIFT_PLOT);
+const CONVENER_DRIFT_ROLE = withSystem(ROLE_CONVENER, CONVENER_DRIFT);
+
+export const DRIFT_SPEAKERS = [DRIFT_CHARACTER_ROLE, DRIFT_WORLD_ROLE, DRIFT_PLOT_ROLE];
+
+// ---- Stage5 前三章试写（pilot）：跨章审阅角色 ----
+
+/**
+ * ★ 为什么"每章过三道门"还不够，必须再加一个跨章角色：
+ *   三道门**只看一章**。三章各自都合格，合起来仍可能不是一个故事的开头 ——
+ *   文风一章一个样、主角弧光三章没动、伏笔埋了三条一条不收。这三样**只在章与章之间**才看得见，
+ *   单章视角永远发现不了（这也正是"试写三章"这个设计存在的理由）。
+ *   所以它不是"再查一遍错"，而是**换一个粒度**看问题。
+ */
+const PREMIERE_REVIEW = `你是「前三章审阅」，负责**横着读**这三章（不是逐章挑错 —— 每章已经各自过了三道门）。
+
+只输出 JSON，不要任何其他文字：
+{"voice":"文风：三章是否同一个叙述者、语感有没有漂",
+ "arc":"主角弧光：三章里主角有没有按《角色与节奏宪章》的方向动，还是原地踏步",
+ "foreshadow":"伏笔：埋了几条、每条有没有推进迹象、有没有只埋不收或提前收",
+ "cohesion":"整体：三章连读像不像同一本书的开头；结尾钩子是否成立",
+ "verdict":"pass|minor|major",
+ "issues":[{"kind":"voice|arc|foreshadow|cohesion","detail":"具体问题","evidence":"正文原句","fix":"接下来该怎么改"}]}
+
+判定口径（严格）：
+- major：出现"必须停下来重写"的问题（例如三章的主角完全是两个人、世界观自相矛盾、文风断层到读不下去）
+- minor：可继续，但接下来几章要按 fix 修正 → issues 里每条都要给 fix
+- pass：没有值得写进 issues 的问题 → issues 写空数组
+规则：
+- **必须引用正文原句作为 evidence**，编不出原句就不要写这条 issue
+- 不要复述剧情、不要夸奖；只写问题与判断`;
+
+export const ROLE_PREMIERE: DesignRole = {
+  key: 'premiere-reviewer',
+  name: '前三章审阅',
+  color: '#B0654A',
+  short: '阅',
+  // 它是**唯一**必须读正文的流水线角色（跨章审阅的输入就是三章全文）——
+  // 所以 readNarrative 为 true；但不需要 location/item 这类装配字段（正文里本来就有）。
+  memory: {
+    readL1: ['settings.projectName', 'settings.brief', 'settings.genre', 'entity.characters.*',
+      'outline.*', 'constraint.*', 'foreshadow.*', 'chapter.*'],
+    readNarrative: true,
+  },
+  system: PREMIERE_REVIEW,
+};
+
+/** 跨章审阅的 system（供 pilot 直接取用；改口径只改这里） */
+export const PREMIERE_SYSTEM = PREMIERE_REVIEW;
+
 export const PHASE_SPEC: Partial<Record<StageKey, StageSpec>> = {
+  // Stage4 · 偏离核查：三位分头查（角色/设定/剧情），定稿官合并 —— **无用户闸门**，
+  //   有硬偏离时由编排器把游标退回建议回修的段（见 orchestrator 的 drift 分支）
+  drift: {
+    lead: '角色设计师',
+    speakers: DRIFT_SPEAKERS,
+    convener: CONVENER_DRIFT_ROLE,
+  },
   cast: {
     lead: '角色设计师',
     speakers: [CAST_CHARACTER_ROLE, CAST_PLOT_ROLE, CAST_CONTINUITY_ROLE],

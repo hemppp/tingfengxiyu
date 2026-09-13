@@ -49,8 +49,11 @@ apps/web/src/components/layout/PipelinePanel.tsx 进度步进条 + 闸门审批�
 5. `brief` 段没有闸门（作者刚填完，再让他确认自己填的东西是多余的）→ 只发 `stage_skipped`，
    不发 `awaiting_user`。**闸门只挂在 cast/bible/plot/pilot。**
 
-**还没做（M2/M3）**：drift 三层核查、前三章试写 + 跨章审阅、写作监工、每三章轨迹确认、断点续跑、台账回放 UI。
-这四段在状态机里已就位，`advance` 到它们会明确返回 **501 未实现**（不假装能跑）。
+**M2 进度（2026-09-13 晚）**：
+- ✅ **Stage4 偏离核查（drift）已实现并真机验证** —— 见 §4 Stage4 与本文末「drift 实现记录」
+- ✅ **Stage5 前三章试写 + 跨章审阅已实现并真机验证** —— 见 §4 Stage5 与本文末「pilot 实现记录」
+**还没做（M3）**：写作监工、每三章轨迹确认、断点续跑、台账回放 UI。
+`production` 段在状态机里已就位，`advance` 到它会明确返回 **501 未实现**（不假装能跑）。
 
 ### M1 收尾修复（2026-09-13 二轮）
 
@@ -278,6 +281,27 @@ export function roleFor(role: DesignRole, stage: StageKey): string;
 - 落库：`chapters` + 实体沉淀（`entity-sink`，只在真交付后跑）
 - 事件：`pilot_chapter{i}/3` → `premiere_review` → `awaiting_user{stage:'pilot'}`
 
+**实现口径（2026-09-13，`pipeline/pilot.ts`）**：
+
+1. **复用单章闭环，不另写写作器**：`runPilot` 逐章调 `discuss/orchestrator.runDiscussion`
+   （`chapterOrder` + `finalDone:false`），它带来强制注入上一章全文、三道门、带警示交付、实体沉淀。
+   另写一套只会得到两个行为不一致的写作器（改一处漏一处的老问题）。
+2. **`pilot` 在 `specFor` 之前分流**：它不是"讨论 → 收敛"型阶段（`PHASE_SPEC` 里没有它），
+   走 `runPilotStage` 这个编排壳。
+3. **它是唯一"闸门前就落库"的阶段**：试写的产出物就是正文；不落库就没法拿来看，
+   也就失去了试写的意义。代价是作者在 G4 否掉时要人工删这三章（权衡后仍值得）。因此：
+   - `approveStage('pilot')` **不再去"抽取报告"**（报告是给人读的），只回报试写与落库情况；
+   - 之前会走到通用分支，得到一条「结构化抽取失败…本次未落库」的误导性提示（已修）。
+4. **验收一律只看库**：`StageRecord.pilotChapters`（三章的 order/delivered/wordCount/warnings）
+   与 `premiereVerdict`（pass|minor|major + 问题条数 + 类目）。
+   报告可以写得很漂亮，但"交了几章、各多少字、有没有带警示"才是可判定的事实。
+5. **跨章审阅的解析不许当 pass**：`parsePremiereReview` 解析不出来 → 兜底 `minor` + 一条 issue，
+   把"这次审阅没能解析"显式写进报告。（"没审出问题"与"压根没审"混成一个结果是最糟的失败模式）
+6. **harness 级的顺手修补**：`ROLE_WORLD`（策划官）此前**没有 `memory` 字段** → 闸门 fail-closed
+   → 它拿到的是**空的项目现状**（连【创作设定】都是空字符串），而立世界规则恰恰最不能凭空造。
+   已补策略并登记进 `ALL_MEMORY_ROLES`（不变量测试从 6 例扩到 8 例，新增角色漏登记会被逮住）。
+7. `PipelineView` 暴露 `lastDelivered`：长跑从第几章接靠它，验收也靠它（否则只能正则在报告里找 = 假验证）。
+
 ### Stage6 · 长跑 + 监工 + 每三章轨迹确认
 
 - 逐章：现有单章闭环（讨论 → 结论 → 落笔 → 篇幅自检 → 三道门 → 交付 → 沉淀）
@@ -430,3 +454,71 @@ interface PipelineState {
 - 插件注册资源必须走 `ctx.effect`；Web 面插件是**构建期**收集，改了要重启 vite
 - 产出物进 KV/DB 之前**别只信模型的话** —— 结构化落库要过解析校验，解析失败要报错而不是静默跳过
   （校对门曾因 JSON 截断静默变成摆设）
+
+
+---
+
+## drift 实现记录（M2 · 2026-09-13）
+
+**文件**：`pipeline/drift.ts`（判定与合并**全是纯函数**，可单测）+ `roles-phase.ts` 的 `drift` 档位 + `orchestrator.ts` 的 drift 分支。
+
+**与"假核查"的区别**（这是本段唯一的设计要点）：
+- ❌ 不这么问：「你看有没有跑偏」→ 模型必答「整体符合」，等于没查
+- ✅ 这么问：把 **brief 按字段拆成断言**（L1-1…L1-6，**确定性生成、零模型调用**），
+  再给每个核查角色一张清单，要求**逐条**回 `{verdict: 符合|偏离|库中无依据, evidence, backTo}`
+
+**分层与处置**：
+| 层 | 对照物 | 处置 |
+|---|---|---|
+| L1 | brief 字段（作者原话） | 偏离 = **硬**：回修对应段 |
+| L2 | 已批准的 cast/bible/plot（在 header 里） | 偏离 = **硬** |
+| L3 | 项目库事实（digest） | 偏离 / 任何层的「库中无依据」= **软**：进《待定》 |
+
+**三处关键取舍（别改乱）**：
+1. **合并规则**：同一断言有人判"符合"有人判"偏离" → **按偏离**（核查是"谁发现谁说了算"，不是投票）
+2. **认不出的判定词 → 记为「库中无依据」而不是「符合」**：把没查出来的东西显示成"查过了"，
+   代价比"进待定被人看见"大一个数量级
+3. **drift 无用户闸门**：跑完自动 `approved` 并推进游标；**只有硬偏离**才拦人 ——
+   把游标退回建议回修的最早那段（cast→bible→plot 顺序），那段闸门作废，并发 `stage_drift_blocked`
+
+**可验证性**：`StageRecord.driftCounts` 记下「核了几条、几条符合/偏离/无依据、硬/软各几条」——
+没有它，没人能验证"核查真的逐条做了"。前端事件 `stage_auto_approved` / `stage_drift_blocked` 已接。
+
+**验证**：
+- 单测 `pipeline/drift.test.ts` 11 例（含设计点名的必测项：**埋一条硬约束能被报出来**、
+  认不出的词不算符合、编造的 id 被丢弃、回修段取最靠前）
+- 真机 `scripts/verify-pipeline-drift.mjs`：brief 里埋「白天绝无电 + 严禁枪支」两条硬约束，
+  跑完 cast/bible/plot 审批后再跑 drift，断言逐条统计与游标行为
+
+---
+
+## pilot 实现记录（M2 · 2026-09-13）
+
+**文件**：`pipeline/pilot.ts`（纯函数层可单测 + `runPilot` 编排）+ `roles-phase.ts` 的 `ROLE_PREMIERE`
++ `orchestrator.ts` 的 `runPilotStage` 壳。
+
+**为什么值得单独一道**：三道门**只看一章**。三章各自合格，合起来仍可能不是一个故事的开头。
+真机这一跑就把这句话坐实了 —— 跨章审阅报出的 4 处问题里，最具体的一条是：
+
+> 第 2 章与第 3 章在苏晚段落上出现几乎逐句重复的「归档」描写（『她没进任何一家店，也没找水、找吃的』），
+> 连读时像回放，削弱推进感。
+
+这条**任何单章门都不可能发现**（每章自己看完全正常），只有"横着读"才看得见。
+
+**真机结果（`scripts/verify-pipeline-pilot.mjs`，全过，用时 291s）**：
+
+| 项 | 结果 |
+|---|---|
+| 三章落库 | `pilotChapters` = [1,2,3]，`delivered` 全 true、0 章带警示 |
+| 字数 | 2935 / 2555 / 3736（`chapters.content` 实测 3091 / 2673 / 3906 字符，口径差 = 标点与空白） |
+| 跨章审阅 | `premiereVerdict` = `minor`，4 处问题，类目 `cohesion/foreshadow/arc` |
+| G4 闸门 | 停在 `awaiting_user`（试写必须作者看过） |
+| 长跑游标 | `lastDelivered === 3` → M3 从第 4 章接 |
+| 跨章连续性 | 第 2/3 章正文都出现主角名，且第 2 章没有"重新开篇介绍主角" |
+
+**坑与取舍（都已修）**：
+1. `ROLE_WORLD` 没有 `memory` → 闸门 fail-closed → 策划官拿到**空的项目现状**。
+   已补并登记（`ALL_MEMORY_ROLES` 6 → 8，测试同步扩）。
+2. `approveStage('pilot')` 原本会走通用抽取分支，得到「结构化抽取失败…本次未落库」的误导提示 ——
+   pilot 的落库在跑的时候就完成了，批准不该再抽报告的 JSON。
+3. `PipelineView` 补 `lastDelivered`：不给这个数，"从第几章接"只能靠正则在报告里找（= 假验证）。

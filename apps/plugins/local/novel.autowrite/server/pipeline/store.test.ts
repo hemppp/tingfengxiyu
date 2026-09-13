@@ -257,7 +257,10 @@ describe('持久化与视图', () => {
     expect(view.staleStages).toEqual(['brief', 'cast']);
     expect(view.stages.find((x) => x.key === 'cast')?.gated).toBe(true);
     expect(view.stages.find((x) => x.key === 'brief')?.gated).toBe(false);
-    expect(view.stages.find((x) => x.key === 'drift')?.implemented).toBe(false);
+    // drift / pilot 已实现（M2），production 仍为占位（M3）
+    expect(view.stages.find((x) => x.key === 'drift')?.implemented).toBe(true);
+    expect(view.stages.find((x) => x.key === 'pilot')?.implemented).toBe(true);
+    expect(view.stages.find((x) => x.key === 'production')?.implemented).toBe(false);
   });
 
   it('决策台账：append + 倒序读 + 上限截断', async () => {

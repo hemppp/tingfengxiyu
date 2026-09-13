@@ -162,6 +162,25 @@ export async function resolveSettingsDigest(
 }
 
 /** 读取某一章的现有内容（交付覆写检查 + 备份用） */
+/** 读**原始** brief（JSON 对象）。drift 的 L1 断言按字段拆，需要原始字段而不是格式化文本 */
+export async function readProjectBriefRaw(
+  ctx: ServerPluginContext,
+  projectId: string,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const gdb = ctx.db.global() as DrizzleDb;
+    const rows = await gdb
+      .select({ brief: schema.projects.brief })
+      .from(schema.projects)
+      .where(eq(schema.projects.id, projectId))
+      .limit(1);
+    return parseBrief(rows[0]?.brief);
+  } catch (e) {
+    console.warn('[context] 读原始 brief 失败（按无 brief 处理）:', e);
+    return null;
+  }
+}
+
 export async function readChapterByOrder(
   ctx: ServerPluginContext,
   projectId: string,

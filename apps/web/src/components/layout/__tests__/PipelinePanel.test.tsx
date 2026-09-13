@@ -32,7 +32,7 @@ vi.mock('@/utils/errors', () => ({
 }));
 
 const GATED = ['cast', 'bible', 'plot', 'pilot'];
-const IMPLEMENTED = ['brief', 'cast', 'bible', 'plot'];
+const IMPLEMENTED = ['brief', 'cast', 'bible', 'plot', 'drift', 'pilot'];
 
 function stage(key: PipelineStageView['key'], label: string, over: Partial<PipelineStageView> = {}): PipelineStageView {
   return {
@@ -66,6 +66,7 @@ function makeView(over: Partial<PipelineView> = {}): PipelineView {
     stages: ALL_STAGES,
     decisions: [],
     reviewEvery: 3,
+    lastDelivered: 0,
     updatedAt: 0,
     ...over,
   };
@@ -116,11 +117,11 @@ describe('PipelinePanel', () => {
   });
 
   it('未实现的段：按钮禁用并明说尚未实现（不假装能跑）', async () => {
-    mockFetch.mockResolvedValue(makeStatus({ view: makeView({ stage: 'drift' }) }));
+    mockFetch.mockResolvedValue(makeStatus({ view: makeView({ stage: 'production' }) }));
     setup();
-    const btn = await screen.findByRole('button', { name: /跑「偏离核查」/ });
+    const btn = await screen.findByRole('button', { name: /跑「长跑与监工」/ });
     expect(btn).toBeDisabled();
-    expect(screen.getByText(/这一段（偏离核查）尚未实现/)).toBeInTheDocument();
+    expect(screen.getByText(/这一段（长跑与监工）尚未实现/)).toBeInTheDocument();
   });
 
   it('等确认：三态按钮齐备，**打回在没批注时禁用**', async () => {
@@ -229,5 +230,41 @@ describe('PipelinePanel', () => {
     await waitFor(() => expect(mockToast).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'error', message: 'HTTP 500' }),
     ));
+  });
+
+  it('试写三章：每章交稿都报一条进度，没落库的章必须显眼', async () => {
+    const onTurn = vi.fn();
+    mockFetch.mockResolvedValue(makeStatus({ view: makeView({ stage: 'pilot' }) }));
+    mockRun.mockImplementation((_stage: unknown, _opts: unknown, onEvent: (e: unknown) => void) => {
+      onEvent({ type: 'pilot_chapter', index: 1, total: 3, order: 1, phase: 'start' });
+      onEvent({ type: 'pilot_chapter', index: 1, total: 3, order: 1, phase: 'done', delivered: true, wordCount: 3120 });
+      onEvent({ type: 'pilot_chapter', index: 2, total: 3, order: 2, phase: 'done', delivered: false, wordCount: 0, warnings: ['意图门未通过（打回 2 次）'] });
+      return Promise.resolve();
+    });
+    setup({ onTurn });
+    fireEvent.click(await screen.findByRole('button', { name: /跑「前三章试写」/ }));
+
+    await waitFor(() => expect(onTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ name: '第 1 章', text: expect.stringContaining('已入项目库（3120 字）'), tone: 'ok' }),
+    ));
+    expect(onTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ name: '第 2 章', text: expect.stringContaining('未入项目库'), tone: 'warn' }),
+    );
+  });
+
+  it('跨章审阅：原文进交流流；判 major 时弹错误提醒（这是唯一"停下重写"的判定）', async () => {
+    const onTurn = vi.fn();
+    mockFetch.mockResolvedValue(makeStatus({ view: makeView({ stage: 'pilot' }) }));
+    mockRun.mockImplementation((_stage: unknown, _opts: unknown, onEvent: (e: unknown) => void) => {
+      onEvent({ type: 'premiere_review', text: '【前三章跨章审阅】判定：建议停下重写', verdict: 'major', issues: 3 });
+      return Promise.resolve();
+    });
+    setup({ onTurn });
+    fireEvent.click(await screen.findByRole('button', { name: /跑「前三章试写」/ }));
+
+    await waitFor(() => expect(onTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ name: '《前三章审阅报告》', text: expect.stringContaining('建议停下重写'), tone: 'warn' }),
+    ));
+    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ type: 'error', message: expect.stringContaining('3 处问题') }));
   });
 });

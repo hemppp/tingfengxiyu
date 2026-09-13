@@ -458,11 +458,18 @@ describe('权限矩阵：层级一致性（I1）', () => {  it('编排层可读�
     expect(policies.find((p) => p.agentId === 'reviewer')?.policy?.readNarrative).toBe(false);
   });
 
-  it('六个角色都显式声明了 memory（新增角色漏声明会被这条逮住）', () => {
+  it('八个角色都显式声明了 memory（新增角色漏声明会被这条逮住）', () => {
     const policies = allRolePolicies();
-    expect(policies).toHaveLength(6);
+    // 6 个讨论角色 + 策划官（世界规则）+ 前三章审阅（跨章）
+    expect(policies).toHaveLength(8);
     for (const { agentId, policy } of policies) {
       expect(policy, `${agentId} 未声明 memory（fail-closed 下它会读不到任何全局记忆）`).toBeDefined();
+    }
+    // ★ 流水线角色也必须登记：策划官靠这份现状立世界规则，空了就会凭空造
+    for (const id of ['world-architect', 'premiere-reviewer']) {
+      const p = policies.find((x) => x.agentId === id)?.policy;
+      expect(p, `${id} 未登记`).toBeDefined();
+      expect(p?.readL1 ?? []).toContain('settings.brief');
     }
   });
 });

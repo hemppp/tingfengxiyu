@@ -18,9 +18,18 @@ import type { DesignRole } from '../discuss/roles.js';
 import { formatBrief, resolveSettingsDigest, type SettingsDigest } from '../framework/context-resolver.js';
 import { readDigestFor } from '../framework/memory/digest-gate.js';
 import { createAgentMemory, createMemoryGate, experience, writeAudit, fingerprintOf } from '../framework/memory/index.js';
-import { REVISION_LIMIT, STAGE_LABEL, type PipelineEvent, type PipelineState, type SinkStats, type StageKey } from './types.js';
+import {
+  GATED_STAGES, REVISION_LIMIT, STAGE_LABEL, type PipelineEvent, type PipelineState, type SinkStats, type StageKey,
+} from './types.js';
+import {
+  buildAssertions, mergeDriftReport, parseJudgments, renderAssertions, summarizeDrift,
+  type DriftJudgment, type DriftReport,
+} from './drift.js';
+import { readProjectBriefRaw } from '../framework/context-resolver.js';
+import { extractFirstJson } from '../autowrite/helpers.js';
+import { pilotSinkNotes, runPilot } from './pilot.js';
 import { STAGE_SPEAK_MAX_TOKENS, specFor } from './roles-phase.js';
-import { PipelineStore, computeBriefHash } from './store.js';
+import { nextStage, PipelineStore, computeBriefHash } from './store.js';
 import { sinkStageArtifact } from './sink.js';
 
 /** 单个前置阶段产出物注入上限：三段都塞进上下文会贵到离谱，也要防被截断误导 */
@@ -90,6 +99,15 @@ export async function runStage(
     return;
   }
 
+  // ---- Stage5 · 前三章试写：先分流，不走"讨论 → 收敛"那套 ----
+  //   pilot 复用**单章闭环**跑三章（见 pilot.ts 顶部注释），产出物是跨章审阅报告。
+  //   必须放在 specFor 之前 —— 后面的 headerFor/buildHeader 是"立设定"专用的组装，
+  //   对 pilot 没意义（每章的上下文由单章闭环自己装配）。
+  if (stage === 'pilot') {
+    await runPilotStage(ctx, { projectId, userId, extra: opts.extra, revisionNote: opts.revisionNote, store }, emit);
+    return;
+  }
+
   const spec = specFor(stage);
   if (!spec) {
     emit({ type: 'stage_failed', stage, message: `「${STAGE_LABEL[stage]}」阶段尚未实现` });
@@ -132,6 +150,22 @@ export async function runStage(
   };
   /** L2：记「这个角色这一轮说了什么」（失败不影响本段讨论） */
   const memoryOf = (agentId: string) => createAgentMemory({ ctx, projectId, agentId, gate });
+
+  // ---- drift（偏离核查）专用：逐条断言 + 收集各角色的机器可读判定 ----
+  //   ★ 断言来自 brief 的**字段**（确定性生成，零成本）：见 drift.ts buildAssertions 的注释
+  const driftAssertions = stage === 'drift' ? buildAssertions(await readProjectBriefRaw(ctx, projectId)) : [];
+  const driftJudgments: DriftJudgment[] = [];
+  const parseSpeakerJudgments = (text: string): DriftJudgment[] => {
+    try {
+      const json = extractFirstJson(text);
+      if (!json) return [];
+      const parsed = JSON.parse(json) as { judgments?: unknown };
+      return parseJudgments(parsed.judgments, driftAssertions);
+    } catch (e) {
+      console.warn('[drift] 该角色的判定无法解析（按未判定处理）:', e);
+      return [];
+    }
+  };
 
   const transcript: Array<{ name: string; text: string }> = [];
   const buildInput = (header: string, role: DesignRole, extra?: string): string => {
@@ -190,7 +224,19 @@ export async function runStage(
 
     // 主笔 → 其余角色依次回应（每个角色都能看到前面人的发言）
     for (const role of spec.speakers) {
-      await speak(role);
+      // drift：把断言清单 + 库事实对照物塞给它，并要求逐条回 JSON 判定
+      const extra = stage === 'drift'
+        ? [
+            '【断言清单（逐条判定，id 必须原样回填）】',
+            renderAssertions(driftAssertions),
+            '',
+            '【L3 对照物：项目库事实】',
+            digest.characters || '（暂无角色）',
+            digest.foreshadows || '（暂无伏笔）',
+          ].join('\n')
+        : undefined;
+      const said = await speak(role, extra);
+      if (stage === 'drift') driftJudgments.push(...parseSpeakerJudgments(said));
     }
 
     // 主笔针对质疑正面回应 —— 没有这一轮就只是各交一份报告，不构成讨论
@@ -198,26 +244,176 @@ export async function runStage(
       await speak(spec.rebuttal.role, spec.rebuttal.extra);
     }
 
-    // 收敛成契约
+    // 收敛成契约（drift 是"合并报告"，把机器可读的判定一并交给定稿官，避免它自己编）
     emit({ type: 'stage_phase', stage, label: '收敛本段结论' });
-    const artifact = await speak(spec.convener);
+    const driftReport: DriftReport = stage === 'drift'
+      ? mergeDriftReport(driftJudgments)
+      : { hard: [], soft: [], backTo: null, counts: { total: 0, 符合: 0, 偏离: 0, 库中无依据: 0 } };
+    const convenerExtra = stage === 'drift'
+      ? [
+          '【三位核查角色的逐条判定（机器合并后的结果，别改动它）】',
+          `硬偏离：${driftReport.hard.length} 条 → ${driftReport.hard.map((j) => `${j.id}${j.backTo ? `(回修 ${j.backTo})` : ''}`).join('、') || '无'}`,
+          `软偏离：${driftReport.soft.length} 条 → ${driftReport.soft.map((j) => j.id).join('、') || '无'}`,
+          `统计：${summarizeDrift(driftReport)}`,
+          '',
+          '请据此写《偏离报告》：硬偏离逐条写清"断言 → 冲突在哪 → 建议回修哪一段"，软偏离进"待定"。',
+        ].join('\n')
+      : undefined;
+    const artifact = await speak(spec.convener, convenerExtra);
     emit({ type: 'stage_summary', stage, text: artifact });
 
-    // 存状态：等作者确认（★ 此时不落库）
     const state = store.load();
     if (!state) throw new Error('流水线状态丢失，请重新启动');
     const rec = state.stages[stage];
     rec.artifact = artifact;
-    rec.status = 'awaiting_user';
     rec.runningSince = undefined;
     rec.finishedAt = Date.now();
     rec.error = undefined;
+
+    if (GATED_STAGES.includes(stage)) {
+      // 有闸门：等作者确认（★ 此时不落库）
+      rec.status = 'awaiting_user';
+      await store.save(state);
+      emit({ type: 'awaiting_user', stage, summary: artifact, revision: rec.revision, revisionLimit: REVISION_LIMIT });
+      return;
+    }
+
+    // ---- 无闸门阶段（当前只有 drift）：自动过；有硬偏离就把游标退回需要回修的那一段 ----
+    if (stage === 'drift') {
+      rec.driftCounts = {
+        total: driftReport.counts.total,
+        符合: driftReport.counts.符合,
+        偏离: driftReport.counts.偏离,
+        库中无依据: driftReport.counts.库中无依据,
+        hard: driftReport.hard.length,
+        soft: driftReport.soft.length,
+      };
+    }
+    rec.status = 'approved';
+    rec.sinked = true;                 // drift 的"落库"就是报告本身，已写进 artifact
+    // ★ 游标要**自己推进**：闸门阶段的推进是作者 approve 时做的，非闸门阶段没人替它做 ——
+    //   漏了这一步，drift 跑完游标还停在 drift，下一段永远跑不了（真机断言抓到过）。
+    const advanced = nextStage(stage);
+    if (advanced) state.stage = advanced;
+    await store.save(state);
+
+    emit({ type: 'stage_auto_approved', stage, summary: summarizeDrift(driftReport) });
+
+    if (driftReport.hard.length > 0 && driftReport.backTo) {
+      const backTo = driftReport.backTo as StageKey;
+      const back = state.stages[backTo];
+      if (back) {
+        // 那段要重修 → 游标退回 + 该段闸门作废（连着后面的批准一起失效）
+        back.status = 'idle';
+        back.sinked = false;
+        back.artifact = undefined;
+        back.error = undefined;
+        state.stage = backTo;
+        const invalidated = store.invalidateFrom(state, backTo);
+        // ★ invalidateFrom 会把 backTo **之后**的所有段作废 —— 包括 drift 自己。
+        //   但报告是这次核查的产物：作者回去重修时，正是靠它知道"为什么要修"。
+        //   所以这里把 drift 自己的记录恢复回来（真机断言抓到过：报告被自己的回退抹掉了）。
+        const self = state.stages[stage];
+        self.status = 'approved';
+        self.artifact = artifact;
+        self.sinked = true;
+        self.error = undefined;
+        await store.save(state);
+        emit({
+          type: 'stage_drift_blocked',
+          stage,
+          backTo,
+          message: `偏离核查发现 ${driftReport.hard.length} 处**硬偏离** → 已退回「${STAGE_LABEL[backTo]}」重修`
+            + (invalidated.length > 0 ? `（作废了 ${invalidated.length} 段的批准）` : ''),
+          hard: driftReport.hard.length,
+          soft: driftReport.soft.length,
+        });
+      }
+    }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    const state = store.load();
+    if (state) {
+      state.stages[stage].status = 'failed';
+      state.stages[stage].runningSince = undefined;
+      state.stages[stage].error = message;
+      await store.save(state);
+    }
+    emit({ type: 'stage_failed', stage, message });
+  }
+}
+
+/**
+ * Stage5 的编排壳：把 `runPilot`（三章串行 + 跨章审阅）接到阶段状态机上。
+ *
+ * 与讨论型阶段的差别只有三处：
+ *   1. 产出物 = 跨章审阅报告（不是"定稿官的契约"）；
+ *   2. **它真的会写库** —— 三章正文由单章闭环交付落库。这是唯一一个"闸门前就落库"的阶段，
+ *      因为"试写"这件事本身就是产出正文；不落库就没法拿来看（也就失去了试写的意义）。
+ *      代价是：作者若在 G4 否掉，已交的三章要人工删 —— 权衡下来仍比"看不见正文的试写"好。
+ *   3. 没有"带批注重跑"的重跑语义差别：重跑本段会**接着已有的章号继续写 3 章**。
+ */
+async function runPilotStage(
+  ctx: ServerPluginContext,
+  o: { projectId: string; userId: string; extra?: string; revisionNote?: string; store: PipelineStore },
+  emit: (e: PipelineEvent) => void,
+): Promise<void> {
+  const { projectId, userId, store } = o;
+  const stage: StageKey = 'pilot';
+
+  try {
+    const started = store.load();
+    if (started) await store.beginStage(started, stage);
+    emit({ type: 'stage_start', stage, revision: store.load()?.stages[stage]?.revision ?? 0 });
+
+    // 已批准的宪章/圣经/总纲：跨章审阅判断"漂没漂"的基准（正文里看不到这些）
+    const st = store.load();
+    const contracts: Array<{ label: string; text: string }> = [];
+    for (const k of ['cast', 'bible', 'plot'] as StageKey[]) {
+      const art = st?.stages[k]?.artifact;
+      if (art && st?.stages[k]?.status === 'approved') contracts.push({ label: STAGE_LABEL[k], text: cut(art, ARTIFACT_INJECT_MAX) });
+    }
+
+    // 作者上一轮的批注：重跑本段时必须生效（否则"改了等于没改"）
+    const extra = [o.extra, o.revisionNote ? `【作者上一轮批注】\n${o.revisionNote}` : '']
+      .filter(Boolean).join('\n\n') || undefined;
+
+    const outcome = await runPilot(ctx, {
+      projectId, userId, extra,
+      lastDelivered: st?.cursor.lastDelivered ?? 0,
+      contracts,
+    }, emit);
+
+    const state = store.load();
+    if (!state) throw new Error('流水线状态丢失，请重新启动');
+    const rec = state.stages[stage];
+    rec.artifact = outcome.artifact;
+    rec.pilotChapters = outcome.chapters;
+    if (outcome.premiere) {
+      rec.premiereVerdict = {
+        verdict: outcome.premiere.verdict,
+        issues: outcome.premiere.issues.length,
+        kinds: [...new Set(outcome.premiere.issues.map((i) => i.kind))],
+      };
+    }
+    rec.runningSince = undefined;
+    rec.finishedAt = Date.now();
+    // ★ 已交付 ≠ 已落库：这里用"三章都交上了"作为 sinked 的判据（口径见 pilotSinkNotes）
+    const notes = pilotSinkNotes(outcome.chapters);
+    rec.sinked = notes.length === 0;
+    rec.error = notes.length ? notes.join('；') : undefined;
+
+    // 长跑游标：pilot 是长跑的起点，游标不写 M3 无从知道从第几章接
+    const lastOrder = outcome.chapters.filter((c) => c.delivered).map((c) => c.order).pop();
+    if (lastOrder) state.cursor.lastDelivered = Math.max(state.cursor.lastDelivered, lastOrder);
+
+    rec.status = 'awaiting_user';
     await store.save(state);
 
     emit({
       type: 'awaiting_user',
       stage,
-      summary: artifact,
+      summary: outcome.artifact,
       revision: rec.revision,
       revisionLimit: REVISION_LIMIT,
     });
@@ -312,6 +508,30 @@ export async function approveStage(
   const state = store.load();
   const artifact = state?.stages[opts.stage]?.artifact;
   if (!state || !artifact) return null;
+
+  // ★ pilot 的"落库"在跑的时候就发生完了（三章正文由单章闭环交付进 chapters）。
+  //   批准这一步不该再去"抽取审计报告"——那份报告是给人读的，没有结构化落库这回事。
+  //   之前会走到通用分支，得到一条「结构化抽取失败…本次未落库」的误导性提示。
+  if (opts.stage === 'pilot') {
+    const chapters = state.stages.pilot.pilotChapters ?? [];
+    const notes = chapters.filter((c) => !c.delivered).map((c) => `第 ${c.order} 章未落库`);
+    const warned = chapters.filter((c) => c.warnings.length);
+    if (warned.length) notes.push(`${warned.length} 章带警示交付，建议复核`);
+    const stats: SinkStats = {
+      characters: { created: 0, updated: 0 },
+      outline: 0,
+      foreshadows: 0,
+      skipped: 0,
+      notes: [
+        `试写 ${chapters.length} 章，已入项目库 ${chapters.filter((c) => c.delivered).length} 章`,
+        ...notes,
+      ],
+    };
+    state.stages.pilot.sinked = chapters.length > 0 && chapters.every((c) => c.delivered);
+    await store.save(state);
+    emit({ type: 'stage_sinked', stage: opts.stage, stats });
+    return stats;
+  }
 
   const stats = await sinkStageArtifact(ctx, {
     projectId: opts.projectId,

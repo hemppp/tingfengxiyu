@@ -30,6 +30,12 @@ export interface PipelineStageView {
   implemented: boolean;
   /** 契约文本（人可读） */
   artifact?: string;
+  /** drift：逐条核查统计（UI 上把"核了几条"显出来） */
+  driftCounts?: { total: number; 符合: number; 偏离: number; 库中无依据: number; hard: number; soft: number };
+  /** pilot：试写的三章交付情况（`delivered=false` 要显眼） */
+  pilotChapters?: Array<{ order: number; delivered: boolean; wordCount: number; warnings: string[] }>;
+  /** pilot：跨章审阅判定 */
+  premiereVerdict?: { verdict: 'pass' | 'minor' | 'major'; issues: number; kinds: string[] };
   error?: string;
 }
 
@@ -51,6 +57,8 @@ export interface PipelineView {
   stages: PipelineStageView[];
   decisions: PipelineDecisionEntry[];
   reviewEvery: number;
+  /** 已交付的最后一章（长跑从它的下一章接） */
+  lastDelivered: number;
   updatedAt: number;
 }
 
@@ -93,6 +101,23 @@ export type PipelineEvent =
       meta?: string;
     }
   | { type: 'stage_summary'; stage: StageKey; text: string }
+  /** 无闸门阶段跑完自动过（当前是 drift） */
+  | { type: 'stage_auto_approved'; stage: StageKey; summary: string }
+  /** 偏离核查发现硬偏离：游标已退回需要回修的那一段 */
+  | { type: 'stage_drift_blocked'; stage: StageKey; backTo: StageKey; message: string; hard: number; soft: number }
+  /** pilot：第 i/3 章开写 / 写完（done 带该章是否落库与字数） */
+  | {
+      type: 'pilot_chapter';
+      index: number;
+      total: number;
+      order: number;
+      phase: 'start' | 'done';
+      delivered?: boolean;
+      wordCount?: number;
+      warnings?: string[];
+    }
+  /** pilot：跨章审阅结论（原文给作者看） */
+  | { type: 'premiere_review'; text: string; verdict: 'pass' | 'minor' | 'major'; issues: number }
   | { type: 'awaiting_user'; stage: StageKey; summary: string; revision: number; revisionLimit: number }
   | { type: 'stage_sinked'; stage: StageKey; stats: SinkStats }
   | { type: 'stage_skipped'; stage: StageKey; reason: string }

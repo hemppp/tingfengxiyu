@@ -38,7 +38,10 @@ export const STAGE_LABEL: Record<StageKey, string> = {
 export const GATED_STAGES: readonly StageKey[] = ['cast', 'bible', 'plot', 'pilot'];
 
 /** M1 已实现、可真正跑的阶段；其余阶段 advance 时明确告知未实现，不假装能跑 */
-export const IMPLEMENTED_STAGES: readonly StageKey[] = ['brief', 'cast', 'bible', 'plot'];
+export const IMPLEMENTED_STAGES: readonly StageKey[] = ['brief', 'cast', 'bible', 'plot', 'drift', 'pilot'];
+
+/** pilot 试写几章（设计 §Stage5：前三章先试水，好看清文风与弧光再长跑） */
+export const PILOT_CHAPTERS = 3;
 
 export type StageStatus = 'idle' | 'running' | 'awaiting_user' | 'approved' | 'failed';
 
@@ -58,6 +61,21 @@ export interface StageRecord {
   artifact?: string;
   /** 本段是否已把产出物落库（approve 后才做） */
   sinked?: boolean;
+  /**
+   * drift 段专有：**逐条核查**的统计。为什么要单独存：
+   * 报告是给人看的散文，而"到底核了几条、几条符合"才是可判定的事实 ——
+   * 没有它就没人能验证"核查真的逐条做了"（设计里那条必测项就卡在这里）。
+   */
+  driftCounts?: { total: number; 符合: number; 偏离: number; 库中无依据: number; hard: number; soft: number };
+  /**
+   * pilot 段专有：**试写的三章**到底交上去没有。
+   * 与 driftCounts 同理 —— 报告会写得很漂亮（"三章都达标、文风统一"），
+   * 但"交了几章、各多少字、有没有带警示"才是可判定的事实。承诺的 3 章交了 2 章，
+   * 报告却写得像全交了，是这类流水线最典型的失真。
+   */
+  pilotChapters?: Array<{ order: number; delivered: boolean; wordCount: number; warnings: string[] }>;
+  /** pilot 段专有：跨章审阅的判定（pass/minor/major）与问题条数 */
+  premiereVerdict?: { verdict: 'pass' | 'minor' | 'major'; issues: number; kinds: string[] };
   startedAt?: number;
   finishedAt?: number;
   /** status==='failed' 时的原因 */
@@ -120,6 +138,26 @@ export type PipelineEvent =
       meta?: string;
     }
   | { type: 'stage_summary'; stage: StageKey; text: string }
+  /** 无闸门阶段跑完自动过（当前是 drift）：报告已出，不需要作者确认 */
+  | { type: 'stage_auto_approved'; stage: StageKey; summary: string }
+  /**
+   * pilot：第 i/3 章开写 / 写完。`phase` 区分两个时点 —— 前端据此插分段、
+   * 并在 done 时把"已交付 N 字"落到那一章上。`delivered=false` 表示这章没进库（要显眼）。
+   */
+  | {
+      type: 'pilot_chapter';
+      index: number;
+      total: number;
+      order: number;
+      phase: 'start' | 'done';
+      delivered?: boolean;
+      wordCount?: number;
+      warnings?: string[];
+    }
+  /** pilot：三章之后的跨章审阅结论（原样给作者看，不加工） */
+  | { type: 'premiere_review'; text: string; verdict: 'pass' | 'minor' | 'major'; issues: number }
+  /** 偏离核查发现**硬偏离**：游标已退回到需要回修的那一段，那段闸门作废 */
+  | { type: 'stage_drift_blocked'; stage: StageKey; backTo: StageKey; message: string; hard: number; soft: number }
   | {
       type: 'awaiting_user';
       stage: StageKey;
@@ -155,10 +193,22 @@ export interface PipelineView {
     implemented: boolean;
     /** 契约文本（供 UI 展示 / 复制） */
     artifact?: string;
+    /** drift：逐条核查统计（UI 上把"核了几条"显出来） */
+    driftCounts?: StageRecord['driftCounts'];
+    /** pilot：试写的三章交付情况 */
+    pilotChapters?: StageRecord['pilotChapters'];
+    /** pilot：跨章审阅判定 */
+    premiereVerdict?: StageRecord['premiereVerdict'];
     error?: string;
   }>;
   /** 最近若干条闸门决策（倒序） */
   decisions: DecisionEntry[];
   reviewEvery: number;
+  /**
+   * 长跑游标：**已交付的最后一章**。
+   * 必须暴露出来 —— 它是"试写到哪了/长跑从第几章接"的唯一权威数字，
+   * 不暴露的话 M3 只能靠猜，验收脚本也只能靠正则在报告里找（那就是假验证）。
+   */
+  lastDelivered: number;
   updatedAt: number;
 }
