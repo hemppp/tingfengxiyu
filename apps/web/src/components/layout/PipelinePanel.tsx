@@ -302,8 +302,18 @@ export function PipelinePanel({ projectId, onProjectDataChanged, onTurn, hasChap
       dispatchToastEvent({ type: 'error', message: e instanceof Error ? e.message : String(e) });
     } finally {
       setBusy(false);
+      /**
+       * ★ 失败也要刷新状态。
+       *
+       * 实测（GUI 全流程）：批准动作在服务端是**同步跑一次模型抽取**（把契约落库），
+       * 超过客户端 8 秒超时后前端报「请求超时」，而**服务端其实已经批准完了** ——
+       * 界面却停在上一步，"跑世界圣经"的按钮永远不出现，看起来像卡死。
+       * 只调大超时还不够：真超时/断线时同样会留下"服务端已前进、界面没动"的鬼状态，
+       * 所以这里无条件回读一次服务端真相。
+       */
+      void refresh();
     }
-  }, [projectId, busy, note, onProjectDataChanged]);
+  }, [projectId, busy, note, onProjectDataChanged, refresh]);
 
   if (!projectId) return null;
 

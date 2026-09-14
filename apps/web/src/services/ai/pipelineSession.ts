@@ -142,12 +142,23 @@ export async function startPipeline(note?: string): Promise<{ view: PipelineView
   return apiClient.post<{ view: PipelineView; baselineMismatch: boolean }>(`${API_BASE}/start`, { note });
 }
 
+/**
+ * 闸门决策。
+ *
+ * ★ `approve` 在服务端是**同步跑一次模型抽取**（把契约文本抽成结构化记录再落库），
+ *   实测耗时可超过 10 秒 —— 用默认 8 秒超时会得到「请求超时」，而服务端其实已经批完了
+ *   （界面卡在上一步，按钮永远不出现；GUI 全流程跑出来了）。所以这里必须给足超时。
+ */
 export async function decidePipeline(
   stage: StageKey,
   action: DecisionAction,
   note?: string,
 ): Promise<DecisionResult> {
-  return apiClient.post<DecisionResult>(`${API_BASE}/decision`, { stage, action, note });
+  return apiClient.post<DecisionResult>(
+    `${API_BASE}/decision`,
+    { stage, action, note },
+    { timeoutMs: 180_000 },
+  );
 }
 
 /**
