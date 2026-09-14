@@ -31,10 +31,19 @@ export interface SettingsDigest {
 
 /** `projects.brief` 是 JSON 文本列，这里手动解析并兜底（不 import db 层的 parseJson，避免跨包耦合） */
 function parseBrief(raw: unknown): Record<string, unknown> | null {
+  /**
+   * ★ 同时接受**已经是对象**的形态。
+   *
+   * 只认字符串会埋一个静默坑：调用方手里常常已经解析过了
+   * （`readProjectBriefRaw()` 返回的就是对象），若拿它去喂 `formatBrief`，
+   * 会得到 null → 注入整段被跳过 → **作者的设定白填、而且不报任何错**。
+   * 这类"悄悄少了一段"最难查（实测：单测里传对象时 formatBrief 返回空串才发现）。
+   */
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>;
   if (typeof raw !== 'string' || raw.trim() === '') return null;
   try {
     const v = JSON.parse(raw);
-    return v && typeof v === 'object' ? (v as Record<string, unknown>) : null;
+    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
   } catch {
     return null;
   }
