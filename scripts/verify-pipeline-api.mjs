@@ -12,8 +12,9 @@
 // 覆盖（零成本部分）：
 //   1) 未启动 → started:false
 //   2) 没有开书设定 → 400 且提示人话（流水线的起点就是它）
-//   3) start（有设定）→ 7 阶段就位、游标停在 brief、4 个已实现、闸门标在 cast/bible/plot/pilot
-//   4) 跳着跑 → 409；未实现阶段（drift）→ 501
+//   3) start（有设定）→ 7 阶段就位、游标停在 brief、已实现 6 段（只剩 production 未实现）、
+//      闸门标在 cast/bible/plot/pilot
+//   4) 跳着跑 → 409；未实现阶段（production）→ 501
 //   5) brief 段不调模型直接过：SSE 只有 stage_skipped、游标推进到 cast
 //   6) 往回重跑更早的段被允许，并记进台账
 //
@@ -110,15 +111,25 @@ const started = await req(`${P}/start`, { method: 'POST', headers: { 'x-project-
 let view = started.json?.data?.view;
 check('start 成功且 7 个阶段就位', started.status === 200 && view?.stages?.length === 7, `HTTP ${started.status}`);
 check('游标停在 brief', view?.stage === 'brief', String(view?.stage));
-check('只有 4 个阶段标为已实现', (view?.stages ?? []).filter((s) => s.implemented).length === 4);
+// ★ 别硬编码「几个已实现」：跟着 IMPLEMENTED_STAGES 的真实名单走。
+//   M2 完成后已实现 6 段，而这里曾经写死 4 段（brief/cast/bible/plot），
+//   每上一个里程碑就要改一次脚本 —— 2026-09-14 就是这么假失败过一回。
+const implKeys = (view?.stages ?? []).filter((s) => s.implemented).map((s) => s.key);
+check(
+  '已实现 6 段（brief/cast/bible/plot/drift/pilot），只剩 production 未实现',
+  JSON.stringify(implKeys) === JSON.stringify(['brief', 'cast', 'bible', 'plot', 'drift', 'pilot']),
+  implKeys.join(','),
+);
 check('闸门只标在 cast/bible/plot/pilot',
   JSON.stringify((view?.stages ?? []).filter((s) => s.gated).map((s) => s.key)) === JSON.stringify(['cast', 'bible', 'plot', 'pilot']));
 
 // 守卫
 const skip = await req(`${P}/advance`, { method: 'POST', headers: { 'x-project-id': pid }, body: JSON.stringify({ stage: 'bible' }) });
 check('跳着跑 bible → 409', skip.status === 409, `HTTP ${skip.status}`);
-const drift = await req(`${P}/advance`, { method: 'POST', headers: { 'x-project-id': pid }, body: JSON.stringify({ stage: 'drift' }) });
-check('未实现的 drift → 501（不假装能跑）', drift.status === 501, `HTTP ${drift.status}`);
+// 「未实现」的探针要用**真未实现**的阶段。drift 在 M2 已实现，再拿它验 501 会先撞上游标守卫
+// 拿回 409 —— 那不是缺陷，是探针选错了（且 409 与「跳着跑」的断言混在一起，看起来像真 bug）。
+const notImpl = await req(`${P}/advance`, { method: 'POST', headers: { 'x-project-id': pid }, body: JSON.stringify({ stage: 'production' }) });
+check('未实现的 production → 501（不假装能跑）', notImpl.status === 501, `HTTP ${notImpl.status}`);
 const early = await req(`${P}/decision`, { method: 'POST', headers: { 'x-project-id': pid }, body: JSON.stringify({ stage: 'cast', action: 'approve' }) });
 check('cast 没产出就 approve → 409', early.status === 409, `HTTP ${early.status}`);
 const wrongStage = await req(`${P}/decision`, { method: 'POST', headers: { 'x-project-id': pid }, body: JSON.stringify({ stage: 'brief', action: 'revise', note: 'x' }) });
