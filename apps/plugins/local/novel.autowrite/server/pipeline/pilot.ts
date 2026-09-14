@@ -25,6 +25,7 @@ import { schema, eq, and, isNull, desc, getProjectDb, type DrizzleDb } from '@no
 import { runDiscussion, type SessionEvent } from '../discuss/orchestrator.js';
 import { extractFirstJson } from '../autowrite/helpers.js';
 import { readDigestFor } from '../framework/memory/digest-gate.js';
+import { createAgentSkillResolver } from '../framework/agent-skills.js';
 import {
   createAgentMemory, createMemoryGate, experience, fingerprintOf, writeAudit,
 } from '../framework/memory/index.js';
@@ -376,7 +377,8 @@ async function reviewPremiere(
 
   try {
     const result = await ctx.ai.agents.run({
-      system: ROLE_PREMIERE.system,
+      // ★ 前三章审阅也是"智能体"之一，它的开关同样要生效（与另两条链路同口径）
+      system: await createAgentSkillResolver(ctx, o.userId).systemFor(ROLE_PREMIERE.key, ROLE_PREMIERE.system),
       input: full,
       maxTurns: 2,
       maxTokens: STAGE_SPEAK_MAX_TOKENS,

@@ -351,3 +351,27 @@ export async function setAllToggles(o: {
   }
   return view.skills.length;
 }
+
+/** 执行链路要用的最小技能形状（只给用得上的字段，别把整个库行塞进 prompt 装配） */
+export interface EnabledSkill { id: string; name: string; systemPrompt: string }
+
+/**
+ * 某个智能体**当前启用**的技能 —— 这是开关真正生效的地方。
+ *
+ * 与 `getTargetSkills` 的区别：那个面向配置界面（要给出全部技能 + 是否开启 + 是否配置过），
+ * 这个面向执行（只给"开着且真有正文"的，调用方直接拼进 system prompt）。
+ *
+ * fail-closed：拿不到、没配置、正文为空 → 返回空数组。
+ * 宁可不加技能，也不要让一条内容为空的技能占着 prompt。
+ */
+export async function listEnabledSkills(agentId: string, userId?: string): Promise<EnabledSkill[]> {
+  const db = getDb();
+  if (!db || !userId) return [];          // 没有用户身份就无从查开关（开关是按用户存的）
+  if (!getSkillTarget(agentId)) return []; // 未声明的智能体：不必查库
+  const rows = await db.select().from(schema.skillLibrary);
+  const skills = rows.map((r) => rowToSkill(r as unknown as Record<string, unknown>));
+  const toggles = await toggleMap(userId, agentId);
+  return skills
+    .filter((s) => belongsToAgent(s, agentId) && toggles.get(s.id) === true && s.systemPrompt.trim().length > 0)
+    .map((s) => ({ id: s.id, name: s.name, systemPrompt: s.systemPrompt }));
+}

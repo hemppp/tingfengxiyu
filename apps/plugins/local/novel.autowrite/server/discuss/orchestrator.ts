@@ -33,6 +33,7 @@ import {
   renderWheelWithin, WHEEL_CAPACITY_DEFAULT, evictPrompt, fingerprintOf, writeAudit, allRolePolicies,
 } from '../framework/memory/index.js';
 import { persistChapterEntities } from '../framework/entity-sink.js';
+import { createAgentSkillResolver, skillMetaNote } from '../framework/agent-skills.js';
 import { runConsistencyGate, runPolishGate, POLISH_PASS_SCORE } from '../framework/gates.js';
 import { WRITER_MAX_TOKENS } from '../autowrite/helpers.js';
 import { schema, eq, and, isNull, getProjectDb, type DrizzleDb } from '@novel/db';
@@ -307,6 +308,11 @@ export async function runDiscussion(
    * 因此裁剪**不产生额外查询**，闸门只做过滤与记账。
    */
   const gate = createMemoryGate(ctx);
+  /**
+   * 已启用技能解析器（"智能体 Skills"的开关 → system prompt）。
+   * ★ 本次运行内按 agent 缓存：一章要跑十几轮发言，不能每轮查一次主库。
+   */
+  const agentSkills = createAgentSkillResolver(ctx, userId);
   const gatedCache = new Map<string, string>();
   /** 出界压缩的按章缓存：同一章只调一次模型 */
   const evictSummaryCache = new Map<number, string>();
@@ -493,8 +499,16 @@ export async function runDiscussion(
   ): Promise<string> => {
     emit({ type: 'phase', label: `${role.name}发言中` });
     const roleHeader = await headerFor(role.key);
+    // ★ 已启用技能拼进 system（"智能体 Skills"里的开关真正生效的地方）
+    const system = await agentSkills.systemFor(role.key, role.system);
+    const injected = agentSkills.appliedIds(role.key);
+    if (injected.length) {
+      // 一行可观测日志：作者问"为什么这次行为变了"、或排查"技能是不是真进了 prompt"时，
+      // 这是唯一能直接看到"系统提示词确实变长了"的地方。
+      console.log(`[skills] ${role.key} 注入 ${injected.join('/')}：system ${role.system.length} → ${system.length} 字`);
+    }
     const result = await ctx.ai.agents.run({
-      system: role.system,
+      system,
       input: buildInput(roleHeader, role, extra),
       tools: role.tools,
       maxTurns: turnsFor(role),
@@ -521,7 +535,8 @@ export async function runDiscussion(
       color: role.color,
       short: role.short,
       text,
-      meta: result.model ? `模型 ${result.model}` : undefined,
+      meta: [result.model ? `模型 ${result.model}` : '', skillMetaNote(agentSkills, role.key)]
+        .filter(Boolean).join(' · ') || undefined,
     });
     return text;
   };

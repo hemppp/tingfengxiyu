@@ -153,6 +153,21 @@ export interface ServerPluginContext extends BasePluginContext {
       }): () => void;
       getAll(): Array<{ id: string; name: string; kind: 'assistant' | 'agent' }>;
     };
+    /**
+     * 智能体**已启用**的技能（集中式 skills 库 → 执行链路）。
+     *
+     * 库与开关存在主库（插件读不到），所以必须由宿主代读。
+     * 调用方拿到的是"这个智能体当前启用、且有正文的技能"，用来拼进 system prompt ——
+     * **开着的技能必须真的作用到模型身上**，否则开关就只是装饰。
+     * 没有配置过 / 查询失败一律返回空数组（fail-closed：宁可不加技能，也不要凭空生效）。
+     */
+    agentSkills: {
+      getEnabled(agentId: string, opts?: { userId?: string }): Promise<Array<{
+        id: string;
+        name: string;
+        systemPrompt: string;
+      }>>;
+    };
     /** 注册 AI 智能体 */
     agents: {
       register(def: { name: string; description?: string; handler: (args: Record<string, unknown>, ctx: Record<string, unknown>) => Promise<unknown> }): () => void;

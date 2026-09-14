@@ -17,6 +17,7 @@ import { getProjectDb } from '@novel/db';
 import type { DesignRole } from '../discuss/roles.js';
 import { formatBrief, resolveSettingsDigest, type SettingsDigest } from '../framework/context-resolver.js';
 import { readDigestFor } from '../framework/memory/digest-gate.js';
+import { createAgentSkillResolver } from '../framework/agent-skills.js';
 import { createAgentMemory, createMemoryGate, experience, writeAudit, fingerprintOf } from '../framework/memory/index.js';
 import {
   GATED_STAGES, REVISION_LIMIT, STAGE_LABEL, type PipelineEvent, type PipelineState, type SinkStats, type StageKey,
@@ -150,6 +151,8 @@ export async function runStage(
   };
   /** L2：记「这个角色这一轮说了什么」（失败不影响本段讨论） */
   const memoryOf = (agentId: string) => createAgentMemory({ ctx, projectId, agentId, gate });
+  /** 已启用技能解析器（"智能体 Skills"的开关 → system prompt；本次运行内缓存） */
+  const agentSkills = createAgentSkillResolver(ctx, userId);
 
   // ---- drift（偏离核查）专用：逐条断言 + 收集各角色的机器可读判定 ----
   //   ★ 断言来自 brief 的**字段**（确定性生成，零成本）：见 drift.ts buildAssertions 的注释
@@ -183,7 +186,8 @@ export async function runStage(
     emit({ type: 'stage_phase', stage, label: `${role.name}发言中` });
     const roleHeader = await headerFor(role.key);
     const result = await ctx.ai.agents.run({
-      system: role.system,
+      // ★ 已启用技能拼进 system（与写章链路同一口径，改一处必须改另一处）
+      system: await agentSkills.systemFor(role.key, role.system),
       input: buildInput(roleHeader, role, extra),
       tools: role.tools,
       maxTurns: turnsFor(role),

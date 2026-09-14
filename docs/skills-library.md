@@ -59,6 +59,9 @@ agent_skill_toggles      每个智能体的技能开关（**按用户**存）
 | PUT | `/api/ai/skill-targets/:agentId/toggle` | 单条开关 `{skillId, enabled}` |
 | PUT | `/api/ai/skill-targets/:agentId/toggle-all` | 批量开关 `{enabled}` |
 
+插件侧读"该智能体已启用的技能"走上下文：`ctx.ai.agentSkills.getEnabled(agentId, { userId })`
+（库在主库，插件读不到，必须宿主代读）。
+
 全部 `requireAuth`；错误体是信封 `{error:{code,message}}`。输入类错误一律 400 且**带上原因**
 （"未知智能体 X（清单里没有它，装了也看不见）"）—— 这里吞原因等于让人对着 500 猜。
 
@@ -118,11 +121,48 @@ SkillSwitch     左关右开；滑块在左=关、在右=开（两个状态都�
 - 真机 GUI：`.workbuddy/ui-checks/gen-skills-ui.mjs` → `plan-skills-ui.json`（含**几何断言**：
   两个入口的 `bottom` 必须 ≤ 输入栏 `top`；以及开关 `aria-checked` 拨动后回读、两页签、下钻与返回）
 
-## 9. 已知边界 / 下一步
+## 9. 开关怎么作用到模型身上（执行链路接线）
 
-- **开关目前只到"配置"层**：它记录"这个智能体启用了哪些技能"，但还没接到 agent 的执行链路上
-  （真正生效需要让 `runDiscussion` / `runPilot` 装配时读 `agent_skill_toggles`）。这是有意分两步：
-  先把"归属 + 开关"这套配置立住并可验证，再接执行。
+开关若只停在配置层，就是装饰。接线三处：
+
+```
+服务端：listEnabledSkills(agentId, userId)  →  ctx.ai.agentSkills.getEnabled(...)   [宿主代读主库]
+插件：  framework/agent-skills.ts
+          renderEnabledSkills(skills)    纯函数：拼 system 后缀（无技能 → 空串）
+          createAgentSkillResolver(ctx, userId)  本次运行内按 agent 缓存
+        ↓
+        discuss/orchestrator.ts  speak()          system: await agentSkills.systemFor(role.key, role.system)
+        pipeline/orchestrator.ts speak()          同上
+        pipeline/pilot.ts        跨章审阅          同上（ROLE_PREMIERE）
+```
+
+口径：
+- **开着 且 有正文** 才追加；取不到 / 没配 / 正文为空 → **一个字都不加**（fail-closed；
+  绝不凭空给模型塞一条空技能，那只会白烧 token 还干扰它）。
+- 追加块**明确标注是框架注入**（「作者在「智能体 Skills」里配置」），避免模型把它当成用户临时说的话。
+- **一次运行内按 agent 缓存**：一章十几轮发言，不能每轮查一次主库。
+- 读库失败降级成"没有技能"——技能装配是旁路，不能因为它把一次写作整垮。
+- 发言事件的 `meta` 里带上 `技能 <ids>`，作者能直接看出"这次行为为什么变了"。
+- **按智能体隔离**：只有该 agent 名下的技能会进它的 system，不会一把全塞给所有 agent。
+
+**不在范围内（有意）**：技能的 `contextKeys`（要注入地点/物品等实体）尚未在这条链路上生效 ——
+插件侧的 digest 目前只带角色/伏笔/大纲/前章正文。真用到再加，那时要同时改
+`SettingsDigest` 与闸门的 `FIELD_TO_KEY_FAMILY`。
+另：校对门/润色门（`framework/gates.ts`）用的是 `proofreader` 身份、不在智能体清单里，因此不参与技能装配。
+
+**验证**：
+- 单测 `server/framework/agent-skills.test.ts` 13 例（无技能不加、空正文过滤、
+  一次运行只查一次库、查库失败降级、appliedIds 供 meta）
+- 真机 `scripts/verify-agent-skills-execution.mjs`：装一条**探针技能**要求模型在章末原样输出
+  `##SKILL-PROBE-OK##`（这个串模型不可能自己编出来），跑一章后断言：
+  ① 正文里真出现该标记 → 技能正文确实进了模型；
+  ② 写作官的 turn meta 带 `技能 probe-marker`；
+  ③ 同一轮里其他智能体的 meta 不带 → 是**按智能体分配**而不是一把全塞。
+
+## 10. 已知边界 / 下一步
+
 - `skillTargets.declare()` 已作为插件入口接好（`ctx.ai.skillTargets`），
   但现有 agent 名单目前由核心静态声明（展示层目录，与插件 `DesignRole.key` 对齐）。
 - 库不提供"从 URL / 文件安装"，只有表单安装。
+- `contextKeys` 驱动的实体注入未接（见 §9 末）。
+

@@ -36,6 +36,7 @@ import {
 import { registerTool, unregisterTool, getAllToolDefinitions, markPluginTool } from '../ai/tools/registry.js';
 import { registerSkill, unregisterSkill, SKILLS } from '../ai/agents/skills.js';
 import { declareSkillTarget, undeclareSkillTarget, listSkillTargets } from '../ai/agents/skill-targets.js';
+import { listEnabledSkills } from '../services/skill-library.js';
 import { Agent, Runner } from '@openai/agents';
 import { getAIConfig } from '../ai/providers/provider-factory.js';
 import { getSdkProvider } from '../ai/agents/sdk/provider.js';
@@ -318,6 +319,10 @@ export function createServerPluginHost(options: ServerPluginHostOptions = {}): S
         return () => undeclareSkillTarget(def.id);
       },
       getAll: () => listSkillTargets().map((t) => ({ id: t.id, name: t.name, kind: t.kind })),
+    },
+    agentSkills: {
+      // 执行链路用：返回"这个智能体当前启用、且有正文"的技能（库在主库，插件读不到 → 宿主代读）
+      getEnabled: (agentId: string, opts?: { userId?: string }) => listEnabledSkills(agentId, opts?.userId),
     },
     agents: {
       register(def: { name: string }) {
