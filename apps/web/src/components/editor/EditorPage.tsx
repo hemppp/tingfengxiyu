@@ -1,10 +1,11 @@
 import { EditorContent } from '@tiptap/react';
 import { useChapterStore, useProjectStore } from '@/stores';
 import { useChapterJumpStore } from '@/stores/chapterJumpStore';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 import { gsap, useGSAP } from '@/utils/gsap';
+import { pickFallbackChapterId } from '@/utils/chapter';
 import { SelectionMenu } from './SelectionMenu';
 import { Pen } from 'lucide-react';
 import { WriterMode } from './WriterMode';
@@ -64,6 +65,21 @@ export function EditorPage() {
   const jumpAnchor = useChapterJumpStore((s) => s.jumpAnchor);
 
   const currentChapter = getCurrentChapter();
+
+  // ★ 「最近章节」= 当前项目里 updatedAt 最新的那一章。
+  //   早先按钮直接取 `chapters[0]`，但后端 listChapters 按 `order` 升序返回
+  //   （chapter-service.ts），于是它打开的是**第一章** —— 与文案不符：
+  //   空状态页的用途是「接着上次写」，对写作者来说"第一章"没有意义。
+  //   后端 updateChapter 每次保存都会刷新 updatedAt，所以这个定义可靠。
+  //   按 projectId 过滤，与 handleCreateChapter 的计数口径保持一致
+  //   （store 在同一次会话里切换项目时可能短暂混有其它项目的章节）。
+  //   口径与 ChapterEditor 的失效链接兜底共用 pickFallbackChapterId。
+  const recentChapterId = useMemo(() => {
+    const scoped = currentProject
+      ? chapters.filter((c) => c.projectId === currentProject.id)
+      : chapters;
+    return pickFallbackChapterId(scoped);
+  }, [chapters, currentProject]);
 
   const {
     editor,
@@ -454,8 +470,8 @@ export function EditorPage() {
                 <span>新建章节</span>
               </button>
               <button
-                onClick={() => useChapterStore.getState().setCurrentChapter(chapters[0]?.id ?? null)}
-                disabled={chapters.length === 0}
+                onClick={() => useChapterStore.getState().setCurrentChapter(recentChapterId)}
+                disabled={!recentChapterId}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium rounded-xl nm-btn-mist-primary transition-all duration-200 disabled:opacity-40"
               >
                 <BookOpenIcon size={14} />

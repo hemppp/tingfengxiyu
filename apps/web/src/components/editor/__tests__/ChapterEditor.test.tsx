@@ -43,24 +43,35 @@ vi.mock('@/components/editor/EditorPage', () => ({
   EditorPage: () => null,
 }));
 
-const CHAPTER_A = '5fae6a3a-e148-4d87-8fff-3f158ef366b4';
-const CHAPTER_B = 'probe-ch-1';
 const BOOK = '3eb7f978-2137-4ad3-b2cf-6fb5695a0069';
+
+/**
+ * ★ 章节列表顺序刻意设计成「第一个 ≠ 最近的」：
+ *   CHAPTER_FIRST 排在数组首位（模拟后端按 order 升序返回），
+ *   但 CHAPTER_RECENT 的 updatedAt 更大。
+ *   失效 URL 的兜底必须落到 CHAPTER_RECENT —— 早期实现用的是 chapters[0]，
+ *   这个数据集能把两种口径区分开（只断言「落到了某一章」是测不出来的）。
+ */
+const CHAPTER_FIRST = 'probe-ch-1';
+const CHAPTER_RECENT = 'probe-ch-2';
+
+const mkChapter = (id: string, updatedAt: number, content = 'x') => ({ id, updatedAt, content });
 
 beforeEach(() => {
   navigateMock.mockClear();
   setCurrentChapterMock.mockClear();
   chapters = [
-    { id: CHAPTER_A, content: 'a' },
-    { id: CHAPTER_B, content: 'b' },
+    mkChapter(CHAPTER_FIRST, 1000),
+    mkChapter(CHAPTER_RECENT, 2000), // ← 最近编辑
   ];
-  params = { bookId: BOOK, chapterId: CHAPTER_A };
+  params = { bookId: BOOK, chapterId: CHAPTER_FIRST };
 });
 
 describe('ChapterEditor · URL 章节 id 校验', () => {
   it('id 存在 → 选中该章，且不动 URL', async () => {
+    params = { bookId: BOOK, chapterId: CHAPTER_FIRST };
     render(<ChapterEditor />);
-    await waitFor(() => expect(setCurrentChapterMock).toHaveBeenCalledWith(CHAPTER_A));
+    await waitFor(() => expect(setCurrentChapterMock).toHaveBeenCalledWith(CHAPTER_FIRST));
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
@@ -70,24 +81,35 @@ describe('ChapterEditor · URL 章节 id 校验', () => {
 
     await waitFor(() =>
       expect(navigateMock).toHaveBeenCalledWith(
-        `/project/${BOOK}/${CHAPTER_A}`,
+        `/project/${BOOK}/${CHAPTER_RECENT}`,
         { replace: true },
       ),
     );
     // 关键：store 里必须是真实存在的章节，不是那个坏 id
-    expect(setCurrentChapterMock).toHaveBeenCalledWith(CHAPTER_A);
+    expect(setCurrentChapterMock).toHaveBeenCalledWith(CHAPTER_RECENT);
     expect(setCurrentChapterMock).not.toHaveBeenCalledWith('write');
   });
 
+  it('★ 兜底落到「最近编辑」的那章，而不是列表第一个', async () => {
+    // 这里是最容易写错的地方：早期实现用 chapters[0]，会落到 CHAPTER_FIRST
+    params = { bookId: BOOK, chapterId: 'stale-bookmark-id' };
+    render(<ChapterEditor />);
+
+    await waitFor(() => expect(navigateMock).toHaveBeenCalled());
+    // 数组第一个是 CHAPTER_FIRST，但最近的是 CHAPTER_RECENT
+    expect(setCurrentChapterMock).toHaveBeenCalledWith(CHAPTER_RECENT);
+    expect(setCurrentChapterMock).not.toHaveBeenCalledWith(CHAPTER_FIRST);
+  });
+
   it('id 不存在且列表里只有一个别的章 → 落到那一章', async () => {
-    chapters = [{ id: CHAPTER_B, content: 'b' }];
+    chapters = [mkChapter(CHAPTER_FIRST, 1000)];
     params = { bookId: BOOK, chapterId: 'stale-bookmark-id' };
     render(<ChapterEditor />);
 
     await waitFor(() =>
-      expect(navigateMock).toHaveBeenCalledWith(`/project/${BOOK}/${CHAPTER_B}`, { replace: true }),
+      expect(navigateMock).toHaveBeenCalledWith(`/project/${BOOK}/${CHAPTER_FIRST}`, { replace: true }),
     );
-    expect(setCurrentChapterMock).toHaveBeenCalledWith(CHAPTER_B);
+    expect(setCurrentChapterMock).toHaveBeenCalledWith(CHAPTER_FIRST);
     expect(setCurrentChapterMock).not.toHaveBeenCalledWith('stale-bookmark-id');
   });
 
@@ -97,7 +119,7 @@ describe('ChapterEditor · URL 章节 id 校验', () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalledTimes(1));
 
     // 模拟用户切章导致的 store 变化（URL 参数没变）
-    chapters = [{ id: CHAPTER_A, content: 'a2' }, { id: CHAPTER_B, content: 'b' }];
+    chapters = [mkChapter(CHAPTER_FIRST, 3000), mkChapter(CHAPTER_RECENT, 2000)];
     rerender(<ChapterEditor />);
 
     expect(navigateMock).toHaveBeenCalledTimes(1);

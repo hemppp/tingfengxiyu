@@ -1,6 +1,7 @@
 import { useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
+import { useParams } from 'react-router-dom';
 import { CustomHighlight } from '../extensions/CustomHighlight';
 import Underline from '@tiptap/extension-underline';
 import { htmlToText } from '@/services/editor/entityDetector';
@@ -38,6 +39,9 @@ interface UseEditorInstanceOptions {
 export function useEditorInstance({ initialContent, styleProfile }: UseEditorInstanceOptions) {
   // 使用独立 selector，避免订阅整个 store 导致不必要的重渲染
   const currentChapterId = useChapterStore(s => s.currentChapterId);
+  // ★ URL 里的 bookId：冷开（直接刷新深层链接）时 store 尚未恢复，
+  //   而它是同步可用的，作为 projectId 的兜底来源（见 flushToBackend）。
+  const { bookId: urlBookId } = useParams<{ bookId?: string }>();
   const updateChapter = useChapterStore(s => s.updateChapter);
   const setStoreLiveWordCount = useChapterStore(s => s.setLiveWordCount);
   const addWords = useStatsStore(s => s.addWords);
@@ -49,6 +53,8 @@ export function useEditorInstance({ initialContent, styleProfile }: UseEditorIns
   const styleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const currentChapterIdRef = useRef(currentChapterId);
+  // flushToBackend 在 effect 里闭包引用，URL 变化必须走 ref 才能拿到最新值
+  const urlBookIdRef = useRef(urlBookId);
   const updateChapterRef = useRef(updateChapter);
   const addWordsRef = useRef(addWords);
   const styleProfileRef = useRef(styleProfile);
@@ -57,6 +63,10 @@ export function useEditorInstance({ initialContent, styleProfile }: UseEditorIns
   useEffect(() => {
     currentChapterIdRef.current = currentChapterId;
   }, [currentChapterId]);
+
+  useEffect(() => {
+    urlBookIdRef.current = urlBookId;
+  }, [urlBookId]);
 
   useEffect(() => {
     updateChapterRef.current = updateChapter;
@@ -448,9 +458,13 @@ export function useEditorInstance({ initialContent, styleProfile }: UseEditorIns
       // 从 X-Project-Id 头（或 URL :projectId）取 projectId，缺失直接 400。
       // 这里用原生 fetch 绕过了 apiClient，必须手工补上该头 —— 否则这道
       // 「防丢稿」最后防线每次都是 400 静默失败（实测抓包：headerKeys 只有
-      // Content-Type，无 X-Project-Id）。getCurrentProjectId 即 apiClient
-      // dynamicHeaders 所用的同一个 getter，避免重复一套项目上下文逻辑。
-      const projectId = getCurrentProjectId();
+      // Content-Type，无 X-Project-Id）。
+      //
+      // ★ 冷开竞态：直接刷新 /project/:bookId/:chapterId 时 store 是空的，
+      //   ProjectLayout 需要一次异步往返才能把项目元数据写回 store。在这个窗口内
+      //   getCurrentProjectId() 返回 undefined —— 只靠它会漏掉头而 400。
+      //   而 URL 里的 bookId 是**同步可用**的，故优先 store、兜底 URL。
+      const projectId = getCurrentProjectId() || urlBookIdRef.current;
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
       if (projectId) headers['X-Project-Id'] = projectId;

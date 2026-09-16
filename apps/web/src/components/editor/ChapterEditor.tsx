@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { EditorPage } from '@/components/editor/EditorPage';
 import { useChapterStore } from '@/stores';
 import { PATHS } from '@/routes/paths';
+import { pickFallbackChapterId } from '@/utils/chapter';
 import { Loader2, RefreshCw } from 'lucide-react';
 
 /**
@@ -44,15 +45,17 @@ export function ChapterEditor() {
       //   而 flushToBackend 仍按该 id 发 PUT /api/chapters/<乱码>，
       //   配合 silent:true 就是一连串用户完全无感的 400。
       //   处理：纠正 URL 到真实存在的章节（一章都没有则回项目首页），使路由与 store 一致。
+      //   落到**最近编辑过**的那章而非 chapters[0]：失效链接的用户期待「接着上次写」，
+      //   口径与 EditorPage 的「打开最近章节」按钮共用 pickFallbackChapterId。
       if (handledInvalidRef.current) return;
       handledInvalidRef.current = true;
 
-      const fallback = chapters[0]?.id;
+      const fallback = pickFallbackChapterId(chapters);
       navigate(
         fallback ? `${PATHS.project}/${bookId}/${fallback}` : `${PATHS.project}/${bookId}`,
         { replace: true },
       );
-      setCurrentChapter(fallback ?? null);
+      setCurrentChapter(fallback);
       setIsWaitingForData(false);
       setLoadTimeout(false);
       return;
