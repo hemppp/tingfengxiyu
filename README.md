@@ -72,7 +72,7 @@ pnpm build && pnpm start:server   # 生产：静态由基座托管
 
 | 检查项 | 结果 |
 |--------|------|
-| 全工作区类型检查 `pnpm type-check` | ✅ 7/7 包通过 |
+| 全工作区类型检查 `pnpm type-check` | ✅ 8 个包通过（`Scope: 8 of 9`；`apps/desktop` 是空壳、无 package.json） |
 | 服务端构建 `tsc` + 前端构建 `vite build` | ✅ |
 | `GET /api/health` | ✅ 200 · **25 个插件**全部 ok |
 | 插件挂载 | ✅ **20 个内置模块** + AI + 管理 + worldbuilding + plugin-manager + 本地插件（`novel.autowrite` / `novel.bookscan` / `novel.typography`）均以 cordis fiber 挂载 |
@@ -277,7 +277,7 @@ import { BambooMistBackground } from '@/components/backgrounds/BambooMistBackgro
 
 ### 环境要求
 
-- **Node.js 22+**（本项目 Dockerfile 使用 `node:22-alpine`）
+- **本机开发必须 Node 24**（依赖装于 ABI 137，Node 22 会 `ERR_DLOPEN_FAILED`）；Dockerfile 用 `node:22-alpine`，镜像内依赖在镜像内重装，与之一致
 - pnpm >= 8
 
 > ⚠️ **better-sqlite3 是 native 模块，其 ABI 必须与「安装依赖时所用的 Node 大版本」一致。**
@@ -307,16 +307,20 @@ pnpm dev:web
 
 ```bash
 # 一键全量验证（两侧单测 + 记忆不变量抽查，串行；server 套件走 Node 24）
-node scripts/verify-all.mjs        # 等价于 npm run verify:all
+node scripts/verify-all.mjs        # 等价于 pnpm verify:all
 
-# 仅单元测试
-pnpm test
+# 仅单元测试（根 package.json 没有 test 脚本，用 -r 递归跑各子包）
+pnpm -r test
 
-# 查看测试覆盖率
-pnpm test:coverage
+# 只跑一侧
+pnpm --filter @novel/server test
+pnpm --filter @novel/web test
+
+# 查看测试覆盖率（覆盖率脚本仅 web 侧提供）
+pnpm --filter @novel/web test:coverage
 ```
 
-> 单测基线：**server 186 例 / web 139 例**。真机验证脚本（`scripts/verify-*.mjs`）会自建探测账号、复制管理员的 AI 配置、跑完打印清理命令，必须**串行**执行（并发会争模型）。
+> 单测基线：**server 200 例 / web 139 例**。真机验证脚本（`scripts/verify-*.mjs`）会自建探测账号、复制管理员的 AI 配置、跑完打印清理命令，必须**串行**执行（并发会争模型）。
 
 ### 构建生产版本
 
@@ -389,14 +393,14 @@ pnpm build
 ### 运行测试
 
 ```bash
-# 运行所有测试
-pnpm test
+# 运行所有测试（根 package.json 无 test 脚本）
+pnpm -r test
 
-# 监听模式
-pnpm test:watch
+# 监听模式（仅 web 侧提供）
+pnpm --filter @novel/web test:watch
 
-# 生成覆盖率报告
-pnpm test:coverage
+# 生成覆盖率报告（仅 web 侧提供）
+pnpm --filter @novel/web test:coverage
 ```
 
 ### 测试文件位置
