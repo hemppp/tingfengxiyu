@@ -41,6 +41,33 @@ function clampHub(p: HubPos): HubPos {
   };
 }
 
+/**
+ * 正文**实际文字列**的包围盒（所有段落的并集）。
+ *
+ * ★ 别用 `.ProseMirror` 容器去避让：容器比文字宽得多（段落 max-width 34em 且居中），
+ *   按容器避让等于白让掉两侧空白，半径被压小后气泡反而叠在一起。
+ *   2026-09-16 实测 1440px：按容器算半径只能到 216（相邻间隙 1.1px，几乎贴住），
+ *   按文字算能到 240（间隙 6px）—— 差的就是这段白扔的空间。
+ *
+ * 拿不到段落时退回容器；完全没有编辑器（非手写页）返回 null = 不收紧。
+ */
+function getProseTextBox(): { left: number; right: number } | null {
+  const ps = document.querySelectorAll('.ProseMirror p');
+  let left = Infinity;
+  let right = -Infinity;
+  ps.forEach((p) => {
+    const r = p.getBoundingClientRect();
+    if (r.width <= 0) return;
+    if (r.left < left) left = r.left;
+    if (r.right > right) right = r.right;
+  });
+  if (Number.isFinite(left)) return { left, right };
+  const el = document.querySelector('.ProseMirror');
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return { left: r.left, right: r.right };
+}
+
 function loadHubPos(): HubPos {
   const fallback = { x: DEFAULT_HUB_X, y: Math.round(window.innerHeight / 2) };
   try {
@@ -131,6 +158,13 @@ export function FloatingBubbles({ panels, openKeys, onToggle }: FloatingBubblesP
   const [open, setOpen] = useState(false);
   const [hubPos, setHubPos] = useState<HubPos>(loadHubPos);
   const [dragging, setDragging] = useState(false);
+  // ★ 视口尺寸进 state：展开方向、可用半径、正文避让全都依赖它。
+  //   旧版直接读 window.innerWidth 且不订阅 resize —— 拖完窗口几何停在旧值上，
+  //   方向/半径都不重算（那次 resize 只钳了罗盘位置）。
+  const [viewport, setViewport] = useState(() => ({
+    w: typeof window === 'undefined' ? 1440 : window.innerWidth,
+    h: typeof window === 'undefined' ? 900 : window.innerHeight,
+  }));
   const closeTimer = useRef<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -151,9 +185,12 @@ export function FloatingBubbles({ panels, openKeys, onToggle }: FloatingBubblesP
 
   useEffect(() => () => cancelClose(), [cancelClose]);
 
-  // 视口变化：重新钳制，避免罗盘被挤到屏幕外
+  // 视口变化：钳罗盘位置 + 重算几何（方向/半径/避让都跟着变）
   useEffect(() => {
-    const onResize = () => { setHubPos((p) => clampHub(p)); };
+    const onResize = () => {
+      setHubPos((p) => clampHub(p));
+      setViewport({ w: window.innerWidth, h: window.innerHeight });
+    };
     window.addEventListener('resize', onResize);
     return () => { window.removeEventListener('resize', onResize); };
   }, []);
@@ -226,48 +263,36 @@ export function FloatingBubbles({ panels, openKeys, onToggle }: FloatingBubblesP
 
   // ---- 轮盘几何：随数量自适应，相邻卫星不重叠 ----
   // 展开方向随罗盘所在半屏自动换向：贴右半屏时向左铺，避免轮盘整个跑出视口
-  const dir: 1 | -1 = hubPos.x > window.innerWidth / 2 ? -1 : 1;
+  const dir: 1 | -1 = hubPos.x > viewport.w / 2 ? -1 : 1;
   const n = panels.length;
   const spread = Math.min(180, 40 + n * 12); // 度（半圆，±spread/2）
-  // ★ 避让正文列（D3，2026-09-16 实测 520px + 1440px）：
-  //   罗盘贴左缘展开时，卫星会铺到正文列上把字盖住。原版只按「到屏幕边缘」
-  //   算半径，实测 1440 宽屏也会压入正文 20px —— 所以不是窄屏专属问题，
-  //   宽窄屏都要避让。
-  //
-  //   ⚠️ 第一版按「屏幕宽 - 固定 34em」估算，是错的：520px 窄屏下
-  //      (520-544)/2 为负，被 Math.max(64,…) 兜到 64，而正文实际占满 312px、
-  //      左缘在 104，于是展开后气泡右缘 124 仍压入正文 20px（实测 overlapX=+20）。
-  //   改为「运行时量正文真实左缘」，不再依赖任何硬编码宽度。
-  const isNarrow = window.innerWidth < 900;
-  // 展开方向决定要避让哪一侧的正文边缘
-  const proseEl = document.querySelector('.ProseMirror');
-  const proseRect = proseEl ? proseEl.getBoundingClientRect() : null;
-  const proseLeft = proseRect ? proseRect.left : 0;
-  const proseRight = proseRect ? proseRect.right : window.innerWidth;
-  const maxR = Math.max(
-    120,
-    Math.floor(dir === 1 ? window.innerWidth - hubPos.x : hubPos.x) - 64,
-  );
-  // 向右展开时避让正文左缘；向左展开时避让正文右缘。留 GAP 避免贴着字。
-  const GAP = 10;
-  const avoidR = dir === 1
-    ? Math.floor(proseLeft - hubPos.x - BUBBLE / 2 - GAP)
-    : Math.floor(hubPos.x - proseRight - BUBBLE / 2 - GAP);
-  // 拿不到正文（非编辑器页）时 Inf 等于不收紧，行为与旧版一致
-  const proseMaxR = proseRect ? Math.max(BUBBLE, avoidR) : Infinity;
-  // 窄屏同时收窄扇形张角：半径压小后若还铺 ±90°，相邻卫星会叠在一起；
-  // 收窄到 70° 让它们挤在罗盘附近一小段弧上，整体仍不越入正文列。
-  const effSpread = isNarrow ? Math.min(spread, 70) : spread;
-  const effArcRad = (effSpread * Math.PI) / 180;
-  const effStep = n > 1 ? effArcRad / (n - 1) : effArcRad;
-  const radius = Math.max(
-    BUBBLE, // 底线：半径至少一个气泡直径，否则卫星全叠在罗盘上
-    Math.min(
-      maxR,
-      proseMaxR,
-      Math.max(130, Math.ceil(MIN_CHORD / (2 * Math.sin(effStep / 2)))),
-    ),
-  );
+
+  // ★ 张角只能"往大里要"，不能往小里收。
+  //   相邻弦长 = 2R·sin(张角 / (2(n−1)))：张角越小 → 夹角越小 → 弦长越短 → 越容易叠。
+  //   旧版对窄屏把张角收到 70°（本意是"让气泡挤在罗盘附近、别越入正文"），
+  //   方向正好反了，是**加重**重叠的。2026-09-16 实测 900px 下 15/15 对相邻气泡
+  //   全部重叠（间隙 −21px），1200px 下同样 15/15（−8.5px）。
+  const arcRad = (spread * Math.PI) / 180;
+  const step = n > 1 ? arcRad / (n - 1) : arcRad;
+
+  // ① 到屏幕边缘：别让轮盘整个跑出视口
+  const edgeR = Math.max(120, Math.floor(dir === 1 ? viewport.w - hubPos.x : hubPos.x) - 64);
+  // ② 避让正文 —— 量的是**实际文字列**而不是 .ProseMirror 容器（原因见 getProseTextBox）
+  const proseBox = getProseTextBox();
+  const GAP = 10; // 气泡边缘到文字边缘的净空
+  const proseR = proseBox
+    ? Math.floor(
+        dir === 1
+          ? proseBox.left - hubPos.x - BUBBLE / 2 - GAP
+          : hubPos.x - proseBox.right - BUBBLE / 2 - GAP,
+      )
+    : Infinity;
+  const proseMaxR = Number.isFinite(proseR) ? Math.max(BUBBLE, proseR) : Infinity;
+  // ③ 满足最小弦长所需的半径。
+  //   ★ 半径被 ①② 压到 ③ 以下时气泡必然偏挤 —— 这是**有意取舍**：
+  //     正文可读性优先于轮盘美观，宁可气泡挤一点也不去压字。
+  const neededR = Math.max(130, Math.ceil(MIN_CHORD / (2 * Math.sin(step / 2))));
+  const radius = Math.max(BUBBLE, Math.min(edgeR, proseMaxR, neededR));
 
   const hubClick = (key: string) => {
     onToggle(key);
@@ -316,7 +341,8 @@ export function FloatingBubbles({ panels, openKeys, onToggle }: FloatingBubblesP
         }}
       >
         {panels.map((p, idx) => {
-          const aDeg = -effSpread / 2 + (effSpread * idx) / (n - 1); // 屏幕坐标：0° = 正右方
+          // Math.max(1, n-1)：只有一个面板时避免 0/0（NaN 会让气泡消失）
+          const aDeg = -spread / 2 + (spread * idx) / Math.max(1, n - 1); // 屏幕坐标：0° = 正右方
           const rad = (aDeg * Math.PI) / 180;
           const x = Math.cos(rad) * radius * dir;
           const y = Math.sin(rad) * radius;

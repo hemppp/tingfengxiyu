@@ -29,6 +29,18 @@ const categoryConfig: Record<QuickPhrase['category'], { icon: typeof User; color
   custom: { icon: Sparkles, color: '#6b7280', label: '自定义' },
 };
 
+/**
+ * 气泡的固定几何（`position: fixed`，见下方 style）。
+ *
+ * ★ 编辑器必须据此在滚动内容底部预留空隙 —— 气泡是**覆盖层**，不在文档流里。
+ *   不预留的话正文滚到底时末段会被它压住（2026-09-16 实测 520px 窄屏压住 39px）。
+ *   所以这两个值导出给 EditorPage 用，避免改了一处忘了另一处。
+ */
+export const QP_BUBBLE_BOTTOM = 80;   // 气泡底边距视口底
+export const QP_BUBBLE_HEIGHT = 44;   // 胶囊高（对应 h-11）
+/** 气泡顶边距视口底的距离 —— 正文必须停在它上面才不被遮 */
+export const QP_BUBBLE_CLEARANCE = QP_BUBBLE_BOTTOM + QP_BUBBLE_HEIGHT;
+
 export function QuickPhraseBubble({ editor }: QuickPhraseBubbleProps) {
   const projectId = useCurrentProjectId();
   const { phrases, addPhrase, removePhrase, incrementUsage, setIsGenerating, isGenerating } = useQuickPhraseStore();
@@ -221,7 +233,8 @@ export function QuickPhraseBubble({ editor }: QuickPhraseBubbleProps) {
       `}
       style={{
         left: '50%',
-        bottom: '80px',
+        // 用常量而非字面量：EditorPage 靠同一个值算正文底部预留（见 QP_BUBBLE_CLEARANCE）
+        bottom: QP_BUBBLE_BOTTOM,
         transform: 'translateX(-50%)',
       }}
       onMouseEnter={handleMouseEnter}

@@ -1,7 +1,7 @@
 import { EditorContent } from '@tiptap/react';
 import { useChapterStore, useProjectStore } from '@/stores';
 import { useChapterJumpStore } from '@/stores/chapterJumpStore';
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
 import { gsap, useGSAP } from '@/utils/gsap';
@@ -13,7 +13,7 @@ import { ForeshadowWarning } from '@/components/foreshadow/ForeshadowWarning';
 import { StyleAdvisor } from './panels/StyleAdvisor';
 import { styleService } from '@/services/editor/styleService';
 import type { StyleProfile } from '@/services/editor/styleService';
-import { QuickPhraseBubble } from './panels/QuickPhraseBubble';
+import { QuickPhraseBubble, QP_BUBBLE_CLEARANCE } from './panels/QuickPhraseBubble';
 import { PluginEditorToolbar } from './PluginEditorToolbar';
 import { EditorPanelRail } from './EditorPanelRail';
 import { useEditorInstance } from './hooks/useEditorInstance';
@@ -53,6 +53,9 @@ export function EditorPage() {
   const editorAreaRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const scrollHostRef = useRef<HTMLDivElement>(null);
+  /** 正文底部需要预留的高度（px），用来给「快捷短语」浮层让位 —— 推导见下方 useLayoutEffect */
+  const [qpReserve, setQpReserve] = useState(0);
   const navigate = useNavigate();
   // 拆 selector：原一次性订阅整个 store 导致 addWords、setXxx 都触发 re-render。
   // 现在每个 selector 独立，只有对应字段变化才 re-render。
@@ -215,6 +218,36 @@ export function EditorPage() {
       { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out' }
     );
   }, [currentChapterId]);
+
+  // ★ 给「快捷短语」浮层让出底部空间。
+  //   气泡是 position:fixed 的覆盖层（见 QuickPhraseBubble），不在文档流里，
+  //   正文滚到底时末段会被它压住 —— 实测 520px 窄屏压住 39px（宽屏只是因为内容短才没暴露）。
+  //
+  //   ★ 为什么"量"而不是写死常量：预留量 = 滚动容器底边 → 气泡顶边 的距离。
+  //     气泡顶边固定在视口底上方 QP_BUBBLE_CLEARANCE，但滚动容器底边到视口底的距离
+  //     随布局变（侧栏折叠 / 沉浸模式 / 状态栏），写死一个数在别的布局下必然对不齐。
+  useLayoutEffect(() => {
+    const host = scrollHostRef.current;
+    if (!host) return;
+    // GAP 取 24 而不是"看着够"的十几：气泡自身有漂浮动画
+    // （nm-qp-drift-a/b，垂直方向最大 ±12px），按静止位置算会在漂到最低点时贴住字。
+    const GAP = 24; // 正文末行与气泡之间的安全间隙（含动画位移余量）
+    const recompute = () => {
+      const hostBottom = host.getBoundingClientRect().bottom;
+      const bubbleTop = window.innerHeight - QP_BUBBLE_CLEARANCE;
+      setQpReserve(Math.max(0, Math.round(hostBottom - bubbleTop) + GAP));
+    };
+    recompute();
+    // ★ box:'border-box'：下面要改的正是这个元素的 paddingBottom，
+    //   用默认的 content-box 会被自己的改动反复触发（padding 变 → 内容盒变 → 回调 → …）
+    const ro = new ResizeObserver(recompute);
+    ro.observe(host, { box: 'border-box' });
+    window.addEventListener('resize', recompute);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', recompute);
+    };
+  }, []);
 
   // 时间线跳转：监听 jumpSignal，定位到目标段落并高亮 3 秒
   // jumpSignal 从 0 起步，首次跳转才触发；避免挂载时误触
@@ -557,8 +590,16 @@ export function EditorPage() {
         >
           {/* 内层：滚动容器（独立 overflow，内部 padding） */}
           <div
+            ref={scrollHostRef}
             className="nm-editor-scroll-host"
-            style={{ paddingLeft: 'clamp(16px, 4vw, 48px)', paddingRight: 'clamp(16px, 4vw, 48px)', paddingTop: 'clamp(20px, 4vh, 32px)', paddingBottom: 'clamp(20px, 4vh, 32px)' }}
+            style={{
+              paddingLeft: 'clamp(16px, 4vw, 48px)',
+              paddingRight: 'clamp(16px, 4vw, 48px)',
+              paddingTop: 'clamp(20px, 4vh, 32px)',
+              // 底部取「基础呼吸留白」与「快捷短语气泡预留量」的较大者 —— 后者由上面的
+              // useLayoutEffect 量出（写死会在别的布局下对不齐，原因见那段注释）。
+              paddingBottom: `max(clamp(20px, 4vh, 32px), ${qpReserve}px)`,
+            }}
           >
 
             <EditorContent editor={editor} />
