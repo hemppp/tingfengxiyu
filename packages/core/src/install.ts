@@ -21,7 +21,7 @@ import type { PluginManifest } from './manifest.js';
 import { satisfiesMinVersion } from './manifest.js';
 import { HOST_VERSION } from './loader.js';
 
-/** 标准版本号（随标准正文 docs/plugin-standard.md 同步演进） */
+/** 标准版本号（随标准正文 docs/architecture/plugin-standard.md 同步演进） */
 export const INSTALL_STANDARD_VERSION = '1.0.0';
 
 /** 标准错误码：出现任何一个都表示插件被拒绝安装/挂载（不会拖垮宿主） */

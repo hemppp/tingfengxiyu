@@ -26,7 +26,7 @@ export interface DesignRole {
   /** 允许调用的工具；设定管家需要读库 */
   tools?: string[];
   /**
-   * 记忆权限（docs/multi-agent-memory-architecture.md §4.1 权限矩阵）。
+   * 记忆权限（docs/architecture/multi-agent-memory-architecture.md §4.1 权限矩阵）。
    * ★ **缺省 = 空集（fail-closed）**：新增角色忘记声明，读不到 L1，而不是默认全读。
    */
   memory?: RoleMemoryPolicy;

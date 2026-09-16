@@ -12,7 +12,7 @@
 //   · 明确标注是**框架注入**，并写清是谁启用的，避免模型把这当成用户临时说的话。
 //
 // 边界（有意不做的）：技能的 `contextKeys`（要注入地点/物品等实体）**尚未**在这条链路上生效 ——
-// 插件侧的 digest 目前只带角色/伏笔/大纲/前章正文。等真用到再加，见 docs/skills-library.md §9。
+// 插件侧的 digest 目前只带角色/伏笔/大纲/前章正文。等真用到再加，见 docs/architecture/skills-library.md §9。
 // ============================================================
 
 import type { ServerPluginContext } from '@novel/core';

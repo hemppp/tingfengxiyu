@@ -2,7 +2,7 @@
 // 本地插件扫描器 —— apps/plugins/local/{dirName}/ 目录即插件
 //
 // AI 对话创建的插件（create_plugin 工具）落盘到此处，宿主启动时扫描加载。
-// 目录名 {dirName} 允许两种形态（见 docs/plugin-standard.md G2 身份门）：
+// 目录名 {dirName} 允许两种形态（见 docs/architecture/plugin-standard.md G2 身份门）：
 //   完整 id（如 novel.bookscan，AI create_plugin 形态）或 id 尾段（如 typography，手写形态）。
 // 目录结构：
 //   apps/plugins/local/{dirName}/

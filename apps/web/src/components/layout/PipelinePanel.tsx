@@ -13,7 +13,7 @@
 // PipelinePanel —— 多智能体协作流水线的进度与闸门
 //
 // 位置：AI 写作工作台的中栏（正文方块上方）。设计见
-// docs/ai-writing-multiagent-pipeline.md。
+// docs/architecture/ai-writing-multiagent-pipeline.md。
 //
 // 它只做三件事：
 //   1. 显示 7 个阶段走到哪了（含"已批准但基线已变"的过期提醒）

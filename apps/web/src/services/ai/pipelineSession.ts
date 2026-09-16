@@ -1,7 +1,7 @@
 // ============================================================
 // 多智能体协作流水线 —— 前端客户端
 //
-// 对接插件路由（设计见 docs/ai-writing-multiagent-pipeline.md）：
+// 对接插件路由（设计见 docs/architecture/ai-writing-multiagent-pipeline.md）：
 //   GET  /api/plugins/autowrite/pipeline           读状态
 //   POST /api/plugins/autowrite/pipeline/start     启动 / 续跑
 //   POST /api/plugins/autowrite/pipeline/advance   跑一段（SSE）

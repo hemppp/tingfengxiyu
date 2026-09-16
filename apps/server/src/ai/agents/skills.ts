@@ -41,7 +41,7 @@ export interface SkillDef {
 /**
  * 预设技能列表。
  *
- * ★ 2026-09 技能内容已全部剥离至 novel.autowrite 插件（docs/autowrite-plugin-framework.md）：
+ * ★ 2026-09 技能内容已全部剥离至 novel.autowrite 插件（docs/architecture/ai-writing-architecture.md）：
  *   本表只剩注册表机制（registerSkill/unregisterSkill/查询），内容归插件持有。
  *   插件经 ctx.ai.skills.register 注册，dispose 时自动注销。
  *

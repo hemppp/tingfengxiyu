@@ -192,7 +192,7 @@ export function createAutowriteRouter(ctx: ServerPluginContext): Hono {
   });
 
   // ============================================================
-  // 多智能体协作流水线（设计见 docs/ai-writing-multiagent-pipeline.md）
+  // 多智能体协作流水线（设计见 docs/architecture/ai-writing-multiagent-pipeline.md）
   //
   //   GET  /pipeline            读状态（工作台挂载时拉一次）
   //   POST /pipeline/start      启动 / 续跑（写基线指纹）
@@ -285,7 +285,7 @@ export function createAutowriteRouter(ctx: ServerPluginContext): Hono {
 
   // ---- 读状态 ----
   // ---- 记忆审计 / 冲突（分层记忆架构的用户可见面）----
-  // 设计见 docs/multi-agent-memory-architecture.md：`memory_audit` 记「谁在什么用途下读了/被拒了什么」，
+  // 设计见 docs/architecture/multi-agent-memory-architecture.md：`memory_audit` 记「谁在什么用途下读了/被拒了什么」，
   // `fact_conflicts` 记「同批次同槽位矛盾」。以前只能在库里看，这里给它一个面。
   router.get('/memory', async (c) => {
     const projectId = c.req.header('x-project-id');

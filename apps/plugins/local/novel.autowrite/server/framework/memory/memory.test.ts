@@ -1,7 +1,7 @@
 /**
  * @fileoverview 分层记忆 · 单测
  *
- * 覆盖 docs/multi-agent-memory-architecture.md 的 6 条不变量与防污染清单里**可自动化**的部分：
+ * 覆盖 docs/architecture/multi-agent-memory-architecture.md 的 6 条不变量与防污染清单里**可自动化**的部分：
  *   · 闸门：未声明 fail-closed / 白名单 / 宽权限 / 非法 reason / 叙事式单独闸门 / 放行与拒绝都记账
  *   · L2 隔离：A 写的 B 读不到；跨智能体写被拒；双式（fact_ref 与 experience）互不覆盖
  *   · 水车：斗数固定、幂等舀入、出界一斗

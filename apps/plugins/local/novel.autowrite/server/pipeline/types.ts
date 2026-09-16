@@ -1,7 +1,7 @@
 // ============================================================
 // 多智能体协作流水线 —— 类型与常量
 //
-// 设计见 docs/ai-writing-multiagent-pipeline.md。这里是它的可执行部分：
+// 设计见 docs/architecture/ai-writing-multiagent-pipeline.md。这里是它的可执行部分：
 //   7 个阶段（StageKey）+ 4 道用户闸门（G1–G4）+ 闸门三态。
 //
 // ★ 与 `discuss/orchestrator.ts`（单章闭环）的关系：

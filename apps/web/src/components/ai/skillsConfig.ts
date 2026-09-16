@@ -44,7 +44,7 @@ export interface SkillMeta {
   source: 'builtin' | 'plugin';
 }
 
-/** 技能图标：内容归插件所有（2026-09 剥离，docs/autowrite-plugin-framework.md §7），
+/** 技能图标：内容归插件所有（2026-09 剥离，docs/architecture/ai-writing-architecture.md），
  *  经插件 web 面 ctx.registerSkillIcons 注册；此处只留兜底表（未知技能用 Puzzle）。 */
 const SKILL_ICONS: Record<string, LucideIcon> = {};
 

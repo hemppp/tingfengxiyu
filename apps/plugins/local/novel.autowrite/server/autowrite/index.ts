@@ -11,7 +11,7 @@
 //
 //   `AutoWriteWorkbench` 已不连这套流程（其计划卡读的是会话结论，不是 `/batches`）。
 //   保留原因：`/batches` 状态路由与 FlowStore 的审计台账将来可能迁到讨论链路复用。
-//   → 取舍决策见 `docs/ai-writing-handover.md` §2 / §8-1。**新代码不要再往这里加东西。**
+//   → 取舍决策见 `docs/handover/ai-writing-handover.md` §2 / §8-1。**新代码不要再往这里加东西。**
 //
 // FlowSpec（声明）+ 8 个流程工具（裁决式执行）。
 // 工具注册走 ctx.effect 包裹，插件禁用/卸载时随 DisposerBag 自动注销。

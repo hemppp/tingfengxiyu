@@ -2,7 +2,7 @@
 
 > AI 辅助小说创作助手 — 空山雨后主题
 
-> **接手开发请先读 [`docs/ai-writing-handover.md`](docs/ai-writing-handover.md)** —— AI 写作模块的现状、未完成清单与已知陷阱都在那里。
+> **接手开发请先读 [`docs/handover/ai-writing-handover.md`](docs/handover/ai-writing-handover.md)** —— AI 写作模块的现状、未完成清单与已知陷阱都在那里。
 > 本文档是产品与架构总览；两者不一致时以接手必读为准。
 
 ---
@@ -77,7 +77,7 @@ pnpm build && pnpm start:server   # 生产：静态由基座托管
 | `GET /api/health` | ✅ 200 · **25 个插件**全部 ok |
 | 插件挂载 | ✅ **20 个内置模块** + AI + 管理 + worldbuilding + plugin-manager + 本地插件（`novel.autowrite` / `novel.bookscan` / `novel.typography`）均以 cordis fiber 挂载 |
 | 业务链路（登录→建项目→读取→删除） | ✅ 200/201/200/200 |
-| AI 写作链路（多角色讨论 → 三道门 → 交付 → 实体沉淀） | ✅ 真机验证，逐条证据见 `docs/verify-report-*.md` |
+| AI 写作链路（多角色讨论 → 三道门 → 交付 → 实体沉淀） | ✅ 真机验证，逐条证据见 `docs/reports/verify-report-*.md` |
 | 生产静态托管 / SPA 回退 / 未授权 401 | ✅ |
 
 ## 🛠 技术栈
@@ -123,8 +123,8 @@ NovelMuse/
 │   ├── core/             # 纯契约包（manifest zod + 类型 + 浏览器安全入口 @novel/core/web）
 │   ├── db/               # 数据库 Schema 与迁移
 │   └── shared/           # 共享类型定义
-├── scripts/              # 验证与运维脚本（verify-*.mjs / run-chapters.mjs / clean-*.mjs）
-├── docs/                 # 项目文档；AI 写作模块以 ai-writing-handover.md 为准
+├── scripts/              # 验证与运维脚本（verify/ 验证 · tools/ 工具 · docker/ 构建 · desktop/ 桌面 · e2e/ 端到端）
+├── docs/                 # 项目文档（architecture/ 架构 · design/ 设计 · reports/ 报告 · handover/ 交接）
 └── README.md             # 本文件
 ```
 

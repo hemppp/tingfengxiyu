@@ -5,7 +5,7 @@
 //   GET  /api/plugins/autowrite/memory                     读审计 + 冲突 + 各角色 L2 条数
 //   POST /api/plugins/autowrite/memory/conflicts/resolve    裁掉一条冲突
 //
-// 设计见 docs/multi-agent-memory-architecture.md §8.3：这些数据以前只能查库看，
+// 设计见 docs/architecture/multi-agent-memory-architecture.md §8.3：这些数据以前只能查库看，
 // 现在给它一个面 —— **可信的隔离需要看得见**（看不见的审计等于没有）。
 // ============================================================
 

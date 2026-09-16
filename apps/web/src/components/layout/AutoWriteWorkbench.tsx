@@ -280,7 +280,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
   const onTurnRef = useRef<(t: PipelineTurn) => void>(() => {});
 
   // ============================================================
-  // 分页工作区（AI 写作模式专用，设计见 docs/ui-tab-workspace-design.md）
+  // 分页工作区（AI 写作模式专用，设计见 docs/design/ui-tab-workspace-design.md）
   //
   //   结构：AI 交流栏 │ 气泡列 │ 正文（常驻，永不卸载）│ 辅助分页区
   //

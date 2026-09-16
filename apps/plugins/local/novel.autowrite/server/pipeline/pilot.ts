@@ -1,7 +1,7 @@
 // ============================================================
 // Stage5 · 前三章试写（pilot）
 //
-// 设计（docs/ai-writing-multiagent-pipeline.md §Stage5）：
+// 设计（docs/architecture/ai-writing-multiagent-pipeline.md §Stage5）：
 //   写作智能体派 3 个子代理，**串行**写前三章 → 每章各自走现有的
 //   意图门 → 校对门 → 润色门 → 交付 → 实体沉淀 → 三章齐了再加一道
 //   `premiere-reviewer` **跨章审阅** → 停下等作者（G4）。

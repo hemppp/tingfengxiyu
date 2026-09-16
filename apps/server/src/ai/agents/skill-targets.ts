@@ -1,7 +1,7 @@
 // ============================================================
 // 技能目标（智能体清单）—— 「智能体 skills」面板里那一列
 //
-// 名词口径（见 docs/skills-library.md）：
+// 名词口径（见 docs/architecture/skills-library.md）：
 //   · **智能体**（assistant）：对话本体那一个，kind = 'assistant'
 //   · **agent**：各个子智能体（写作官等），kind = 'agent'，由某个插件声明
 //

@@ -1,4 +1,4 @@
-// 剥离自核心 skills.ts 的「角色分析师」——内容原样迁移（docs/autowrite-plugin-framework.md §7）
+// 剥离自核心 skills.ts 的「角色分析师」——内容原样迁移（docs/architecture/ai-writing-architecture.md）
 import type { SkillDef } from '../framework/types.js';
 
 export const characterAnalyst: SkillDef = {

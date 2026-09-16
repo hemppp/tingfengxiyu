@@ -1,6 +1,6 @@
 // ============================================================
 // 分层记忆 · 类型与常量
-// 设计：docs/multi-agent-memory-architecture.md
+// 设计：docs/architecture/multi-agent-memory-architecture.md
 //
 // 两条铁律写在类型里，让越权**编不过**：
 //   · 传给智能体的句柄没有「写全局」的方法

@@ -1,7 +1,7 @@
 // ============================================================
 // 流转状态 KV 存储（plugin_kv，项目隔离）
 //
-// key 约定（docs/autowrite-plugin-framework.md §6.2）：
+// key 约定（docs/architecture/ai-writing-architecture.md）：
 //   batch:<id>            批次计划与进度指针
 //   flow:<batchId>:<order> 单章流转状态（步骤/草稿/审查结论/计数）
 //   audit:<batchId>       审计台账（每步留痕，强制开启）

@@ -1,7 +1,7 @@
 // ============================================================
 // novel.autowrite 挂载冒烟测试 —— 技能剥离的验收关卡
 //
-// 验收锚点（docs/autowrite-plugin-framework.md §7 / §11-A）：
+// 验收锚点（docs/architecture/ai-writing-architecture.md）：
 //   1. 插件经本地扫描真实挂载（health 中 status=ok）
 //   2. 核心技能注册表内容为空、9 个技能全部由插件注册（source=plugin）
 //   3. 8 个剥离技能 id/名称原样保留（前端选择器无感）

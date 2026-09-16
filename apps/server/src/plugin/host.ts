@@ -547,7 +547,7 @@ export function createServerPluginHost(options: ServerPluginHostOptions = {}): S
     hooks: hookBus,
 
     async mount(entries: PluginEntry[]) {
-      // ── 安装管线（novel-plugin-standard/1.0，见 docs/plugin-standard.md）──
+      // ── 安装管线（novel-plugin-standard/1.0，见 docs/architecture/plugin-standard.md）──
       // 逐门校验：任何一门失败都只隔离该插件并记录标准错误码，绝不中断整批挂载。
       //   G0 Manifest 门 → G2 身份门（重复 id）→ G3 版本门 + G4 静态依赖门
       //   → G4/G5 挂载期门（拓扑排序 + 环检测 + 注入校验）→ mountEntry（load/apply 隔离）

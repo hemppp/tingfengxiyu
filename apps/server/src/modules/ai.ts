@@ -42,7 +42,7 @@ import { assertSafeOutboundUrl, assertSafeOutboundUrlDeep } from '../lib/ssrf-gu
 import { verifyProjectOwnership } from '../lib/ownership.js';
 import { buildProjectContext, checkOutlineExists } from '../ai/context-builder.js';
 import { listSkillMetas } from '../ai/agents/skills.js';
-// 集中式 Skills 库（docs/skills-library.md）：库的读写 + 每个智能体的开关
+// 集中式 Skills 库（docs/architecture/skills-library.md）：库的读写 + 每个智能体的开关
 import {
   listLibrary, listOrphanOwners, installSkill, removeSkill,
   listTargets, getTargetSkills, setToggle, setAllToggles,
@@ -1663,7 +1663,7 @@ aiRouter.get('/skills', requireAuth, (c) => {
 // ============================================================
 // 集中式 Skills 库 + 每个智能体的技能开关
 //
-// 设计见 docs/skills-library.md。三处入口对应三个问题：
+// 设计见 docs/architecture/skills-library.md。三处入口对应三个问题：
 //   · 库里有什么、归属谁     → /skill-library
 //   · 装了/删了              → /skill-library/install、/skill-library/:id
 //   · 某个智能体开了哪些     → /skill-targets、/skill-targets/:agentId、.../toggle

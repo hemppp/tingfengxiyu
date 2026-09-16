@@ -483,7 +483,7 @@ export const userSettings = sqliteTable('user_settings', {
 });
 
 // ============================================================
-// 分层记忆（docs/multi-agent-memory-architecture.md）
+// 分层记忆（docs/architecture/multi-agent-memory-architecture.md）
 //
 // 三张表对应架构里的三层关注点：
 //   agent_memory   L2 智能体专属记忆（agent_id 必填 = 隔离的物理保证）
@@ -547,7 +547,7 @@ export const factConflicts = sqliteTable('fact_conflicts', {
 // ============================================================
 // 集中式 Skills 库（主库，全局）
 //
-// 口径（docs/skills-library.md）：
+// 口径（docs/architecture/skills-library.md）：
 //   · 一处集中存放**所有**技能，智能体与各 agent 都从这里取自己那一类；
 //   · 库**只支持安装与删除**（不提供编辑）—— 技能正文属于"装进来的东西"，
 //     就地改会让库与技能来源脱节；

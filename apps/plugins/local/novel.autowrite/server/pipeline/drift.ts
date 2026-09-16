@@ -1,7 +1,7 @@
 // ============================================================
 // Stage4 · 偏离核查（drift）—— 三层、逐条断言式
 //
-// 设计见 docs/ai-writing-multiagent-pipeline.md §4 Stage4。
+// 设计见 docs/architecture/ai-writing-multiagent-pipeline.md §4 Stage4。
 //
 // ★ 为什么必须"逐条断言"而不是"你看有没有跑偏"：
 //   后者是开放式提问，模型必然回"整体符合"—— 那种核查等于没有。

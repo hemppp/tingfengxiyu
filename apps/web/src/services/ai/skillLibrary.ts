@@ -1,7 +1,7 @@
 // ============================================================
 // 集中式 Skills 库 —— 前端客户端
 //
-// 对接后端路由（设计见 docs/skills-library.md）：
+// 对接后端路由（设计见 docs/architecture/skills-library.md）：
 //   GET    /api/ai/skill-library              库里全部技能（按两类分开）+ 孤儿归属
 //   POST   /api/ai/skill-library/install      安装 / 重装
 //   DELETE /api/ai/skill-library/:id          删除

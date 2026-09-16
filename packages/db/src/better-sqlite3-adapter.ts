@@ -402,7 +402,7 @@ function bootstrapTables(sqlite: any): void {
       updated_at INTEGER NOT NULL
     )`,
 
-    // 集中式 Skills 库（docs/skills-library.md）+ 每个智能体的技能开关
+    // 集中式 Skills 库（docs/architecture/skills-library.md）+ 每个智能体的技能开关
     // ★ 必须与 drizzle/0001_skills_library.sql 保持一致（打包版没有迁移目录，走这里）
     `CREATE TABLE IF NOT EXISTS skill_library (
       id TEXT PRIMARY KEY NOT NULL,
