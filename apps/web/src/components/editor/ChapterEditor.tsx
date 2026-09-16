@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { EditorPage } from '@/components/editor/EditorPage';
 import { useChapterStore } from '@/stores';
+import { PATHS } from '@/routes/paths';
 import { Loader2, RefreshCw } from 'lucide-react';
 
 /**
@@ -9,20 +10,49 @@ import { Loader2, RefreshCw } from 'lucide-react';
  *
  * 数据加载由 syncService（ProjectLayout 中调用）统一负责，
  * 本组件只负责设置当前章节 ID，避免双入口竞态导致旧项目数据残留。
+ *
+ * ★ URL 的 chapterId 只是**进入时的初始值**：左侧章节树切章时只改 store、不改 URL
+ *   （见 LeftSidebar 的 handleSelectChapter），所以本组件不能持续把 store 当作 URL 的镜像
+ *   去校正 —— 只在"数据就绪但该 id 查无此章"时纠正一次，之后完全交还给 store。
  */
 export function ChapterEditor() {
-  const { chapterId } = useParams<{ bookId: string; chapterId: string }>();
+  const { bookId, chapterId } = useParams<{ bookId: string; chapterId: string }>();
+  const navigate = useNavigate();
   const chapters = useChapterStore(s => s.chapters);
   const setCurrentChapter = useChapterStore(s => s.setCurrentChapter);
   const [isWaitingForData, setIsWaitingForData] = useState(false);
   const [loadTimeout, setLoadTimeout] = useState(false);
+  // 失效 URL 只纠正一次。之后用户怎么切章（只改 store）都不再被本 effect 干涉。
+  const handledInvalidRef = useRef(false);
 
   useEffect(() => {
     if (!chapterId) return;
 
-    // 如果章节数据已加载，直接设置当前章节
     if (chapters.length > 0) {
-      setCurrentChapter(chapterId);
+      const exists = chapters.some((ch) => ch.id === chapterId);
+
+      if (exists) {
+        setCurrentChapter(chapterId);
+        setIsWaitingForData(false);
+        setLoadTimeout(false);
+        return;
+      }
+
+      // ★ 数据已就绪却查无此章：URL 里的 chapterId 是失效的（手输/改错的链接、
+      //   陈旧书签、分享后章节被删）。此前会不校验直接 setCurrentChapter(坏 id)，
+      //   把编辑器挂在一个 store 里不存在的"幽灵章节"上 —— 界面停在空状态，
+      //   而 flushToBackend 仍按该 id 发 PUT /api/chapters/<乱码>，
+      //   配合 silent:true 就是一连串用户完全无感的 400。
+      //   处理：纠正 URL 到真实存在的章节（一章都没有则回项目首页），使路由与 store 一致。
+      if (handledInvalidRef.current) return;
+      handledInvalidRef.current = true;
+
+      const fallback = chapters[0]?.id;
+      navigate(
+        fallback ? `${PATHS.project}/${bookId}/${fallback}` : `${PATHS.project}/${bookId}`,
+        { replace: true },
+      );
+      setCurrentChapter(fallback ?? null);
       setIsWaitingForData(false);
       setLoadTimeout(false);
       return;
@@ -39,7 +69,7 @@ export function ChapterEditor() {
     }, 10000);
 
     return () => clearTimeout(timer);
-  }, [chapterId, chapters.length, setCurrentChapter]);
+  }, [bookId, chapterId, chapters, setCurrentChapter, navigate]);
 
   // 加载中状态
   if (isWaitingForData) {
