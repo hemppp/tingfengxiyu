@@ -273,15 +273,15 @@ export function ForeshadowManager() {
               <p className="mb-3">在编辑器中创建伏笔：</p>
               <ol className="space-y-1.5 list-none">
                 <li className="flex items-start gap-2">
-                  <span className="shrink-0 w-4 h-4 rounded-full bg-muted/80 text-[10px] flex items-center justify-center">1</span>
+                  <span className="shrink-0 w-4 h-4 rounded-full bg-muted/80 text-[11px] flex items-center justify-center">1</span>
                   <span>选中要标记的文字内容</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="shrink-0 w-4 h-4 rounded-full bg-muted/80 text-[10px] flex items-center justify-center">2</span>
+                  <span className="shrink-0 w-4 h-4 rounded-full bg-muted/80 text-[11px] flex items-center justify-center">2</span>
                   <span>在划词菜单中点「添加伏笔」</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="shrink-0 w-4 h-4 rounded-full bg-muted/80 text-[10px] flex items-center justify-center">3</span>
+                  <span className="shrink-0 w-4 h-4 rounded-full bg-muted/80 text-[11px] flex items-center justify-center">3</span>
                   <span>填写描述与类型后确认创建</span>
                 </li>
               </ol>

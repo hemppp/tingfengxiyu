@@ -120,7 +120,7 @@ export function MemoryAuditPanel({ projectId }: { projectId?: string | null }) {
             <span className="text-[11.5px] font-medium" style={{ color: 'hsl(var(--destructive))' }}>
               事实冲突 {view.conflicts.length} 条
             </span>
-            <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
+            <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
               同批次同槽位两个值 —— 两条都没写，等人裁
             </span>
           </div>
@@ -212,7 +212,7 @@ export function MemoryAuditPanel({ projectId }: { projectId?: string | null }) {
           <span className="text-[11.5px] font-medium" style={{ color: 'hsl(var(--foreground))' }}>
             审计流水
           </span>
-          <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
+          <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
             近 {view?.audit.length ?? 0} 条
             {denied.length > 0 && ` · 其中被拒 ${denied.length}`}
           </span>
@@ -225,11 +225,11 @@ export function MemoryAuditPanel({ projectId }: { projectId?: string | null }) {
               style={{ borderBottom: '0.5px dashed hsl(var(--border) / 0.6)' }}
               data-audit={a.action}
             >
-              <span className="text-[10px] tabular-nums shrink-0 pt-0.5" style={{ color: 'hsl(var(--muted-foreground) / 0.8)' }}>
+              <span className="text-[11px] tabular-nums shrink-0 pt-0.5" style={{ color: 'hsl(var(--muted-foreground) / 0.8)' }}>
                 {hhmmss(a.at)}
               </span>
               <span
-                className="text-[10px] shrink-0 pt-0.5"
+                className="text-[11px] shrink-0 pt-0.5"
                 style={{ color: a.allow ? 'hsl(var(--muted-foreground))' : 'hsl(var(--destructive))', minWidth: 40 }}
               >
                 {ACTION_LABEL[a.action] ?? a.action}

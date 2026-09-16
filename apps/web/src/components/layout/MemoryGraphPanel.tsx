@@ -404,7 +404,7 @@ export function MemoryGraphPanel({ projectId }: { projectId?: string | null }) {
             <span className="text-[11.5px] font-medium" style={{ color: 'hsl(var(--foreground))' }}>
               审计流水
             </span>
-            <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
+            <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
               近 {view?.audit.length ?? 0} 条
               {denied.length > 0 && ` · 其中被拒 ${denied.length}`}
             </span>
@@ -456,7 +456,7 @@ export function MemoryGraphPanel({ projectId }: { projectId?: string | null }) {
         <span style={{ width: 14, height: 0, borderTop: `1.5px dashed ${ALERT_INK}` }} aria-hidden="true" />
         <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }}>被拒 / 冲突</span>
       </span>
-      <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground) / 0.75)' }}>
+      <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground) / 0.75)' }}>
         点节点看明细 · 冲突节点可裁决 · 打开「边标签」看读写次数
       </span>
     </>

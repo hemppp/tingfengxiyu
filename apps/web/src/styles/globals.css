@@ -903,6 +903,17 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   overflow-wrap: break-word;
   word-break: break-word;
 }
+/* 行宽收窄（E2，2026-09-16）：原实测 1210px ÷ 17px = 71 字/行，远超中文正文舒适区（25–40 字）。
+   收窄到 34em（≈34 字）并居中——居中取向保持不动（E3 是定稿设计，只收窄不改对齐）。
+   ⚠️ 必须同时约束段落本身：信纸横线画在 .ProseMirror p 上，只限制外层容器的话
+      横线仍会铺满 1210px，与文字宽度对不齐。
+   ⚠️ 用 max-width 而非固定 width：窄屏时自动退化为占满可用宽度。 */
+.ProseMirror > p,
+.ProseMirror > .is-empty {
+  max-width: 34em;
+  margin-left: auto;
+  margin-right: auto;
+}
 /* 书信纸：横线画在每个段落自身（em 基准随字号响应式缩放，与 1.9 行高逐行对齐），
    段间 4px 空隙自然断线；空段落同样画线，保持信纸连续感 */
 .ProseMirror p, .ProseMirror .is-empty {

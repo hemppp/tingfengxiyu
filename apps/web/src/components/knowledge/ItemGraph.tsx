@@ -162,7 +162,7 @@ export function ItemGraph() {
         position: { x: Math.random() * 600 + 100, y: Math.random() * 500 + 50 },
         data: {
           label: char.name,
-          color: char.color || '#3b82f6',
+          color: char.color || 'hsl(var(--entity-character))',
           size: CHARACTER_NODE_SIZE,
           subtitle: '角色',
           isSelected: false,
@@ -218,7 +218,7 @@ export function ItemGraph() {
         if (seenItemRel.has(key)) return;
         seenItemRel.add(key);
 
-        const color = itemRelationColors[rel.type] ?? '#6b7280';
+        const color = itemRelationColors[rel.type] ?? 'hsl(var(--muted-foreground))';
         const label = itemRelationLabels[rel.type] ?? rel.type;
         const sourceR = sizeMap.get(item.id) ?? 23;
         const targetR = sizeMap.get(rel.targetItemId) ?? 23;
@@ -279,7 +279,7 @@ export function ItemGraph() {
           seenHolderPair.add(key);
 
           const itemA = items.find((it) => it.id === idA);
-          const color = itemA ? (itemA.color || getItemColor(itemA.type)) : '#6b7280';
+          const color = itemA ? (itemA.color || getItemColor(itemA.type)) : 'hsl(var(--muted-foreground))';
           const sourceR = sizeMap.get(idA) ?? 23;
           const targetR = sizeMap.get(idB) ?? 23;
 
@@ -463,11 +463,11 @@ export function ItemGraph() {
   const legend = (
     <>
       <div className="flex items-center gap-1.5">
-        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#3b82f6' }} />
+        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'hsl(var(--entity-character))' }} />
         <span className="text-[11px] text-muted-foreground">角色</span>
       </div>
       <div className="flex items-center gap-1.5">
-        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#6b7280' }} />
+        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'hsl(var(--muted-foreground))' }} />
         <span className="text-[11px] text-muted-foreground">物品（按类型染色）</span>
       </div>
       {Object.entries(itemRelationColors).map(([type, color]) => (
@@ -537,7 +537,7 @@ export function ItemGraph() {
       <div className="flex items-center gap-2">
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md"
-          style={{ backgroundColor: selectedChar.color || '#3b82f6' }}
+          style={{ backgroundColor: selectedChar.color || 'hsl(var(--entity-character))' }}
         >
           {selectedChar.name[0]}
         </div>
@@ -571,7 +571,7 @@ export function ItemGraph() {
   ) : undefined;
 
   const getNodeColor = useCallback((node: Node) => {
-    return (node.data as { color?: string }).color || '#6b7280';
+    return (node.data as { color?: string }).color || 'hsl(var(--muted-foreground))';
   }, []);
 
   return (
@@ -592,7 +592,7 @@ export function ItemGraph() {
         onEdgeMouseEnter={onEdgeMouseEnter}
         onEdgeMouseLeave={onEdgeMouseLeave}
         onConnect={onConnect}
-        connectionLineStyle={{ stroke: '#94a3b8', strokeWidth: 2 }}
+        connectionLineStyle={{ stroke: 'hsl(var(--border))', strokeWidth: 2 }}
         defaultEdgeOptions={{ type: 'bubble', style: { strokeWidth: 1.5 } }}
         getNodeColor={getNodeColor}
         legend={legend}

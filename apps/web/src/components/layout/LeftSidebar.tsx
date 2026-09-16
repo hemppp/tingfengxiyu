@@ -436,7 +436,7 @@ export function LeftSidebar() {
                   {/* 卷标题 */}
                   {volumeGroups.length > 1 && (
                     <div
-                      className="text-[10px] font-semibold tracking-wide px-1"
+                      className="text-[11px] font-semibold tracking-wide px-1"
                       style={{ color: 'hsl(var(--ink-pale))' }}
                     >
                       {volume}

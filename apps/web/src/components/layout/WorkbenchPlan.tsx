@@ -150,12 +150,12 @@ export function WorkbenchPlan({ chapterTitle, conclusion, running, stages }: Wor
                   <span className="text-[11px] font-medium" style={{ color: st === 'idle' ? 'hsl(var(--muted-foreground))' : 'hsl(var(--ink))' }}>
                     {s.label}
                   </span>
-                  <span className="text-[10px]" style={{ color: sty.text }}>
+                  <span className="text-[11px]" style={{ color: sty.text }}>
                     {sty.label}
                   </span>
                 </span>
                 {i < STAGES.length - 1 && (
-                  <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground) / 0.5)' }} aria-hidden="true">
+                  <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground) / 0.5)' }} aria-hidden="true">
                     ›
                   </span>
                 )}

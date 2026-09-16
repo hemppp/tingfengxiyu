@@ -161,7 +161,7 @@ export function CharacterGraph() {
         const label = relationLabels[rel.type] || rel.type;
         const isMutual = rel.type === 'friend' || rel.type === 'family' || rel.type === 'ally' || rel.type === 'mutual';
         const directed = !isMutual;
-        const lineColor = relationColors[rel.type] || '#6b7280';
+        const lineColor = relationColors[rel.type] || 'hsl(var(--muted-foreground))';
 
         const sourceR = sizeMap.get(char.id) ?? 15;
         const targetR = sizeMap.get(rel.targetId) ?? 15;
@@ -206,7 +206,7 @@ export function CharacterGraph() {
     // ★ 人物-物品持有关系：当前持有者非空的物品作为节点入图，与持有者连「持有」边
     const heldItems = items.filter((item) => (item.currentHolders ?? []).length > 0);
     heldItems.forEach((item) => {
-      const nodeColor = itemColors[item.type?.toLowerCase() || 'other'] || '#6b7280';
+      const nodeColor = itemColors[item.type?.toLowerCase() || 'other'] || 'hsl(var(--muted-foreground))';
       nodes.push({
         id: `item-${item.id}`,
         type: 'bubble',
@@ -444,7 +444,7 @@ export function CharacterGraph() {
           <div>
             <h3 className="font-bold">{selectedChar.name}</h3>
             {selectedChar.role && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-secondary">
+              <span className="text-[11px] px-1.5 py-0.5 rounded-full font-medium bg-secondary">
                 {roleLabels[selectedChar.role] || selectedChar.role}
               </span>
             )}
@@ -488,7 +488,7 @@ export function CharacterGraph() {
             if (!target) return null;
             return (
               <div key={`${rel.targetId}-${rel.type}-${i}`} className="flex items-center gap-1.5 text-xs py-1 border-b last:border-0">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: relationColors[rel.type] || '#6b7280' }} />
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: relationColors[rel.type] || 'hsl(var(--muted-foreground))' }} />
                 <span className="font-medium">{target.name}</span>
                 <span className="text-muted-foreground">— {relationLabels[rel.type] || rel.type}</span>
               </div>
@@ -511,13 +511,13 @@ export function CharacterGraph() {
         <div className="flex items-center gap-2 mb-1">
           <div
             className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-md"
-            style={{ backgroundColor: itemColors[selectedItem.type?.toLowerCase() || 'other'] || '#6b7280' }}
+            style={{ backgroundColor: itemColors[selectedItem.type?.toLowerCase() || 'other'] || 'hsl(var(--muted-foreground))' }}
           >
             {selectedItem.name[0]}
           </div>
           <div>
             <h3 className="font-bold">{selectedItem.name}</h3>
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-secondary">
+            <span className="text-[11px] px-1.5 py-0.5 rounded-full font-medium bg-secondary">
               {itemLabels[selectedItem.type?.toLowerCase() || 'other'] || '物品'}
             </span>
           </div>
@@ -564,7 +564,7 @@ export function CharacterGraph() {
   ) : undefined;
 
   const getNodeColor = useCallback((node: Node) => {
-    return (node.data as { color?: string }).color || '#6b7280';
+    return (node.data as { color?: string }).color || 'hsl(var(--muted-foreground))';
   }, []);
 
   return (
@@ -585,7 +585,7 @@ export function CharacterGraph() {
         onEdgeMouseEnter={onEdgeMouseEnter}
         onEdgeMouseLeave={onEdgeMouseLeave}
         onConnect={onConnect}
-        connectionLineStyle={{ stroke: '#94a3b8', strokeWidth: 2 }}
+        connectionLineStyle={{ stroke: 'hsl(var(--border))', strokeWidth: 2 }}
         defaultEdgeOptions={{ type: 'bubble', style: { strokeWidth: 1.5 } }}
         getNodeColor={getNodeColor}
         legend={legend}

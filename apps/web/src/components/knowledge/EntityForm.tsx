@@ -395,7 +395,7 @@ function ItemHoldersEditor({ item, onSave }: ItemHoldersEditorProps) {
         <label className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
           <Check size={12} />
           当前持有者
-          <span className="text-[10px] text-muted-foreground normal-case font-normal">
+          <span className="text-[11px] text-muted-foreground normal-case font-normal">
             （可多选 — 装备可被多个角色共同持有）
           </span>
         </label>
@@ -526,7 +526,7 @@ function CharacterRelationsEditor({ character, onSave }: CharacterRelationsEdito
       <label className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
         <Network size={12} />
         角色关系
-        <span className="text-[10px] text-muted-foreground normal-case font-normal">
+        <span className="text-[11px] text-muted-foreground normal-case font-normal">
           （与其他角色的关联 — 父亲/师父/仇人/朋友...）
         </span>
       </label>
@@ -545,7 +545,7 @@ function CharacterRelationsEditor({ character, onSave }: CharacterRelationsEdito
                 key={`${r.targetId}-${r.type}-${idx}`}
                 className="group flex items-center gap-2 px-2.5 py-1.5 rounded-2xl border border-gray-100 bg-white hover:bg-gray-50 transition-colors"
               >
-                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-xl text-[10px] ${meta.color}`}>
+                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-xl text-[11px] ${meta.color}`}>
                   <Icon size={10} />
                   {meta.label}
                 </span>
@@ -735,7 +735,7 @@ function ItemRelationsEditor({ item, onSave }: ItemRelationsEditorProps) {
       <label className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
         <Link2 size={12} />
         物品间关系
-        <span className="text-[10px] text-muted-foreground normal-case font-normal">
+        <span className="text-[11px] text-muted-foreground normal-case font-normal">
           （与其他物品的关联 — 配对/包含/部件/对立/变形）
         </span>
       </label>
@@ -753,7 +753,7 @@ function ItemRelationsEditor({ item, onSave }: ItemRelationsEditorProps) {
                 key={`${r.targetItemId}-${r.type}-${idx}`}
                 className="group flex items-center gap-2 px-2.5 py-1.5 rounded-2xl border border-gray-100 bg-white hover:bg-gray-50 transition-colors"
               >
-                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-xl text-[10px] ${meta.color}`}>
+                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-xl text-[11px] ${meta.color}`}>
                   {meta.label}
                 </span>
                 <span className="text-sm text-gray-800 font-medium">

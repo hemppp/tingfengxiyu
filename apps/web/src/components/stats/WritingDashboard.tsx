@@ -180,11 +180,11 @@ export function WritingDashboard() {
   ];
 
   return (
-    <div ref={containerRef} className="h-full overflow-y-auto" style={{ background: '#ffffff' }}>
+    <div ref={containerRef} className="h-full overflow-y-auto" style={{ background: 'transparent' }}>
       <div className="max-w-4xl mx-auto px-8 py-10 space-y-8">
         {/* Header */}
         <h2
-          className="text-2xl font-semibold text-gray-900"
+          className="text-2xl font-semibold text-foreground"
           style={{ letterSpacing: '-0.02em' }}
         >
           📊 写作统计
@@ -196,14 +196,14 @@ export function WritingDashboard() {
             <div
               key={m.label}
               className="dashboard-card rounded-xl p-4 transition-shadow hover:shadow-sm"
-              style={{ background: '#f6f5f4', border: '1px solid rgba(15,15,15,0.05)' }}
+              style={{ background: 'hsl(var(--foreground) / 0.03)', border: '1px solid hsl(var(--border) / 0.4)' }}
             >
               <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-2">
                 <m.icon size={13} />
                 <span style={{ letterSpacing: '0.03em' }}>{m.label}</span>
               </div>
               <div
-                className="text-2xl font-semibold text-gray-900 tabular-nums"
+                className="text-2xl font-semibold text-foreground tabular-nums"
                 style={{ letterSpacing: '-0.02em' }}
               >
                 {m.value}
@@ -226,10 +226,10 @@ export function WritingDashboard() {
         {/* Weekly Trend */}
         <div
           className="rounded-xl p-6"
-          style={{ background: '#ffffff', border: '1px solid rgba(15,15,15,0.08)' }}
+          style={{ background: 'transparent', border: '1px solid hsl(var(--border) / 0.5)' }}
         >
           <h3
-            className="text-xs font-semibold text-gray-500 uppercase mb-4"
+            className="text-xs font-semibold text-muted-foreground uppercase mb-4"
             style={{ letterSpacing: '0.05em' }}
           >
             本周写作趋势
@@ -245,7 +245,7 @@ export function WritingDashboard() {
                   style={{
                     height: `${Math.max((d.words / maxDaily) * 100, d.words > 0 ? 12 : 3)}%`,
                     minHeight: 3,
-                    background: d.words > 0 ? '#2383e2' : 'rgba(15,15,15,0.06)',
+                    background: d.words > 0 ? 'hsl(var(--primary))' : 'rgba(15,15,15,0.06)',
                     opacity: d.words > 0 ? 0.8 : 0.4,
                   }}
                 />
@@ -258,10 +258,10 @@ export function WritingDashboard() {
         {/* Chapter Ranking */}
         <div
           className="rounded-xl p-6"
-          style={{ background: '#f6f5f4', border: '1px solid rgba(15,15,15,0.05)' }}
+          style={{ background: 'hsl(var(--foreground) / 0.03)', border: '1px solid hsl(var(--border) / 0.4)' }}
         >
           <h3
-            className="text-xs font-semibold text-gray-500 uppercase mb-4"
+            className="text-xs font-semibold text-muted-foreground uppercase mb-4"
             style={{ letterSpacing: '0.05em' }}
           >
             章节字数排名
@@ -276,13 +276,13 @@ export function WritingDashboard() {
                   <span
                     className="text-xs font-semibold w-5 h-5 flex items-center justify-center rounded-full"
                     style={{
-                      background: i === 0 ? '#2383e2' : 'rgba(15,15,15,0.06)',
-                      color: i === 0 ? '#fff' : '#9b9a97',
+                      background: i === 0 ? 'hsl(var(--primary))' : 'rgba(15,15,15,0.06)',
+                      color: i === 0 ? 'hsl(var(--primary-foreground))' : 'hsl(var(--muted-foreground))',
                     }}
                   >
                     {i + 1}
                   </span>
-                  <span className="text-sm flex-1 truncate text-gray-700">{ch.title}</span>
+                  <span className="text-sm flex-1 truncate text-foreground">{ch.title}</span>
                   <span className="text-sm font-mono text-muted-foreground">
                     {ch.wordCount.toLocaleString()}
                   </span>
@@ -297,10 +297,10 @@ export function WritingDashboard() {
         {/* Achievements */}
         <div
           className="rounded-xl p-6"
-          style={{ background: '#ffffff', border: '1px solid rgba(15,15,15,0.08)' }}
+          style={{ background: 'transparent', border: '1px solid hsl(var(--border) / 0.5)' }}
         >
           <h3
-            className="text-xs font-semibold text-gray-500 uppercase mb-4 flex items-center gap-2"
+            className="text-xs font-semibold text-muted-foreground uppercase mb-4 flex items-center gap-2"
             style={{ letterSpacing: '0.05em' }}
           >
             <Award size={14} />

@@ -648,8 +648,10 @@ export function ProjectLayout() {
               }}
             >
               <div
-                className="w-5 h-5 flex items-center justify-center rounded-full text-white text-[9px] font-semibold"
-                style={{ background: '#2383C7' }}
+                className="w-5 h-5 flex items-center justify-center rounded-full text-white text-[11px] font-semibold"
+                // 墨阶化（2026-09-16）：原为硬编码霁青 #2383C7，是水墨主题里唯一
+                // 还在用的彩色实心块（同批的 BookScanDirectory 已改成浓墨）。
+                style={{ background: 'hsl(var(--ink))' }}
               >
                 {user.displayName ? user.displayName.charAt(0).toUpperCase() : <User size={10} />}
               </div>

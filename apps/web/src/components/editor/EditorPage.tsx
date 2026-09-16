@@ -496,7 +496,7 @@ export function EditorPage() {
       {/* 沉浸式写作按钮 - 浮于右上角（已移除字数/章节统计 bar） */}
       <button
         onClick={() => setWriterMode(true)}
-        className="absolute right-4 sm:right-6 top-3 z-20 flex items-center gap-1.5 px-2.5 py-1 text-[12px] rounded-xl transition-all duration-200 hover:bg-[hsl(var(--mist-pale))]"
+        className="absolute right-4 sm:right-6 top-3 z-20 flex items-center justify-center gap-1.5 min-w-6 min-h-6 px-2.5 py-1 text-[12px] rounded-xl transition-all duration-200 hover:bg-[hsl(var(--mist-pale))]"
         style={{ color: 'hsl(var(--ink-light))' }}
         title="沉浸式写作"
         aria-label="沉浸式写作"
@@ -553,7 +553,7 @@ export function EditorPage() {
         <div
           ref={editorAreaRef}
           className="nm-editor-card nm-editor-content relative overflow-hidden"
-          style={{ height: '78%' }}
+          style={{ height: '100%' }}
         >
           {/* 内层：滚动容器（独立 overflow，内部 padding） */}
           <div

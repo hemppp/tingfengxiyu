@@ -84,7 +84,7 @@ export function LocationGraph() {
         position: { x: Math.random() * 600 + 100, y: Math.random() * 500 + 50 },
         data: {
           label: location.name,
-          color: location.color || '#6b7280',
+          color: location.color || 'hsl(var(--muted-foreground))',
           size,
           subtitle: '地点',
           isSelected: false,
@@ -101,7 +101,7 @@ export function LocationGraph() {
         position: { x: Math.random() * 600 + 100, y: Math.random() * 500 + 50 },
         data: {
           label: char.name,
-          color: char.color || '#3b82f6',
+          color: char.color || 'hsl(var(--entity-character))',
           size: CHARACTER_NODE_SIZE,
           subtitle: '角色',
           isSelected: false,
@@ -112,7 +112,7 @@ export function LocationGraph() {
 
     locations.forEach((location) => {
       const characterIds = locationCharacterMap.get(location.id) || [];
-      const locationColor = location.color || '#6b7280';
+      const locationColor = location.color || 'hsl(var(--muted-foreground))';
       const sourceR = sizeMap.get(location.id) ?? 24;
       characterIds.forEach((charId) => {
         const targetR = sizeMap.get(charId) ?? 18;
@@ -250,15 +250,15 @@ export function LocationGraph() {
   const legend = (
     <>
       <div className="flex items-center gap-1.5">
-        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#6b7280' }} />
+        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'hsl(var(--muted-foreground))' }} />
         <span className="text-[11px] text-muted-foreground">地点（按 color 字段染色）</span>
       </div>
       <div className="flex items-center gap-1.5">
-        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#3b82f6' }} />
+        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'hsl(var(--entity-character))' }} />
         <span className="text-[11px] text-muted-foreground">角色</span>
       </div>
       <div className="flex items-center gap-1.5">
-        <div className="w-6 h-0.5" style={{ backgroundColor: '#6b7280' }} />
+        <div className="w-6 h-0.5" style={{ backgroundColor: 'hsl(var(--muted-foreground))' }} />
         <span className="text-[11px] text-muted-foreground">"位于"关系（按章节共现推断）</span>
       </div>
     </>
@@ -270,13 +270,13 @@ export function LocationGraph() {
       <div className="flex items-center gap-2 mb-1">
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md"
-          style={{ backgroundColor: selectedLocation.color || '#6b7280' }}
+          style={{ backgroundColor: selectedLocation.color || 'hsl(var(--muted-foreground))' }}
         >
           {selectedLocation.name[0]}
         </div>
         <div>
           <h3 className="font-bold">{selectedLocation.name}</h3>
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-secondary">地点</span>
+          <span className="text-[11px] px-1.5 py-0.5 rounded-full font-medium bg-secondary">地点</span>
         </div>
       </div>
 
@@ -308,7 +308,7 @@ export function LocationGraph() {
               if (!char) return null;
               return (
                 <div key={charId} className="flex items-center gap-1.5 text-xs py-1 border-b last:border-0">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: char.color || '#3b82f6' }} />
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: char.color || 'hsl(var(--entity-character))' }} />
                   <span className="font-medium">{char.name}</span>
                 </div>
               );
@@ -330,13 +330,13 @@ export function LocationGraph() {
       <div className="flex items-center gap-2 mb-1">
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md"
-          style={{ backgroundColor: selectedChar.color || '#3b82f6' }}
+          style={{ backgroundColor: selectedChar.color || 'hsl(var(--entity-character))' }}
         >
           {selectedChar.name[0]}
         </div>
         <div>
           <h3 className="font-bold">{selectedChar.name}</h3>
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-secondary">角色</span>
+          <span className="text-[11px] px-1.5 py-0.5 rounded-full font-medium bg-secondary">角色</span>
         </div>
       </div>
       {selectedChar.aliases && selectedChar.aliases.length > 0 && (
@@ -361,7 +361,7 @@ export function LocationGraph() {
               if (!location) return null;
               return (
                 <div key={locId} className="flex items-center gap-1.5 text-xs py-1 border-b last:border-0">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: location.color || '#6b7280' }} />
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: location.color || 'hsl(var(--muted-foreground))' }} />
                   <span className="font-medium">{location.name}</span>
                 </div>
               );
@@ -373,7 +373,7 @@ export function LocationGraph() {
   ) : undefined;
 
   const getNodeColor = useCallback((node: Node) => {
-    return (node.data as { color?: string }).color || '#6b7280';
+    return (node.data as { color?: string }).color || 'hsl(var(--muted-foreground))';
   }, []);
 
   return (

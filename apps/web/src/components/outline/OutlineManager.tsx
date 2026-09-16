@@ -218,10 +218,10 @@ export function OutlineManager() {
     return (
       <div
         className="h-full flex items-center justify-center"
-        style={{ background: '#fbfaf6' }}
+        
       >
         <div className="text-center">
-          <AlertCircle size={48} className="mx-auto text-gray-200 mb-4" />
+          <AlertCircle size={48} className="mx-auto text-muted-foreground/40 mb-4" />
           <p className="text-sm text-muted-foreground">请先选择项目</p>
         </div>
       </div>
@@ -229,15 +229,15 @@ export function OutlineManager() {
   }
 
   return (
-    <div className="h-full flex flex-col" style={{ background: '#fbfaf6' }}>
+    <div className="h-full flex flex-col" >
       {/* Toolbar */}
       <div
         className="px-6 py-3 flex items-center gap-2"
-        style={{ borderBottom: '1px solid rgba(15,15,15,0.08)', background: '#ffffff' }}
+        
       >
         <div className="flex items-center gap-2">
-          <FileText size={16} style={{ color: 'hsl(178, 35%, 38%)' }} />
-          <h2 className="text-sm font-semibold text-gray-800">大纲编辑器</h2>
+          <FileText size={16} style={{ color: 'hsl(var(--primary))' }} />
+          <h2 className="text-sm font-semibold text-foreground">大纲编辑器</h2>
         </div>
 
         <span className="text-xs text-muted-foreground ml-2">
@@ -248,7 +248,7 @@ export function OutlineManager() {
 
         <button
           onClick={handleResetToDefault}
-          className="text-xs rounded-xl px-2.5 py-1.5 flex items-center gap-1.5 transition-colors text-gray-600 hover:bg-muted/60"
+          className="text-xs rounded-xl px-2.5 py-1.5 flex items-center gap-1.5 transition-colors text-muted-foreground hover:bg-muted/60"
           style={{ border: '1px solid rgba(15,15,15,0.12)' }}
           title="按默认分区补全（已有内容按标题保留）"
         >
@@ -257,8 +257,7 @@ export function OutlineManager() {
         {treeNodes.length > 0 && (
           <button
             onClick={handleClearLegacyTree}
-            className="text-xs rounded-xl px-2.5 py-1.5 flex items-center gap-1.5 transition-colors hover:bg-destructive/10"
-            style={{ color: '#b91c1c', border: '1px solid rgba(185,28,28,0.3)' }}
+            className="text-xs rounded-xl px-2.5 py-1.5 flex items-center gap-1.5 transition-colors text-destructive border border-destructive/30 hover:bg-destructive/10"
             title="清空旧版树形大纲节点数据"
           >
             <Trash size={11} /> 清空旧数据 ({treeNodes.length})
@@ -290,8 +289,8 @@ export function OutlineManager() {
               {/* ===== 自由笔记分区 ===== */}
               <div>
                 <div className="flex items-center gap-2 mb-3 px-1">
-                  <BookOpen size={13} style={{ color: '#9b9a97' }} />
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  <BookOpen size={13} style={{ color: 'hsl(var(--muted-foreground))' }} />
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     自由笔记分区
                   </h3>
                   <div className="flex-1 h-px" style={{ background: 'rgba(15,15,15,0.06)' }} />
@@ -334,13 +333,13 @@ export function OutlineManager() {
       {initialized && (
         <div
           className="px-6 py-3"
-          style={{ borderTop: '1px solid rgba(15,15,15,0.08)', background: '#ffffff' }}
+          
         >
           <div className="max-w-3xl mx-auto flex items-center gap-2">
             <button
               onClick={() => addSection()}
               className="text-xs font-medium rounded-xl px-3 py-1.5 flex items-center gap-1.5 transition-colors text-white hover:brightness-110"
-              style={{ background: 'hsl(178, 35%, 38%)' }}
+              style={{ background: 'hsl(var(--primary))' }}
             >
               <Plus size={12} /> 添加分区
             </button>
@@ -385,34 +384,36 @@ function TemplateSection({
     <div
       className="rounded-2xl"
       style={{
-        background: '#ffffff',
-        border: '1px solid rgba(14,165,233,0.18)',
-        boxShadow: '0 1px 3px rgba(14,165,233,0.04)',
+        background: 'transparent',
+        // 墨阶化（2026-09-16）：原为 sky 系 rgba(14,165,233,…)，
+        // 是上轮 hex 批量替换漏掉的逗号写法（只匹配了 #0ea5e9 形式）。
+        border: '1px solid hsl(var(--border) / 0.6)',
+        boxShadow: '0 1px 3px hsl(var(--foreground) / 0.04)',
       }}
     >
       {/* 模块标题 */}
       <button
         onClick={onToggleTemplate}
-        className="w-full flex items-center gap-2 px-4 py-3 transition-colors hover:bg-sky-50/40 rounded-t-2xl"
+        className="w-full flex items-center gap-2 px-4 py-3 transition-colors hover:bg-foreground/5 rounded-t-2xl"
       >
-        {templateCollapsed ? <ChevronRight size={14} style={{ color: '#0ea5e9' }} /> : <ChevronDown size={14} style={{ color: '#0ea5e9' }} />}
-        <Target size={14} style={{ color: '#0ea5e9' }} />
-        <h3 className="text-sm font-semibold text-gray-800">网文大纲模板</h3>
+        {templateCollapsed ? <ChevronRight size={14} style={{ color: 'hsl(var(--muted-foreground))' }} /> : <ChevronDown size={14} style={{ color: 'hsl(var(--muted-foreground))' }} />}
+        <Target size={14} style={{ color: 'hsl(var(--muted-foreground))' }} />
+        <h3 className="text-sm font-semibold text-foreground">网文大纲模板</h3>
         <span className="text-[11px] text-muted-foreground ml-1">
           核心冲突 · 每章细节
         </span>
         <div className="flex-1" />
-        <span className="text-[10px] text-gray-300">点击{templateCollapsed ? '展开' : '折叠'}</span>
+        <span className="text-[11px] text-muted-foreground/50">点击{templateCollapsed ? '展开' : '折叠'}</span>
       </button>
 
       {!templateCollapsed && (
         <div className="px-4 pb-4 space-y-4">
           {/* 核心冲突 */}
           <div>
-            <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 mb-1.5">
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground mb-1.5">
               <span
                 className="inline-block w-1.5 h-1.5 rounded-full"
-                style={{ background: '#ef4444' }}
+                style={{ background: 'hsl(var(--destructive))' }}
               />
               核心冲突
             </label>
@@ -420,29 +421,29 @@ function TemplateSection({
               value={coreConflict}
               onChange={(e) => onCoreConflictChange(e.target.value)}
               placeholder="主角想要什么？谁 / 什么在阻止？冲突的根源是什么？例：一个自卑的高中生意外获得读心能力，却发现周围人表面的善意下藏着算计，他必须在信任与自我保护之间抉择……"
-              className="w-full bg-transparent outline-none resize-y text-sm leading-relaxed text-gray-700 placeholder:text-gray-300 rounded-xl px-3 py-2.5"
+              className="w-full bg-transparent outline-none resize-y text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/50 rounded-xl px-3 py-2.5"
               style={{
                 minHeight: '90px',
-                background: 'rgba(14,165,233,0.03)',
-                border: '1px solid rgba(14,165,233,0.12)',
+                background: 'hsl(var(--foreground) / 0.03)',
+                border: '1px solid hsl(var(--border) / 0.5)',
                 fontFamily: '"Songti SC", "Source Han Serif", "Noto Serif CJK SC", Georgia, serif',
               }}
               spellCheck={false}
             />
-            <div className="text-[10px] text-gray-300 mt-1 px-1">
+            <div className="text-[11px] text-muted-foreground/50 mt-1 px-1">
               {coreConflict.trim() ? `${coreConflict.trim().length} 字` : '空白'}
             </div>
           </div>
 
           {/* 每章细节 */}
           <div>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 mb-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground mb-1.5">
               <span
                 className="inline-block w-1.5 h-1.5 rounded-full"
-                style={{ background: '#0ea5e9' }}
+                style={{ background: 'hsl(var(--entity-outline))' }}
               />
               每章细节
-              <span className="text-[10px] text-muted-foreground font-normal ml-1">
+              <span className="text-[11px] text-muted-foreground font-normal ml-1">
                 （{chapters.length} 章）
               </span>
             </div>
@@ -466,7 +467,7 @@ function TemplateSection({
                       className="rounded-xl"
                       style={{
                         border: '1px solid rgba(15,15,15,0.06)',
-                        background: detail.trim() ? '#ffffff' : 'rgba(15,15,15,0.01)',
+                        background: detail.trim() ? 'hsl(var(--background) / 0.6)' : 'transparent',
                       }}
                     >
                       {/* 章节标题行 */}
@@ -477,29 +478,29 @@ function TemplateSection({
                           aria-label={collapsed ? '展开' : '折叠'}
                         >
                           {collapsed ? (
-                            <ChevronRight size={12} style={{ color: '#9b9a97' }} />
+                            <ChevronRight size={12} style={{ color: 'hsl(var(--muted-foreground))' }} />
                           ) : (
-                            <ChevronDown size={12} style={{ color: '#9b9a97' }} />
+                            <ChevronDown size={12} style={{ color: 'hsl(var(--muted-foreground))' }} />
                           )}
                         </button>
                         <span
-                          className="text-[10px] font-mono px-1.5 py-0.5 rounded-md"
+                          className="text-[11px] font-mono px-1.5 py-0.5 rounded-md"
                           style={{
-                            background: 'rgba(14,165,233,0.1)',
-                            color: '#0284c7',
+                            background: 'hsl(var(--foreground) / 0.1)',
+                            color: 'hsl(var(--foreground))',
                           }}
                         >
                           第{ch.order}章
                         </span>
                         <button
                           onClick={() => onToggleChapter(ch.id)}
-                          className="flex-1 text-left text-sm text-gray-700 truncate hover:text-gray-900 transition-colors"
+                          className="flex-1 text-left text-sm text-foreground truncate hover:text-foreground transition-colors"
                           title={ch.title}
                         >
                           {ch.title || '未命名章节'}
                         </button>
                         {detail.trim() && (
-                          <span className="text-[10px] text-gray-300">{detail.trim().length} 字</span>
+                          <span className="text-[11px] text-muted-foreground/50">{detail.trim().length} 字</span>
                         )}
                         {detail.trim() && (
                           <button
@@ -508,7 +509,7 @@ function TemplateSection({
                             title="清空本章细节"
                             aria-label="清空本章细节"
                           >
-                            <Trash2 size={11} style={{ color: '#b91c1c' }} />
+                            <Trash2 size={11} style={{ color: 'hsl(var(--destructive))' }} />
                           </button>
                         )}
                       </div>
@@ -519,7 +520,7 @@ function TemplateSection({
                             value={detail}
                             onChange={(e) => onChapterDetailChange(ch.id, e.target.value)}
                             placeholder={`第${ch.order}章 细节：本章核心事件、冲突推进、角色行动、伏笔铺设/回收、章节结尾钩子……`}
-                            className="w-full bg-transparent outline-none resize-y text-sm leading-relaxed text-gray-700 placeholder:text-gray-300 rounded-lg px-2.5 py-2"
+                            className="w-full bg-transparent outline-none resize-y text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/50 rounded-lg px-2.5 py-2"
                             style={{
                               minHeight: '80px',
                               background: 'rgba(15,15,15,0.015)',
@@ -580,7 +581,7 @@ function SectionCard({
     <div
       className="rounded-xl transition-shadow"
       style={{
-        background: '#ffffff',
+        background: 'transparent',
         border: '1px solid rgba(15,15,15,0.08)',
         boxShadow: '0 1px 2px rgba(15,15,15,0.02)',
       }}
@@ -590,7 +591,7 @@ function SectionCard({
         className="flex items-center gap-1.5 px-3 py-2.5"
         style={{ borderBottom: '1px solid rgba(15,15,15,0.05)' }}
       >
-        <span className="text-gray-300">
+        <span className="text-muted-foreground/50">
           <GripVertical size={12} />
         </span>
         {isEditingTitle ? (
@@ -602,13 +603,13 @@ function SectionCard({
               if (e.key === 'Enter' || e.key === 'Escape') onFinishEditTitle();
             }}
             autoFocus
-            className="flex-1 text-sm font-semibold text-gray-800 bg-transparent outline-none px-1 py-0.5 rounded-[14px]"
-            style={{ border: '1px solid hsl(178, 35%, 70%)' }}
+            className="flex-1 text-sm font-semibold text-foreground bg-transparent outline-none px-1 py-0.5 rounded-[14px]"
+            style={{ border: '1px solid hsl(var(--ring) / 0.5)' }}
           />
         ) : (
           <button
             onClick={onStartEditTitle}
-            className="flex-1 text-left text-sm font-semibold text-gray-800 truncate px-1 py-0.5 rounded-xl hover:bg-gray-50"
+            className="flex-1 text-left text-sm font-semibold text-foreground truncate px-1 py-0.5 rounded-xl hover:bg-foreground/[0.03]"
             title="点击修改分区标题"
           >
             {section.title || '未命名分区'}
@@ -635,7 +636,7 @@ function SectionCard({
           value={section.content}
           onChange={(e) => onChangeContent(e.target.value)}
           placeholder={section.placeholder}
-          className="w-full bg-transparent outline-none resize-y text-sm leading-relaxed text-gray-700 placeholder:text-gray-300"
+          className="w-full bg-transparent outline-none resize-y text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/50"
           style={{
             minHeight: '110px',
             fontFamily: '"Songti SC", "Source Han Serif", "Noto Serif CJK SC", Georgia, serif',
@@ -643,7 +644,7 @@ function SectionCard({
           spellCheck={false}
         />
         <div className="flex items-center justify-end mt-2">
-          <div className="text-[10px] text-gray-300">
+          <div className="text-[11px] text-muted-foreground/50">
             {isEmpty
               ? '空白'
               : `${section.content.trim().length} 字${charCount !== section.content.trim().length ? ` · ${charCount} 字符` : ''}`}
@@ -673,14 +674,14 @@ function IconButton({
       disabled={disabled}
       title={title}
       aria-label={title}
-      className={`p-1 rounded-xl transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
+      className={`inline-flex items-center justify-center min-w-6 min-h-6 p-1 rounded-xl transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
         disabled
           ? ''
           : danger
             ? 'hover:bg-destructive/10'
             : 'hover:bg-muted/60'
       }`}
-      style={{ color: danger ? '#b91c1c' : '#9b9a97' }}
+      style={{ color: danger ? 'hsl(var(--destructive))' : 'hsl(var(--muted-foreground))' }}
     >
       {children}
     </button>
@@ -690,11 +691,10 @@ function IconButton({
 function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
     <div className="text-center py-10">
-      <p className="text-sm text-gray-500">还没有任何分区</p>
+      <p className="text-sm text-muted-foreground">还没有任何分区</p>
       <button
         onClick={onAdd}
-        className="mt-3 text-xs font-medium rounded-xl px-3 py-1.5 flex items-center gap-1.5 mx-auto transition-colors"
-        style={{ background: 'hsl(178, 35%, 38%)', color: '#ffffff' }}
+        className="mt-3 w-full text-xs font-medium rounded-xl px-3 py-1.5 flex items-center justify-center gap-1.5 transition-colors bg-primary text-primary-foreground hover:opacity-90"
       >
         <Plus size={12} /> 添加第一个分区
       </button>

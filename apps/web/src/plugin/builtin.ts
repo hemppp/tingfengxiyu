@@ -31,16 +31,16 @@ const ExportDialog = React.lazy(() => import('@/components/export/ExportDialog')
 /** 内置面板定义（与原 floatingPanelConfigs 完全一致） */
 export const BUILTIN_PANELS: FloatingPanelDef[] = [
   { icon: BookText, label: '参考书', key: 'reference', Component: ReferenceReader, width: 560, height: 800 },
-  { icon: StickyNote, label: '笔记', key: 'notes', Component: NoteManager, width: 1200, height: 800 },
-  { icon: BarChart3, label: '统计', key: 'stats', Component: WritingDashboard, width: 1200, height: 800 },
-  { icon: AlignLeft, label: '大纲', key: 'outline', Component: OutlinePage, width: 1200, height: 800 },
-  { icon: Clock, label: '时间线', key: 'timeline', Component: TimelinePage, width: 1200, height: 800 },
-  { icon: Users, label: '角色', key: 'characters', Component: CharacterManager, width: 1200, height: 800 },
-  { icon: MapPin, label: '地点', key: 'locations', Component: LocationManager, width: 1200, height: 800 },
-  { icon: Lightbulb, label: '伏笔', key: 'foreshadows', Component: ForeshadowManager, width: 1200, height: 800 },
-  { icon: Database, label: '物品', key: 'items', Component: ItemManager, width: 1200, height: 800 },
-  { icon: Network, label: '关系图', key: 'relationGraph', Component: RelationGraph, width: 1200, height: 800 },
-  { icon: Map, label: '地图', key: 'storyMap', Component: StoryMap, width: 1200, height: 800 },
+  { icon: StickyNote, label: '笔记', key: 'notes', Component: NoteManager, width: 900, height: 800 },
+  { icon: BarChart3, label: '统计', key: 'stats', Component: WritingDashboard, width: 900, height: 800 },
+  { icon: AlignLeft, label: '大纲', key: 'outline', Component: OutlinePage, width: 900, height: 800 },
+  { icon: Clock, label: '时间线', key: 'timeline', Component: TimelinePage, width: 900, height: 800 },
+  { icon: Users, label: '角色', key: 'characters', Component: CharacterManager, width: 900, height: 800 },
+  { icon: MapPin, label: '地点', key: 'locations', Component: LocationManager, width: 900, height: 800 },
+  { icon: Lightbulb, label: '伏笔', key: 'foreshadows', Component: ForeshadowManager, width: 900, height: 800 },
+  { icon: Database, label: '物品', key: 'items', Component: ItemManager, width: 900, height: 800 },
+  { icon: Network, label: '关系图', key: 'relationGraph', Component: RelationGraph, width: 900, height: 800 },
+  { icon: Map, label: '地图', key: 'storyMap', Component: StoryMap, width: 900, height: 800 },
   { icon: Download, label: '导出', key: 'export', Component: ExportDialog, width: 800, height: 700 },
 ];
 

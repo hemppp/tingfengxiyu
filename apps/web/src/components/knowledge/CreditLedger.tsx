@@ -186,7 +186,7 @@ export function CreditLedger() {
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <div
-                        className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                        className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0"
                         style={{ backgroundColor: c.color || 'hsl(0 0% 50%)' }}
                       >
                         {c.name[0]}
@@ -280,14 +280,14 @@ export function CreditLedger() {
                           <span className="text-[11px] text-muted-foreground shrink-0">余 {t.balanceAfter}</span>
                         </div>
                         <div className="flex items-center gap-1.5 mt-1 ml-8">
-                          <span className="text-[10px] text-muted-foreground">第 {t.chapter} 章</span>
+                          <span className="text-[11px] text-muted-foreground">第 {t.chapter} 章</span>
                           {relatedItem && (
-                            <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                            <span className="text-[11px] text-muted-foreground flex items-center gap-0.5">
                               · <ShoppingCart size={9} /> {relatedItem.name}
                             </span>
                           )}
                           {t.balanceAfter < 0 && (
-                            <span className="text-[10px] text-red-500 flex items-center gap-0.5 font-medium">
+                            <span className="text-[11px] text-red-500 flex items-center gap-0.5 font-medium">
                               <AlertTriangle size={9} /> 结余为负
                             </span>
                           )}

@@ -418,10 +418,10 @@ export function PipelineGraphPanel({
         </span>
       ))}
       <span className="flex items-center gap-1.5">
-        <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>◈ 闸门</span>
-        <span className="text-[10px]" style={{ color: 'hsl(var(--state-blocked))' }}>过期</span>
-        <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>×N 打回</span>
-        <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground) / 0.7)' }}>虚线边框 = 尚未实现</span>
+        <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }}>◈ 闸门</span>
+        <span className="text-[11px]" style={{ color: 'hsl(var(--state-blocked))' }}>过期</span>
+        <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }}>×N 打回</span>
+        <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground) / 0.7)' }}>虚线边框 = 尚未实现</span>
       </span>
     </>
   );
@@ -444,7 +444,7 @@ export function PipelineGraphPanel({
                 {current.label || STAGE_LABEL_UI[current.key] || current.key}
               </span>
               {current.gated && (
-                <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }} title="这一段跑完会停下等你确认">
+                <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }} title="这一段跑完会停下等你确认">
                   ◈ 闸门
                 </span>
               )}
@@ -519,7 +519,7 @@ export function PipelineGraphPanel({
                 退回上一段
               </button>
               {current.revision > 0 && (
-                <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground) / 0.8)' }}>
+                <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground) / 0.8)' }}>
                   已打回 {current.revision} 次
                 </span>
               )}
@@ -538,15 +538,15 @@ export function PipelineGraphPanel({
                 {current.status === 'failed' ? '重试这一段' : `跑「${current.label}」`}
               </button>
               {!current.implemented && (
-                <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
                   这一段（{current.label}）尚未实现
                 </span>
               )}
               {busy && phase && (
-                <span className="text-[10px]" style={{ color: 'hsl(var(--primary))' }}>{phase}</span>
+                <span className="text-[11px]" style={{ color: 'hsl(var(--primary))' }}>{phase}</span>
               )}
               {!busy && current.implemented && (
-                <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground) / 0.8)' }}>{COST_PER_STAGE}</span>
+                <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground) / 0.8)' }}>{COST_PER_STAGE}</span>
               )}
             </div>
           )}
@@ -555,7 +555,7 @@ export function PipelineGraphPanel({
             <button
               type="button"
               onClick={() => abortRef.current?.abort()}
-              className="self-start rounded-md text-[10px] px-2 py-0.5"
+              className="self-start rounded-md text-[11px] px-2 py-0.5"
               style={{ color: 'hsl(var(--destructive))', border: '0.5px solid hsl(var(--destructive) / 0.4)', background: 'transparent', cursor: 'pointer' }}
             >
               停止
@@ -567,13 +567,13 @@ export function PipelineGraphPanel({
       {/* 最近决策台账：谁在什么时候批了什么、批注是什么 */}
       {view && view.decisions.length > 0 && (
         <div className="flex flex-col gap-1 pt-2" style={{ borderTop: '0.5px solid hsl(var(--border) / 0.5)' }}>
-          <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground))', letterSpacing: '0.08em' }}>
+          <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))', letterSpacing: '0.08em' }}>
             最近决策
           </span>
           {(view.decisions ?? []).slice(0, 6).map((d, i) => (
             <div
               key={`${d.at}-${i}`}
-              className="flex items-baseline gap-1.5 text-[10px] min-w-0"
+              className="flex items-baseline gap-1.5 text-[11px] min-w-0"
               style={{ color: 'hsl(var(--muted-foreground))' }}
             >
               <span className="shrink-0" style={{ color: ACTION_COLOR[d.action] }}>{ACTION_TEXT[d.action]}</span>

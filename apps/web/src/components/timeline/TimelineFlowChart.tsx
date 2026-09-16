@@ -286,19 +286,19 @@ export function TimelineFlowChart({ selectedChapter = 'all' }: TimelineFlowChart
 
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span
-                                className="text-[10px] px-1.5 py-0.5 rounded-xl font-medium shrink-0"
+                                className="text-[11px] px-1.5 py-0.5 rounded-xl font-medium shrink-0"
                                 style={{ background: `${accent}18`, color: accent }}
                               >
                                 第{ev.chapter}章
                               </span>
                               <span
-                                className="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
+                                className="text-[11px] px-1.5 py-0.5 rounded font-medium shrink-0"
                                 style={{ background: `${color}18`, color }}
                               >
                                 {typeLabels[ev.type] || ev.type}
                               </span>
                               {ev.timestamp && (
-                                <span className="text-[10px] shrink-0" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                                <span className="text-[11px] shrink-0" style={{ color: 'hsl(var(--muted-foreground))' }}>
                                   {ev.timestamp}
                                 </span>
                               )}
@@ -307,7 +307,7 @@ export function TimelineFlowChart({ selectedChapter = 'all' }: TimelineFlowChart
                                   {eventChars.slice(0, 2).map((c) => (
                                     <span
                                       key={c.id}
-                                      className="text-[9px] px-1.5 py-0.5 rounded-full"
+                                      className="text-[11px] px-1.5 py-0.5 rounded-full"
                                       style={{
                                         background: `${c.color || '#8b5cf6'}15`,
                                         color: c.color || '#8b5cf6',
@@ -317,7 +317,7 @@ export function TimelineFlowChart({ selectedChapter = 'all' }: TimelineFlowChart
                                     </span>
                                   ))}
                                   {eventChars.length > 2 && (
-                                    <span className="text-[9px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                                    <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
                                       +{eventChars.length - 2}
                                     </span>
                                   )}
@@ -393,7 +393,7 @@ export function TimelineFlowChart({ selectedChapter = 'all' }: TimelineFlowChart
                         <span className="text-xs truncate flex-1" style={{ color: 'hsl(var(--foreground))' }}>
                           第{group.chapter}章
                         </span>
-                        <span className="text-[10px] shrink-0" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                        <span className="text-[11px] shrink-0" style={{ color: 'hsl(var(--muted-foreground))' }}>
                           {group.events.length}
                         </span>
                       </button>

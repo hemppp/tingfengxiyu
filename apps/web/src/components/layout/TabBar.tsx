@@ -270,7 +270,7 @@ export function TabBar({
                 >
                   {iconOf(k)}
                   <span className="truncate flex-1">{labelOf(k)}</span>
-                  {previewKey === k && <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>预览</span>}
+                  {previewKey === k && <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }}>预览</span>}
                   {active === k && <Check size={11} style={{ color: 'hsl(var(--primary))' }} aria-hidden="true" />}
                 </button>
               ))}

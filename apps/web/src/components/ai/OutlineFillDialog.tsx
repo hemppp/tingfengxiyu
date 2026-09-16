@@ -457,7 +457,7 @@ function TargetOption({
       </span>
       {hasExisting && (
         <span
-          className="text-[10px] px-1.5 py-0.5 rounded-md"
+          className="text-[11px] px-1.5 py-0.5 rounded-md"
           style={{
             background: 'hsl(38, 92%, 50% / 0.12)',
             color: 'hsl(32, 95%, 44%)',
@@ -467,7 +467,7 @@ function TargetOption({
         </span>
       )}
       <span
-        className="text-[10px] px-1.5 py-0.5 rounded-md"
+        className="text-[11px] px-1.5 py-0.5 rounded-md"
         style={{
           background: hint === '已识别' ? 'hsl(142, 71%, 45% / 0.12)' : 'rgb(var(--glass-tint) / 0.5)',
           color: hint === '已识别' ? 'hsl(142, 71%, 35%)' : 'hsl(var(--ink-pale))',
@@ -509,7 +509,7 @@ function ModeButton({
       }}
     >
       <div className="text-xs font-semibold">{label}</div>
-      <div className="text-[10px] mt-0.5 opacity-80">{hint}</div>
+      <div className="text-[11px] mt-0.5 opacity-80">{hint}</div>
     </button>
   );
 }

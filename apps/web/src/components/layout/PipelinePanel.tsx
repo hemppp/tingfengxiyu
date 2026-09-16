@@ -356,7 +356,7 @@ export function PipelinePanel({ projectId, onProjectDataChanged, onTurn, hasChap
         )}
         {!started && <span className="text-[11px]">未启动</span>}
         {(view?.staleStages.length ?? 0) > 0 && (
-          <span className="ml-auto flex items-center gap-1 text-[10px]" style={{ color: 'hsl(var(--state-blocked))' }}>
+          <span className="ml-auto flex items-center gap-1 text-[11px]" style={{ color: 'hsl(var(--state-blocked))' }}>
             <AlertTriangle size={11} />
             设定已改，建议重跑
           </span>
@@ -545,7 +545,7 @@ export function PipelinePanel({ projectId, onProjectDataChanged, onTurn, hasChap
                     退回上一段
                   </button>
                   {current.revision > 0 && (
-                    <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground) / 0.8)' }}>
+                    <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground) / 0.8)' }}>
                       已打回 {current.revision} 次
                     </span>
                   )}
@@ -565,15 +565,15 @@ export function PipelinePanel({ projectId, onProjectDataChanged, onTurn, hasChap
                   {current.status === 'failed' ? '重试这一段' : `跑「${current.label}」`}
                 </button>
                 {!current.implemented && (
-                  <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                  <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
                     这一段（{current.label}）尚未实现
                   </span>
                 )}
                 {busy && phase && (
-                  <span className="text-[10px]" style={{ color: 'hsl(var(--primary))' }}>{phase}</span>
+                  <span className="text-[11px]" style={{ color: 'hsl(var(--primary))' }}>{phase}</span>
                 )}
                 {!busy && current.implemented && (
-                  <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground) / 0.8)' }}>
+                  <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground) / 0.8)' }}>
                     {COST_PER_STAGE}
                   </span>
                 )}
@@ -584,7 +584,7 @@ export function PipelinePanel({ projectId, onProjectDataChanged, onTurn, hasChap
               <button
                 type="button"
                 onClick={() => abortRef.current?.abort()}
-                className="self-start rounded-md text-[10px] px-2 py-0.5"
+                className="self-start rounded-md text-[11px] px-2 py-0.5"
                 style={{ color: 'hsl(var(--destructive))', border: '0.5px solid hsl(var(--destructive) / 0.4)', background: 'transparent', cursor: 'pointer' }}
               >
                 停止
@@ -598,13 +598,13 @@ export function PipelinePanel({ projectId, onProjectDataChanged, onTurn, hasChap
                 className="flex flex-col gap-1 pt-1.5"
                 style={{ borderTop: '0.5px solid hsl(var(--border) / 0.4)' }}
               >
-                <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground))', letterSpacing: '0.08em' }}>
+                <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))', letterSpacing: '0.08em' }}>
                   最近决策
                 </span>
                 {(view.decisions ?? []).slice(0, 4).map((d, i) => (
                   <div
                     key={`${d.at}-${i}`}
-                    className="flex items-baseline gap-1.5 text-[10px] min-w-0"
+                    className="flex items-baseline gap-1.5 text-[11px] min-w-0"
                     style={{ color: 'hsl(var(--muted-foreground))' }}
                   >
                     <span className="shrink-0" style={{ color: ACTION_COLOR[d.action] }}>{ACTION_TEXT[d.action]}</span>

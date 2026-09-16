@@ -874,7 +874,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                             <span className="text-[12px] font-medium" style={{ color: 'hsl(var(--ink))' }}>
                               {t.name}
                             </span>
-                            <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground) / 0.75)' }}>
+                            <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground) / 0.75)' }}>
                               {t.time}
                             </span>
                           </div>
@@ -899,7 +899,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                               <span className="text-[12px] font-medium" style={{ color: 'hsl(var(--ink))' }}>
                                 {t.name}
                               </span>
-                              <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground) / 0.75)' }}>
+                              <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground) / 0.75)' }}>
                                 {t.time}
                               </span>
                             </div>
@@ -919,7 +919,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                             </div>
 
                             {t.meta && (
-                              <div className="text-[10px] mt-1.5" style={{ color: 'hsl(var(--muted-foreground) / 0.75)' }}>
+                              <div className="text-[11px] mt-1.5" style={{ color: 'hsl(var(--muted-foreground) / 0.75)' }}>
                                 {t.meta}
                               </div>
                             )}
@@ -949,7 +949,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                             <span className="text-[12px] font-medium" style={{ color: 'hsl(var(--muted-foreground))' }}>
                               {liveThinking.name}
                             </span>
-                            <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground) / 0.75)' }}>
+                            <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground) / 0.75)' }}>
                               思考中…
                             </span>
                           </div>
@@ -1102,7 +1102,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                   </button>
                 </div>
                 <div className="flex items-center gap-2 mt-1.5 px-1">
-                  <span className="text-[10px] truncate" style={{ color: 'hsl(var(--muted-foreground) / 0.7)' }}>
+                  <span className="text-[11px] truncate" style={{ color: 'hsl(var(--muted-foreground) / 0.7)' }}>
                     {busy ? (phase || '智能体处理中…') : 'Enter 发送 · Shift+Enter 换行'}
                   </span>
 
@@ -1110,7 +1110,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                       后续章自动「接着上一章往下写」。每章约一分钟，别在忙的时候改它 */}
                   {!busy && (
                     <label
-                      className="ml-auto flex items-center gap-1 text-[10px] shrink-0"
+                      className="ml-auto flex items-center gap-1 text-[11px] shrink-0"
                       style={{ color: 'hsl(var(--muted-foreground))' }}
                       title="连写章数：从指令里的章号开始逐章写，每章约一分钟"
                     >
@@ -1138,7 +1138,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                   )}
 
                   {progress && (
-                    <span className="text-[10px] shrink-0 ml-auto" style={{ color: 'hsl(var(--primary))' }}>
+                    <span className="text-[11px] shrink-0 ml-auto" style={{ color: 'hsl(var(--primary))' }}>
                       第 {progress.index} / {progress.total} 章
                     </span>
                   )}
@@ -1147,7 +1147,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                     <button
                       type="button"
                       onClick={interrupt}
-                      className="ml-auto text-[10px] px-2 py-0.5 rounded-md"
+                      className="ml-auto text-[11px] px-2 py-0.5 rounded-md"
                       style={{
                         color: 'hsl(var(--destructive))',
                         border: '0.5px solid hsl(var(--destructive) / 0.4)',
@@ -1268,11 +1268,11 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                 </select>
               )}
               {prose ? (
-                <span className="ml-auto text-[10px]" style={{ color: 'hsl(var(--state-running))' }}>
+                <span className="ml-auto text-[11px]" style={{ color: 'hsl(var(--state-running))' }}>
                   {revision > 0 ? `第 ${revision} 次重写` : '本次生成'}
                 </span>
               ) : viewChapter ? (
-                <span className="ml-auto text-[10px]" style={{ color: 'hsl(var(--muted-foreground) / 0.7)' }}>
+                <span className="ml-auto text-[11px]" style={{ color: 'hsl(var(--muted-foreground) / 0.7)' }}>
                   已入库 · {viewChapter.wordCount ?? 0} 字
                 </span>
               ) : null}

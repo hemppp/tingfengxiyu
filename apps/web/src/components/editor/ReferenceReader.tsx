@@ -277,7 +277,7 @@ export function ReferenceReader() {
           )}
 
           {!activeBook && (
-            <div className="shrink-0 px-4 py-2 text-center text-[10px]" style={{ color: 'rgba(55,53,47,0.15)' }}>
+            <div className="shrink-0 px-4 py-2 text-center text-[11px]" style={{ color: 'rgba(55,53,47,0.15)' }}>
               拆书请到「AI 对话」选择扫榜收藏的书 · 报告会回存本书
             </div>
           )}

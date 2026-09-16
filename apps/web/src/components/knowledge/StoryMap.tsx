@@ -31,20 +31,23 @@ function worldOf(loc: Location): { x: number; y: number } {
 
 /** 主题图例色板 */
 function legendFor(isDark: boolean) {
+  // 水墨化（2026-09-16）：地形原为彩色（#a8cde0 蓝 / #b9cc8f 绿 / #8d8776 褐 / #f2efe6 米白），
+  // 与黑白水墨主题冲突。改为按「明度」区分地貌：深海最深 → 雪峰最浅。
+  // ⚠️ 地貌靠明度辨认，相邻档差 ≥12% 才分得开；图例每项都带文字标签，不依赖颜色识别。
   return isDark
     ? [
-        { label: '深海', color: '#0e2033' },
-        { label: '浅海', color: 'hsl(0 0% 34%)' },
-        { label: '平原', color: '#4a5a42' },
-        { label: '山地', color: '#585450' },
-        { label: '雪峰', color: '#a8aca8' },
+        { label: '深海', color: 'hsl(0 0% 12%)' },
+        { label: '浅海', color: 'hsl(0 0% 28%)' },
+        { label: '平原', color: 'hsl(0 0% 44%)' },
+        { label: '山地', color: 'hsl(0 0% 60%)' },
+        { label: '雪峰', color: 'hsl(0 0% 82%)' },
       ]
     : [
-        { label: '深海', color: 'hsl(0 0% 26%)' },
-        { label: '浅海', color: '#a8cde0' },
-        { label: '平原', color: '#b9cc8f' },
-        { label: '山地', color: '#8d8776' },
-        { label: '雪峰', color: '#f2efe6' },
+        { label: '深海', color: 'hsl(0 0% 20%)' },
+        { label: '浅海', color: 'hsl(0 0% 38%)' },
+        { label: '平原', color: 'hsl(0 0% 54%)' },
+        { label: '山地', color: 'hsl(0 0% 70%)' },
+        { label: '雪峰', color: 'hsl(0 0% 92%)' },
       ];
 }
 
@@ -323,7 +326,7 @@ export function StoryMap() {
                 {projectLocations.length}
               </span>
             </div>
-            <p className="text-[10px] text-muted-foreground mt-1">右键地图添加 · 拖拽移动</p>
+            <p className="text-[11px] text-muted-foreground mt-1">右键地图添加 · 拖拽移动</p>
           </div>
           <nav className="flex-1 overflow-y-auto" role="list" aria-label="地点导航列表">
             {projectLocations.length === 0 ? (
@@ -353,7 +356,7 @@ export function StoryMap() {
                       <div className="text-foreground/80 truncate" title={loc.name}>
                         {loc.name}
                       </div>
-                      <div className="text-[10px] text-muted-foreground truncate">
+                      <div className="text-[11px] text-muted-foreground truncate">
                         {pos.x.toFixed(1)}, {pos.y.toFixed(1)}
                       </div>
                     </div>
@@ -465,7 +468,7 @@ export function StoryMap() {
                   <circle cx="12" cy="12" r="4.5" style={{ fill: 'hsl(var(--primary-foreground))' }} />
                 </svg>
                 <span
-                  className="mt-0.5 max-w-[88px] truncate text-[10px] leading-3 px-1 py-px rounded-md bg-background/85 text-foreground/80 pointer-events-none select-none"
+                  className="mt-0.5 max-w-[88px] truncate text-[11px] leading-3 px-1 py-px rounded-md bg-background/85 text-foreground/80 pointer-events-none select-none"
                 >
                   {loc.name}
                 </span>
@@ -481,7 +484,7 @@ export function StoryMap() {
                 <p className="text-sm text-foreground/60">
                   在地图上 <strong className="text-foreground/80">右键点击</strong> 添加故事地点
                 </p>
-                <p className="text-[10px] text-foreground/25 mt-0.5">
+                <p className="text-[11px] text-foreground/25 mt-0.5">
                   标注小说中的城市、要塞、秘密基地…地点会顶起地势
                 </p>
               </div>
@@ -519,7 +522,7 @@ export function StoryMap() {
                   取消
                 </button>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-1.5">Enter 确认 · Esc 取消</p>
+              <p className="text-[11px] text-muted-foreground mt-1.5">Enter 确认 · Esc 取消</p>
             </div>
           )}
 
@@ -529,7 +532,7 @@ export function StoryMap() {
             aria-label="地势图例"
           >
             {legend.map((item) => (
-              <span key={item.label} className="flex items-center gap-1 text-[10px] text-foreground/50">
+              <span key={item.label} className="flex items-center gap-1 text-[11px] text-foreground/50">
                 <span
                   className="w-2 h-2 rounded-[3px] border border-foreground/10"
                   style={{ backgroundColor: item.color }}
@@ -552,7 +555,7 @@ export function StoryMap() {
 
           {/* 底部提示 */}
           <div
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] text-muted-foreground bg-background/80 px-3 py-1 rounded-full pointer-events-none select-none"
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[11px] text-muted-foreground bg-background/80 px-3 py-1 rounded-full pointer-events-none select-none"
             aria-hidden="true"
           >
             右键添加地点 · 拖拽移动标记 · 地势由高斯泼溅实时生成
@@ -598,7 +601,7 @@ export function StoryMap() {
               <div>
                 <label
                   htmlFor="location-description"
-                  className="text-[10px] text-muted-foreground uppercase tracking-wider"
+                  className="text-[11px] text-muted-foreground uppercase tracking-wider"
                 >
                   描述
                 </label>
@@ -619,7 +622,7 @@ export function StoryMap() {
 
               {selectedLocation.chapters.length > 0 && (
                 <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  <label className="text-[11px] text-muted-foreground uppercase tracking-wider">
                     出现章节
                   </label>
                   <div className="mt-1 flex flex-wrap gap-1" role="list" aria-label="出现章节列表">
@@ -627,7 +630,7 @@ export function StoryMap() {
                       <span
                         key={ch}
                         role="listitem"
-                        className="px-1.5 py-0.5 text-[10px] rounded-xl bg-muted text-foreground/60"
+                        className="px-1.5 py-0.5 text-[11px] rounded-xl bg-muted text-foreground/60"
                       >
                         {getChapterInfo(ch)}
                       </span>
@@ -638,14 +641,14 @@ export function StoryMap() {
 
               {selectedLocation.tags.length > 0 && (
                 <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  <label className="text-[11px] text-muted-foreground uppercase tracking-wider">
                     标签
                   </label>
                   <div className="mt-1 flex flex-wrap gap-1" role="list" aria-label="标签列表">
                     {selectedLocation.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="px-1.5 py-0.5 text-[10px] rounded-xl bg-primary/10 text-primary"
+                        className="px-1.5 py-0.5 text-[11px] rounded-xl bg-primary/10 text-primary"
                       >
                         {tag}
                       </span>

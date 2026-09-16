@@ -266,14 +266,14 @@ export function AIConfigPanel() {
           API 地址
           {backendHint ? (
             <span
-              className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-xl font-medium"
+              className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-xl font-medium"
               style={{ background: 'rgba(35,131,116,0.12)', color: '#1e6fa8' }}
             >
               <Server size={10} /> {config.label ?? '内置后端'}
             </span>
           ) : hasUrl ? (
             <span
-              className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-xl font-medium"
+              className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-xl font-medium"
               style={{ background: 'rgba(212,184,125,0.15)', color: '#8a6d3b' }}
             >
               <Globe size={10} /> 第三方 / 中转站
@@ -644,7 +644,7 @@ export function AIConfigPanel() {
             URL: {savedConfig.baseUrl || '未设置'}
             {savedIsBackend && (
               <span
-                className="ml-2 inline-flex items-center gap-0.5 text-[10px] px-1 rounded-xl"
+                className="ml-2 inline-flex items-center gap-0.5 text-[11px] px-1 rounded-xl"
                 style={{ background: 'rgba(35,131,116,0.12)', color: '#1e6fa8' }}
               >
                 <Server size={9} /> 内置后端

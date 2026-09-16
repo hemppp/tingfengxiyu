@@ -73,7 +73,7 @@ function Panel({ title, icon: Icon, iconColor, count, hint, children }: {
           </span>
         )}
         {hint && (
-          <span className="ml-auto text-[10px] truncate" style={{ color: 'hsl(var(--muted-foreground) / 0.75)' }}>
+          <span className="ml-auto text-[11px] truncate" style={{ color: 'hsl(var(--muted-foreground) / 0.75)' }}>
             {hint}
           </span>
         )}

@@ -189,7 +189,7 @@ export function BookScanDirectory({ onGoLibrary }: { onGoLibrary: () => void }) 
       )}
 
       {/* 状态行 */}
-      <div className="shrink-0 px-3 pb-1 text-[10px]" style={{ color: 'rgba(55,53,47,0.35)' }}>
+      <div className="shrink-0 px-3 pb-1 text-[11px]" style={{ color: 'rgba(55,53,47,0.35)' }}>
         {loading && '抓取中…'}
         {!loading && stale && <span className="text-amber-600">缓存数据（站点抓取失败）</span>}
         {!loading && !stale && fetchedAt && `更新于 ${new Date(fetchedAt).toLocaleTimeString()}`}
@@ -212,8 +212,8 @@ export function BookScanDirectory({ onGoLibrary }: { onGoLibrary: () => void }) 
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="w-5 shrink-0 text-center font-semibold" style={{ color: 'rgba(55,53,47,0.3)' }}>{item.rank}</span>
                 <span className="truncate font-medium text-[12px]" style={{ color: '#37352f' }} title={item.intro || item.title}>{item.title}</span>
-                {item.status && <span className="shrink-0 px-1 rounded text-[10px]" style={{ background: 'rgba(0,0,0,0.05)', color: 'rgba(55,53,47,0.5)' }}>{item.status}</span>}
-                {item.meta && <span className="shrink-0 text-[10px]" style={{ color: 'rgba(55,53,47,0.4)' }}>{item.meta}</span>}
+                {item.status && <span className="shrink-0 px-1 rounded text-[11px]" style={{ background: 'rgba(0,0,0,0.05)', color: 'rgba(55,53,47,0.5)' }}>{item.status}</span>}
+                {item.meta && <span className="shrink-0 text-[11px]" style={{ color: 'rgba(55,53,47,0.4)' }}>{item.meta}</span>}
                 <span className="ml-auto shrink-0 truncate max-w-16 text-[11px]" style={{ color: 'rgba(55,53,47,0.4)' }}>{item.author}</span>
               </div>
               {item.intro && (
@@ -258,7 +258,7 @@ export function BookScanDirectory({ onGoLibrary }: { onGoLibrary: () => void }) 
         )}
       </div>
 
-      <div className="shrink-0 px-3 py-1.5 border-t text-[10px] text-center" style={{ borderColor: 'rgba(0,0,0,0.06)', color: 'rgba(55,53,47,0.3)' }}>
+      <div className="shrink-0 px-3 py-1.5 border-t text-[11px] text-center" style={{ borderColor: 'rgba(0,0,0,0.06)', color: 'rgba(55,53,47,0.3)' }}>
         收藏后到「AI 对话」发起拆书，拆完的报告会回到书架，点击即可查看
       </div>
     </div>

@@ -155,7 +155,7 @@ export function BottomDrawer({
                   <span>{tab.label}</span>
                   {tab.badge !== undefined && tab.badge !== 0 && (
                     <span
-                      className="ml-1 text-[9px] tabular-nums px-1.5 rounded-full"
+                      className="ml-1 text-[11px] tabular-nums px-1.5 rounded-full"
                       style={{ background: 'hsl(var(--cinnabar) / 0.15)', color: 'hsl(var(--cinnabar))' }}
                     >
                       {tab.badge}

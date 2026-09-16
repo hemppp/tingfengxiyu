@@ -114,7 +114,7 @@ function WheelBubble({
     >
       <Icon size={17} aria-hidden="true" />
       <span
-        className="absolute top-full mt-1 whitespace-nowrap text-[10px] px-2 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+        className="absolute top-full mt-1 whitespace-nowrap text-[11px] px-2 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
         style={{
           color: 'hsl(var(--ink))',
           background: 'rgb(var(--glass-tint) / 0.85)',
@@ -229,16 +229,44 @@ export function FloatingBubbles({ panels, openKeys, onToggle }: FloatingBubblesP
   const dir: 1 | -1 = hubPos.x > window.innerWidth / 2 ? -1 : 1;
   const n = panels.length;
   const spread = Math.min(180, 40 + n * 12); // 度（半圆，±spread/2）
-  const arcRad = (spread * Math.PI) / 180;
-  const step = n > 1 ? arcRad / (n - 1) : arcRad;
-  // 半径上限：从罗盘朝展开方向到屏幕边缘的距离 - 余量
+  // ★ 避让正文列（D3，2026-09-16 实测 520px + 1440px）：
+  //   罗盘贴左缘展开时，卫星会铺到正文列上把字盖住。原版只按「到屏幕边缘」
+  //   算半径，实测 1440 宽屏也会压入正文 20px —— 所以不是窄屏专属问题，
+  //   宽窄屏都要避让。
+  //
+  //   ⚠️ 第一版按「屏幕宽 - 固定 34em」估算，是错的：520px 窄屏下
+  //      (520-544)/2 为负，被 Math.max(64,…) 兜到 64，而正文实际占满 312px、
+  //      左缘在 104，于是展开后气泡右缘 124 仍压入正文 20px（实测 overlapX=+20）。
+  //   改为「运行时量正文真实左缘」，不再依赖任何硬编码宽度。
+  const isNarrow = window.innerWidth < 900;
+  // 展开方向决定要避让哪一侧的正文边缘
+  const proseEl = document.querySelector('.ProseMirror');
+  const proseRect = proseEl ? proseEl.getBoundingClientRect() : null;
+  const proseLeft = proseRect ? proseRect.left : 0;
+  const proseRight = proseRect ? proseRect.right : window.innerWidth;
   const maxR = Math.max(
     120,
     Math.floor(dir === 1 ? window.innerWidth - hubPos.x : hubPos.x) - 64,
   );
-  const radius = Math.min(
-    maxR,
-    Math.max(130, Math.ceil(MIN_CHORD / (2 * Math.sin(step / 2)))),
+  // 向右展开时避让正文左缘；向左展开时避让正文右缘。留 GAP 避免贴着字。
+  const GAP = 10;
+  const avoidR = dir === 1
+    ? Math.floor(proseLeft - hubPos.x - BUBBLE / 2 - GAP)
+    : Math.floor(hubPos.x - proseRight - BUBBLE / 2 - GAP);
+  // 拿不到正文（非编辑器页）时 Inf 等于不收紧，行为与旧版一致
+  const proseMaxR = proseRect ? Math.max(BUBBLE, avoidR) : Infinity;
+  // 窄屏同时收窄扇形张角：半径压小后若还铺 ±90°，相邻卫星会叠在一起；
+  // 收窄到 70° 让它们挤在罗盘附近一小段弧上，整体仍不越入正文列。
+  const effSpread = isNarrow ? Math.min(spread, 70) : spread;
+  const effArcRad = (effSpread * Math.PI) / 180;
+  const effStep = n > 1 ? effArcRad / (n - 1) : effArcRad;
+  const radius = Math.max(
+    BUBBLE, // 底线：半径至少一个气泡直径，否则卫星全叠在罗盘上
+    Math.min(
+      maxR,
+      proseMaxR,
+      Math.max(130, Math.ceil(MIN_CHORD / (2 * Math.sin(effStep / 2)))),
+    ),
   );
 
   const hubClick = (key: string) => {
@@ -288,7 +316,7 @@ export function FloatingBubbles({ panels, openKeys, onToggle }: FloatingBubblesP
         }}
       >
         {panels.map((p, idx) => {
-          const aDeg = -spread / 2 + (spread * idx) / (n - 1); // 屏幕坐标：0° = 正右方
+          const aDeg = -effSpread / 2 + (effSpread * idx) / (n - 1); // 屏幕坐标：0° = 正右方
           const rad = (aDeg * Math.PI) / 180;
           const x = Math.cos(rad) * radius * dir;
           const y = Math.sin(rad) * radius;

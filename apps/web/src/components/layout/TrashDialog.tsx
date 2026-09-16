@@ -150,7 +150,7 @@ export function TrashDialog({ visible, onClose }: TrashDialogProps) {
                   <div className="text-[12px] font-medium truncate" style={{ color: 'hsl(var(--foreground))' }}>
                     {ch.title || '未命名章节'}
                   </div>
-                  <div className="text-[10px] mt-0.5 flex items-center gap-2" style={{ color: 'hsl(var(--ink-pale))' }}>
+                  <div className="text-[11px] mt-0.5 flex items-center gap-2" style={{ color: 'hsl(var(--ink-pale))' }}>
                     <span>{ch.wordCount.toLocaleString()} 字</span>
                     {ch.deletedAt && (
                       <span>· 删除于 {new Date(ch.deletedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
@@ -187,7 +187,7 @@ export function TrashDialog({ visible, onClose }: TrashDialogProps) {
         {trashed.length > 0 && (
           <div className="nm-modal-footer" style={{ justifyContent: 'flex-start' }}>
             <AlertTriangle size={11} style={{ color: 'hsl(var(--ochre))' }} aria-hidden="true" />
-            <span className="text-[10px]" style={{ color: 'hsl(var(--ink-pale))' }}>
+            <span className="text-[11px]" style={{ color: 'hsl(var(--ink-pale))' }}>
               软删除的章节可随时还原；点击"彻底删除"将永久移除。
             </span>
           </div>

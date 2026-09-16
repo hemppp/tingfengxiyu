@@ -265,7 +265,7 @@ export function AdminPage() {
                         </span>
                         {u.id === currentUser?.id && (
                           <span
-                            className="ml-2 text-[10px] px-1.5 py-0.5 rounded"
+                            className="ml-2 text-[11px] px-1.5 py-0.5 rounded"
                             style={{
                               background: 'hsl(var(--mountain-cyan) / 0.12)',
                               color: 'hsl(var(--mountain-cyan))',

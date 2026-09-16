@@ -138,7 +138,7 @@ export function QuickOpen({ open, panels, openKeys, onPick, onClose }: QuickOpen
               <p.icon size={13} aria-hidden="true" />
               <span className="flex-1 truncate">{p.label}</span>
               {openKeys.includes(p.key) && (
-                <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>已打开</span>
+                <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }}>已打开</span>
               )}
             </button>
           ))}

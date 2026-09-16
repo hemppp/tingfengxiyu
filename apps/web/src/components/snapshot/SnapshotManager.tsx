@@ -180,7 +180,7 @@ export function SnapshotManager() {
       <div className="p-3 mc-divider-bottom flex items-center gap-2">
         <Camera size={16} aria-hidden="true" />
         <h2 className="mc-title-sm">快照管理</h2>
-        <span className="text-[10px] mc-text-sm text-muted-foreground">{chapterSnapshots.length}</span>
+        <span className="text-[11px] mc-text-sm text-muted-foreground">{chapterSnapshots.length}</span>
         <div className="flex-1" />
         <button
           onClick={reload}

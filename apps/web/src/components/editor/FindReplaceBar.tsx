@@ -220,7 +220,7 @@ export function FindReplaceBar({ editor, visible, onClose }: FindReplaceBarProps
           aria-label="查找内容"
         />
         {matchCount && (
-          <span className="text-[10px] tabular-nums px-1.5 shrink-0" style={{ color: 'hsl(var(--ink-pale))' }}>
+          <span className="text-[11px] tabular-nums px-1.5 shrink-0" style={{ color: 'hsl(var(--ink-pale))' }}>
             {matchCount}
           </span>
         )}
@@ -311,7 +311,7 @@ export function FindReplaceBar({ editor, visible, onClose }: FindReplaceBarProps
         <div className="w-px h-3 mx-1" style={{ background: 'hsl(var(--border) / 0.4)' }} />
         <button
           onClick={() => setCaseSensitive(!caseSensitive)}
-          className="shrink-0 px-1.5 py-0.5 text-[10px] rounded-xl transition-colors"
+          className="shrink-0 px-1.5 py-0.5 text-[11px] rounded-xl transition-colors"
           style={{
             color: caseSensitive ? 'hsl(var(--mountain-deep))' : 'hsl(var(--ink-pale))',
             background: caseSensitive ? 'hsl(var(--mountain-pale) / 0.7)' : 'transparent',
@@ -325,7 +325,7 @@ export function FindReplaceBar({ editor, visible, onClose }: FindReplaceBarProps
         </button>
         <button
           onClick={() => setWholeWord(!wholeWord)}
-          className="shrink-0 px-1.5 py-0.5 text-[10px] rounded-xl transition-colors"
+          className="shrink-0 px-1.5 py-0.5 text-[11px] rounded-xl transition-colors"
           style={{
             color: wholeWord ? 'hsl(var(--mountain-deep))' : 'hsl(var(--ink-pale))',
             background: wholeWord ? 'hsl(var(--mountain-pale) / 0.7)' : 'transparent',
@@ -338,12 +338,12 @@ export function FindReplaceBar({ editor, visible, onClose }: FindReplaceBarProps
           全字
         </button>
         {findText && matches.length === 0 && (
-          <span className="ml-auto text-[10px] flex items-center gap-1" style={{ color: 'hsl(var(--cinnabar))' }}>
+          <span className="ml-auto text-[11px] flex items-center gap-1" style={{ color: 'hsl(var(--cinnabar))' }}>
             <X size={10} /> 无匹配
           </span>
         )}
         {findText && matches.length > 0 && (
-          <span className="ml-auto text-[10px] flex items-center gap-1" style={{ color: 'hsl(var(--willow))' }}>
+          <span className="ml-auto text-[11px] flex items-center gap-1" style={{ color: 'hsl(var(--willow))' }}>
             <Check size={10} /> 已匹配
           </span>
         )}

@@ -115,7 +115,7 @@ export const BubbleNode = memo(function BubbleNode({ data }: NodeProps) {
       </div>
       {d.subtitle && (
         <span
-          className="text-[10px] font-medium whitespace-nowrap"
+          className="text-[11px] font-medium whitespace-nowrap"
           style={{
             position: 'absolute',
             top: '100%',

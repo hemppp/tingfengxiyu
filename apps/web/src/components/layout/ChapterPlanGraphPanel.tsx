@@ -477,7 +477,7 @@ export function ChapterPlanGraphPanel({
 
       {changes.length > 0 && (
         <div className="pt-2" style={{ borderTop: '0.5px solid hsl(var(--border) / 0.5)' }}>
-          <div className="text-[10px] mb-1" style={{ color: 'hsl(var(--muted-foreground))', letterSpacing: '0.08em' }}>
+          <div className="text-[11px] mb-1" style={{ color: 'hsl(var(--muted-foreground))', letterSpacing: '0.08em' }}>
             最近变动（全量 {changes.length} 条）
           </div>
           <ul className="space-y-1">
@@ -516,7 +516,7 @@ export function ChapterPlanGraphPanel({
         </span>
       ))}
       <span className="flex items-center gap-1.5">
-        <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>圆节点＝章号 · 方块＝被改动的实体 · 徽标数字＝变动条数</span>
+        <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }}>圆节点＝章号 · 方块＝被改动的实体 · 徽标数字＝变动条数</span>
       </span>
     </>
   );

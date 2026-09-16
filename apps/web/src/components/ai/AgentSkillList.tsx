@@ -130,12 +130,12 @@ export function AgentSkillList({
         <button
           disabled={bulkBusy || skills.length === 0}
           onClick={() => void handleAll(true)}
-          className="text-[10px] px-1.5 py-0.5 rounded-md border hover:bg-muted/60 disabled:opacity-40"
+          className="text-[11px] px-1.5 py-0.5 rounded-md border hover:bg-muted/60 disabled:opacity-40"
         >全部开启</button>
         <button
           disabled={bulkBusy || skills.length === 0}
           onClick={() => void handleAll(false)}
-          className="text-[10px] px-1.5 py-0.5 rounded-md border hover:bg-muted/60 disabled:opacity-40"
+          className="text-[11px] px-1.5 py-0.5 rounded-md border hover:bg-muted/60 disabled:opacity-40"
         >全部关闭</button>
       </div>
 
@@ -143,7 +143,7 @@ export function AgentSkillList({
         <div className="flex flex-col items-center gap-1.5 py-6 text-[11px] text-muted-foreground" role="status">
           <Inbox size={16} aria-hidden="true" />
           <div>{view.target.name}名下还没有技能</div>
-          <div className="text-[10px] opacity-80">去「智能体 Skills → 技能库」安装，或把已有技能的归属改到它</div>
+          <div className="text-[11px] opacity-80">去「智能体 Skills → 技能库」安装，或把已有技能的归属改到它</div>
         </div>
       )}
 
@@ -167,11 +167,11 @@ export function AgentSkillList({
                 <div className="text-[12px] font-medium truncate flex items-center gap-1.5">
                   <span className="truncate">{s.name}</span>
                   {s.source === 'installed' && (
-                    <span className="shrink-0 text-[9px] px-1 rounded bg-muted text-muted-foreground">已装</span>
+                    <span className="shrink-0 text-[11px] px-1 rounded bg-muted text-muted-foreground">已装</span>
                   )}
                 </div>
                 {s.description && (
-                  <div className={`text-[10px] text-muted-foreground leading-tight ${compact ? 'truncate' : 'line-clamp-2'}`}>
+                  <div className={`text-[11px] text-muted-foreground leading-tight ${compact ? 'truncate' : 'line-clamp-2'}`}>
                     {s.description}
                   </div>
                 )}
