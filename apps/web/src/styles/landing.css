@@ -1,15 +1,16 @@
 :root {
-  --landing-bg: #f2f3f7;
-  --landing-accent: #2383C7;
-  --landing-accent-light: #6FA9D8;
-  --landing-accent-dim: #B5D2EA;
-  --landing-accent-pale: #DCEAF6;
-  --landing-text-primary: hsl(var(--foreground, 224 28% 12%));
-  --landing-text-secondary: hsl(var(--muted-foreground, 221 10% 46%));
-  --landing-text-muted: hsl(var(--ink-pale, 221 10% 58%));
+  /* 水墨化（2026-09-15）：落地页原为冷调瓷白 + 霁青系，现整体归入黑白灰 */
+  --landing-bg: #f5f5f5;
+  --landing-accent: #1f1f1f;
+  --landing-accent-light: #6e6e6e;
+  --landing-accent-dim: #b5b5b5;
+  --landing-accent-pale: #e5e5e5;
+  --landing-text-primary: hsl(var(--foreground, 0 0% 9%));
+  --landing-text-secondary: hsl(var(--muted-foreground, 0 0% 42%));
+  --landing-text-muted: hsl(var(--ink-pale, 0 0% 58%));
   --landing-card-bg: transparent;           /* 由玻璃 backdrop-filter 接管 */
-  --landing-card-border: hsl(var(--border, 220 16% 88%) / 0.5);
-  --landing-card-hover-border: rgba(35,131,199,0.35);
+  --landing-card-border: hsl(var(--border, 0 0% 82%) / 0.5);
+  --landing-card-hover-border: hsl(0 0% 12% / 0.35);
   --landing-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
   --landing-serif: "Noto Serif SC", "Source Han Serif SC", serif;
 }

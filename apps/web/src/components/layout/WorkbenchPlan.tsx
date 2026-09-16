@@ -21,7 +21,12 @@ import { ChevronDown, ChevronRight, ListOrdered } from 'lucide-react';
 export type StageKey = 'discuss' | 'write' | 'review' | 'check' | 'polish' | 'deliver';
 export type StageState = 'idle' | 'running' | 'done' | 'blocked';
 
-const STAGES: ReadonlyArray<{ key: StageKey; label: string; hint: string }> = [
+/**
+ * 单章闭环的六个阶段。
+ * ★ 导出给 ChapterPlanGraphPanel 复用 —— 阶段名与顺序是**契约**，
+ *   图谱版与列表版各写一份必然漂移（改一处漏一处是这类 UI 最典型的 bug）。
+ */
+export const STAGES: ReadonlyArray<{ key: StageKey; label: string; hint: string }> = [
   { key: 'discuss', label: '讨论', hint: '设计智能体来回讨论并收敛出本章结论' },
   { key: 'write', label: '写作', hint: '写作官据结论出稿（目标 3000 字，不足 2500 会先补写）' },
   { key: 'review', label: '意图门', hint: '对照本章结论查有无落实；打回上限 2 次' },

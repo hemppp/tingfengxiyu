@@ -41,6 +41,14 @@ import { randomUUID } from 'node:crypto';
 
 export type SessionEvent =
   | { type: 'phase'; label: string }
+  /**
+   * 思维链增量（推理型模型的 reasoning_content）。
+   *
+   * 实时逐片到达，同一个 agent 在一次发言里可能发几十到上千条 ——
+   * 前端按 agent 追加到一个「正在想」的缓冲区，收到该 agent 的 turn 事件时结算。
+   * **模型不吐推理内容（非推理模型 / 中转站剥了字段）时一条都不会有**，前端要按「可能没有」处理。
+   */
+  | { type: 'thinking'; agent: string; name: string; short: string; color: string; delta: string }
   | {
       type: 'turn';
       agent: string;
@@ -49,6 +57,8 @@ export type SessionEvent =
       short: string;
       text: string;
       meta?: string;
+      /** 本次发言的完整思维链（与 thinking 事件同一份内容；没有则 undefined） */
+      thinking?: string;
     }
   | { type: 'conclusion'; text: string }
   | { type: 'draft'; text: string; revision: number }
@@ -514,6 +524,16 @@ export async function runDiscussion(
       maxTurns: turnsFor(role),
       ...(opts?.maxTokens != null ? { maxTokens: opts.maxTokens } : {}),
       context: { projectId, userId },
+      // ★ 思维链旁路：宿主在 provider 的 fetch 上截 reasoning_content 后从这里推回来。
+      //   拿不到就一次都不回调（不是所有模型都吐），下面的 turn 事件只是不带 thinking。
+      onThinking: (delta) => emit({
+        type: 'thinking',
+        agent: role.key,
+        name: role.name,
+        short: role.short,
+        color: role.color,
+        delta,
+      }),
     });
     const text = String(result.text ?? '').trim();
     if (!text) throw new Error(`${role.name}未产出内容（可能是模型调用失败）`);
@@ -537,6 +557,7 @@ export async function runDiscussion(
       text,
       meta: [result.model ? `模型 ${result.model}` : '', skillMetaNote(agentSkills, role.key)]
         .filter(Boolean).join(' · ') || undefined,
+      ...(result.thinking ? { thinking: result.thinking } : {}),
     });
     return text;
   };

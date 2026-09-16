@@ -285,7 +285,7 @@ export function OutlineFillDialog({
                 label="核心冲突"
                 hint={parsed.coreConflict ? '已识别' : '手动填入'}
                 hasExisting={!!notepadData?.coreConflict?.trim()}
-                color="#ef4444"
+                color="hsl(0 0% 38%)"
               />
               {/* 各章节 */}
               {sortedChapters.length === 0 ? (
@@ -315,7 +315,7 @@ export function OutlineFillDialog({
                       label={`第${ch.order}章 ${ch.title || '未命名'}`}
                       hint={matched ? '已识别' : '手动填入'}
                       hasExisting={hasExisting}
-                      color="#0ea5e9"
+                      color="hsl(0 0% 30%)"
                     />
                   );
                 })

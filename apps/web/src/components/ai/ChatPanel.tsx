@@ -44,11 +44,12 @@ type QuickPromptCategory = {
   items: string[];
 };
 
+/** 快捷提示词分类色 —— 水墨化：以「墨阶」代替色相区分（饱和度恒 0） */
 const QUICK_PROMPTS: QuickPromptCategory[] = [
   {
     category: '场景描写',
     icon: MapPin,
-    color: '#a855f7',
+    color: 'hsl(0 0% 38%)', // 淡墨
     items: [
       '帮我描述一下当前的场景',
       '补充一些环境细节描写',
@@ -58,7 +59,7 @@ const QUICK_PROMPTS: QuickPromptCategory[] = [
   {
     category: '人物刻画',
     icon: User,
-    color: '#3b82f6',
+    color: 'hsl(0 0% 22%)', // 浓墨
     items: [
       '帮我丰富主角的心理活动',
       '为本章添加一段人物对话',
@@ -68,7 +69,7 @@ const QUICK_PROMPTS: QuickPromptCategory[] = [
   {
     category: '情节推进',
     icon: Wand2,
-    color: '#f59e0b',
+    color: 'hsl(0 0% 46%)', // 中墨
     items: [
       '主角接下来应该怎么做？',
       '有什么伏笔需要注意吗？',
@@ -78,7 +79,7 @@ const QUICK_PROMPTS: QuickPromptCategory[] = [
   {
     category: '文字打磨',
     icon: Sparkles,
-    color: '#6b7280',
+    color: 'hsl(0 0% 58%)', // 清墨
     items: [
       '优化这段文字的表达',
       '分析一下本章的节奏',

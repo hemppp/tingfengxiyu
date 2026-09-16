@@ -17,10 +17,19 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-/** 分页区宽度范围（与设计文档一致） */
+/**
+ * 分页区宽度范围。
+ * ★ 2026-09-15：上限 720 → 1100、默认 420 → 560。
+ *   作者要求「本章计划 按照正文页面一样变大」—— 原上限 720 把看板锁在了一条窄栏里，
+ *   而「本章计划」这类面板（阶段推进 + 本章结论）本身是阅读型内容，宽一点才看得舒服。
+ *   放开上限**不会盖住正文**：`AutoWriteWorkbench` 的布局预算里带了 `BODY_MIN_WIDTH`，
+ *   空间不够时会自动把分页区落到正文下方（既有保护，本次未改动）。
+ */
 export const PANE_MIN = 320;
-export const PANE_MAX = 720;
-export const PANE_DEFAULT = 420;
+export const PANE_MAX = 1100;
+export const PANE_DEFAULT = 560;
+/** 历史默认值（PANE_MAX=720 那个时代的默认宽）。只用于 onRehydrateStorage 的一次性迁移 */
+export const LEGACY_PANE_DEFAULT = 420;
 
 export interface WorkspaceState {
   /** 组 2（侧编辑器组）已打开的看板 key，按标签顺序（组 1 的正文不在里面，它常驻） */
@@ -154,7 +163,11 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       toggleBubble: (key) => {
         const s = get();
         const has = s.tabs.includes(key);
-        if (!has) { s.openPanel(key, { preview: true }); return; }
+        // ★ 2026-09-15：气泡单击改为**直接固定打开**（原为 `{ preview: true }`）。
+        //   作者反馈「点击打开的时候让那些标签像正文一样打开」—— 预览态会让标签呈斜体、
+        //   并且会被下一个预览顶掉槽位，与「正文」标签的常驻感不一致。
+        //   双击气泡走的仍是 promote（幂等固定），语义不变；若要恢复 IDE 预览行为，把这里改回 true。
+        if (!has) { s.openPanel(key, { preview: false }); return; }
         if (s.active !== key) { s.activate(key); return; }
         // ★ 就是当前标签：只收起组 2，**不销毁**看板（面板里的筛选/滚动/表单都留着）
         set({ paneOpen: !s.paneOpen });
@@ -184,6 +197,10 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       partialize: (s) => ({ tabs: s.tabs, active: s.active, paneOpen: s.paneOpen, paneWidth: s.paneWidth, mru: s.mru }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
+        // ★ 2026-09-15 迁移：旧的 420 是被 PANE_MAX=720 锁住的窄栏尺寸。上限已放开到 1100，
+        //   把「仍停在旧默认值」的人带到新默认 560。**只迁移恰好等于旧默认值的情况** ——
+        //   用户手动拖过的宽度（哪怕只拖到 430）一律不动，那是他的选择。
+        if (state.paneWidth === LEGACY_PANE_DEFAULT) state.paneWidth = PANE_DEFAULT;
         // 恢复时自检：宽度钳制；active 不在 tabs 里就回退（配置被改过/面板被下线）
         state.paneWidth = clampPaneWidth(state.paneWidth ?? PANE_DEFAULT);
         if (state.active && !state.tabs.includes(state.active)) state.active = state.tabs[0] ?? null;

@@ -3,10 +3,12 @@ import type { SkillDef } from '../framework/types.js';
 
 export const foreshadowTracker: SkillDef = {
   id: 'foreshadow-tracker',
+  // 归属智能体 —— 2026-09-15 重分配（此前被 ensureSeeded 统一硬编码为 writer）
+  ownerAgent: 'continuity-keeper',
   contextKeys: ['foreshadows'],
   name: '伏笔追踪者',
   description: '核对伏笔回收、建议新伏笔与留白尺度',
-  color: '#f59e0b',
+  color: 'hsl(0 0% 46%)',
   systemPrompt: `【已激活技能：伏笔追踪者】
 你现在同时兼任"伏笔追踪者"。在回答中请侧重：
 1. 结合注入的"伏笔列表"，核对当前章节是否触及已铺设的伏笔

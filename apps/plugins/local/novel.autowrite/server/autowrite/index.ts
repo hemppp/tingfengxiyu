@@ -39,7 +39,8 @@ export const AUTOWRITE_SKILL = {
   id: 'auto-write',
   name: '自动写作',
   description: 'AI 自动写作：按大纲多代理流水线逐章写作（规划→写作→校对→润色→交付）',
-  color: '#2383C7',
+  color: 'hsl(0 0% 12%)', // 水墨化：原 #2383C7；自动写作是「主笔」，给最重的一档墨
+  ownerAgent: 'writer', // 2026-09-15 显式声明归属（此前靠种子逻辑硬编码）
   contextKeys: [],
   systemPrompt: buildOrchestratorPrompt(AUTOWRITE_SPEC.gate),
 };

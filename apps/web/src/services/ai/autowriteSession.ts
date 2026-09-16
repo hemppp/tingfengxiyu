@@ -7,7 +7,8 @@
 //
 // 事件：
 //   { type:'phase', label }      正在做什么（显示在输入框上方）
-//   { type:'turn', agent, ... }  某个角色的完整发言
+//   { type:'thinking', ... }     某角色正在推理：思维链增量（逐片、实时；非推理模型没有）
+//   { type:'turn', agent, ... }  某个角色的完整发言（带本次发言的整段思维链）
 //   { type:'conclusion', text }  收敛出的本章结论
 //   { type:'error' | 'done' }
 // ============================================================
@@ -23,10 +24,17 @@ export interface SessionTurn {
   short: string;
   text: string;
   meta?: string;
+  /** 本次发言的完整思维链（推理型模型的 reasoning_content），没有则 undefined */
+  thinking?: string;
 }
 
 export type SessionEvent =
   | { type: 'phase'; label: string }
+  /**
+   * 思维链增量：实时逐片到达，同一次发言可能几十到上千条。
+   * **非推理模型 / 中转站剥了该字段时一条都不会有**，前端要按「可能没有」处理。
+   */
+  | { type: 'thinking'; agent: string; name: string; short: string; color: string; delta: string }
   | SessionTurn
   | { type: 'conclusion'; text: string }
   /** 写作官产出的本章正文 —— 落在正文方块里；revision 0 = 初稿，≥1 = 第 N 次重写 */

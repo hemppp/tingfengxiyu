@@ -66,7 +66,13 @@ node scripts/verify-autowrite-cleanup.mjs <username> <projectId>  # 参数由上
 脚本自己注册临时账号（继承管理员的 AI 配置）、建 auto 项目、逐章消费 SSE 并打印事件（含 `gate`），
 最后列出项目库各表行数。实测结果与手工方法（耗时、调用次数、逐步事件）见 `docs/ai-writing-test-report.md`。要点：
 
-- 用 Node 脚本 POST `/api/plugins/autowrite/session`，逐条记 `data:` 行（事件类型：`phase` / `turn` / `conclusion` / `draft` / `review` / `delivered` / `deliver_blocked` / `entities` / `error` / `done`）。
+- 用 Node 脚本 POST `/api/plugins/autowrite/session`，逐条记 `data:` 行（事件类型：`phase` / `thinking` / `turn` / `conclusion` / `draft` / `review` / `delivered` / `deliver_blocked` / `entities` / `error` / `done`）。
+- **`thinking` = 思维链（2026-09-16 加）**：推理型模型的 `reasoning_content`，逐片实时推给前端，同一次发言可能上千条；
+  该次发言的整段也会挂在 `turn.thinking` 上。**非推理模型没有这个事件**，前端按「可能没有」处理。
+  另外，它要单独验：`node scripts/verify-thinking-sidechannel.mjs`（跑到第一条带思维链的发言就掐断）。
+- ⚠️ **验讨论必须先用该账号打一次 `/api/ai/*` 路由**：配置 loader 是惰性注册的（`modules/ai.ts:ensureUserConfigLoader`），
+  而讨论走的是**插件路由**、不经过那个中间件 → 不打这一下就会静默回退到 **env 里的模型**（本机 env 默认 `deepseek-v4-flash`），
+  表现为「配了模型却按别的模型跑」「思维链一条都没有」，且不报任何错。
 - 关键验证点，按重要性：
   1. **第 1 章交付后，项目库应有实体**：`characters` / `items` / `locations` / `foreshadows` 非空（这是 P1 的修复目标；修复前全为 0）。
   2. **再跑第 2 章时，设定管家的【项目现状】里能看到第 1 章沉淀的角色** —— 这才是「记忆沉淀」的真正验收标准，写进去只是手段。

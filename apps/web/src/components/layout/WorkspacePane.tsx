@@ -93,10 +93,14 @@ export function WorkspacePane({
       data-pane-mode={mode}
       className={horizontal ? 'shrink-0 flex flex-col overflow-hidden' : 'shrink-0 flex flex-col overflow-hidden'}
       style={horizontal
-        ? { width: size, borderLeft: '0.5px solid hsl(var(--border) / 0.6)', background: EDITOR_BG }
-        : { height: size, borderTop: '0.5px solid hsl(var(--border) / 0.6)', background: EDITOR_BG }}
+        ? { position: 'relative', width: size, borderLeft: '0.5px solid hsl(var(--border) / 0.6)', background: EDITOR_BG }
+        : { position: 'relative', height: size, borderTop: '0.5px solid hsl(var(--border) / 0.6)', background: EDITOR_BG }}
     >
-      {/* 分隔条：横向档在上缘、竖向档在左缘 */}
+      {/* 分隔条：横向档在上缘、竖向档在左缘。
+          ★ 2026-09-15 改为**绝对定位**（原来是 flex 流里的实体 5px 条）。
+          原实现把本区标签栏整体推低 5px —— 实测组 1 标签栏 top=48、组 2 top=53，
+          作者反馈「打开看板后标签跟正文对不齐」。浮起来后两条标签栏同高，
+          拖拽热区依然有 5px 宽，不损失可用性。 */}
       <div
         role="separator"
         aria-orientation={horizontal ? 'vertical' : 'horizontal'}
@@ -106,13 +110,14 @@ export function WorkspacePane({
         onPointerUp={onUp}
         onPointerCancel={onUp}
         style={{
-          flex: '0 0 5px',
+          position: 'absolute',
+          zIndex: 5,
           cursor: horizontal ? 'col-resize' : 'row-resize',
           touchAction: 'none',
           background: 'transparent',
           ...(horizontal
-            ? { marginLeft: -3, borderLeft: '0.5px solid hsl(var(--border) / 0.5)' }
-            : { marginTop: -3, borderTop: '0.5px solid hsl(var(--border) / 0.5)' }),
+            ? { top: 0, bottom: 0, left: -3, width: 5, borderLeft: '0.5px solid hsl(var(--border) / 0.5)' }
+            : { left: 0, right: 0, top: -3, height: 5, borderTop: '0.5px solid hsl(var(--border) / 0.5)' }),
         }}
       />
 

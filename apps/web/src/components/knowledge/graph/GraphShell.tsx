@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ReactFlow,
   Background,
@@ -13,10 +13,16 @@ import {
   type EdgeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { toPng, toSvg } from 'html-to-image';
 import { Network } from 'lucide-react';
 import { BubbleNode } from './BubbleNode';
-import { Graph3D, type Graph3DHandle } from './Graph3D';
+// ★ Graph3D 走**惰性**：它拖着 three.js（打包后 1.18 MB）。原来静态 import 的后果是
+//   「只要挂上 GraphShell 就把 three 拉下来」—— 而 GraphShell 又被三个关系图共用，
+//   于是**打开关系图谱、甚至只是进 AI 工作台**（工作台静态引 GraphShell）都会白付这 1.18 MB。
+//   实测（生产产物）：GraphShell chunk 的静态 import 里明确列着 vendor-three。
+//   改成惰性后，three 只在用户真的点「3D」时才下载。
+//   Graph3D 用 React 19 的 ref-as-prop（props 里有 `ref?`），所以 lazy 不需要 forwardRef 包一层。
+import type { Graph3DHandle } from './Graph3D';
+const Graph3D = lazy(() => import('./Graph3D').then((m) => ({ default: m.Graph3D })));
 import {
   applyMultiEdgeCurvature,
   applyEdgeLabelVisibility,
@@ -129,6 +135,9 @@ export function GraphShell({
     const flowElement = flowRef.current?.querySelector('.react-flow') as HTMLElement;
     if (!flowElement) return;
     try {
+      // ★ html-to-image（打包 94 KB）按需加载：它只在**点导出**时用得上，
+      //   静态 import 会让每个挂 GraphShell 的页面都先付这 94 KB。
+      const { toPng, toSvg } = await import('html-to-image');
       const dataUrl = format === 'png'
         ? await toPng(flowElement, { backgroundColor: '#ffffff' })
         : await toSvg(flowElement, { backgroundColor: '#ffffff' });
@@ -242,21 +251,29 @@ export function GraphShell({
       <div className="flex-1 flex" ref={flowRef}>
         <div className="flex-1">
           {viewMode === '3d' ? (
-            <Graph3D
-              ref={graph3dRef}
-              nodes={nodes}
-              edges={edges}
-              getNodeColor={getNodeColor}
-              onNodeClick={(node) => onNodeClick?.(null as unknown as React.MouseEvent, node)}
-              onNodeHover={(node) => {
-                if (node) {
-                  onNodeMouseEnter?.(null as unknown as React.MouseEvent, node);
-                } else {
-                  onNodeMouseLeave?.(null as unknown as React.MouseEvent);
-                }
-              }}
-              onBackgroundClick={() => onNodeMouseLeave?.(null as unknown as React.MouseEvent)}
-            />
+            <Suspense
+              fallback={(
+                <div className="h-full w-full flex items-center justify-center text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                  正在载入 3D 视图…
+                </div>
+              )}
+            >
+              <Graph3D
+                ref={graph3dRef}
+                nodes={nodes}
+                edges={edges}
+                getNodeColor={getNodeColor}
+                onNodeClick={(node) => onNodeClick?.(null as unknown as React.MouseEvent, node)}
+                onNodeHover={(node) => {
+                  if (node) {
+                    onNodeMouseEnter?.(null as unknown as React.MouseEvent, node);
+                  } else {
+                    onNodeMouseLeave?.(null as unknown as React.MouseEvent);
+                  }
+                }}
+                onBackgroundClick={() => onNodeMouseLeave?.(null as unknown as React.MouseEvent)}
+              />
+            </Suspense>
           ) : (
             <ReactFlow
               nodes={nodes}
@@ -285,7 +302,10 @@ export function GraphShell({
                 <MiniMap
                   nodeColor={getNodeColor}
                   className="!bg-card !border-border"
-                  maskColor="var(--background)"
+                  // ★ 必须包 `hsl()`：`--background` 存的是**裸三元组**（`0 0% 98%`），
+                  //   直接当颜色用是非法值 → SVG fill 回退成黑色，整个 MiniMap 变成一块黑板
+                  //   （2026-09-15 真机截图发现）。同理 nodeColor 返回的也必须是完整颜色。
+                  maskColor="hsl(var(--background))"
                 />
               )}
             </ReactFlow>

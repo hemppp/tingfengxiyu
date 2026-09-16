@@ -35,30 +35,31 @@ const ITEM_TYPE_LABELS: Record<string, string> = {
 };
 
 function getItemTypeColor(type?: string): string {
+  // 水墨化（2026-09-15）：按类型配色 → 按墨阶配色（饱和度恒 0）
   const colors: Record<string, string> = {
-    weapon: '#ef4444',
-    token: '#3b82f6',
-    artifact: '#8b5cf6',
-    document: '#06b6d4',
-    key: '#f59e0b',
-    medicine: '#22c55e',
-    clothing: '#a855f7',
-    vehicle: '#0ea5e9',
-    treasure: '#facc15',
-    book: '#0891b2',
-    food: '#84cc16',
-    plant: '#16a34a',
-    animal: '#dc2626',
-    tool: '#64728b',
-    prop: '#94a3b8',
-    potion: '#22c55e',
-    armor: '#a16207',
-    scroll: '#ec4899',
-    gem: '#06b6d4',
-    other: '#6b7280',
+    weapon: 'hsl(0 0% 12%)',
+    token: 'hsl(0 0% 34%)',
+    artifact: 'hsl(0 0% 14%)',
+    document: 'hsl(0 0% 52%)',
+    key: 'hsl(0 0% 22%)',
+    medicine: 'hsl(0 0% 44%)',
+    clothing: 'hsl(0 0% 40%)',
+    vehicle: 'hsl(0 0% 42%)',
+    treasure: 'hsl(0 0% 20%)',
+    book: 'hsl(0 0% 30%)',
+    food: 'hsl(0 0% 58%)',
+    plant: 'hsl(0 0% 46%)',
+    animal: 'hsl(0 0% 28%)',
+    tool: 'hsl(0 0% 36%)',
+    prop: 'hsl(0 0% 60%)',
+    potion: 'hsl(0 0% 48%)',
+    armor: 'hsl(0 0% 26%)',
+    scroll: 'hsl(0 0% 38%)',
+    gem: 'hsl(0 0% 16%)',
+    other: 'hsl(0 0% 50%)',
   };
   const key = type?.toLowerCase() || 'other';
-  return colors[key] ?? '#6b7280';
+  return colors[key] ?? 'hsl(0 0% 50%)';
 }
 
 export function ItemManager() {

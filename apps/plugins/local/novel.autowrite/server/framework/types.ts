@@ -14,6 +14,17 @@ export interface SkillDef {
   name?: string;
   description?: string;
   color?: string;
+  /**
+   * 归属智能体（skill-library 种子用）。
+   *
+   * 为什么放在技能定义里：归属是「这个技能该由谁用」的**固有属性**，与技能正文同源，
+   * 不该由种子逻辑统一填。此前 `ensureSeeded()` 硬编码 `ownerAgent: 'writer'`，
+   * 后果是 10 条技能全堆在写作官名下、另外 7 个 agent 的技能列表全空（2026-09-15 修正）。
+   *
+   * 必须是 `ai/agents/skill-targets.ts` 里声明过的 agent id，否则装了也看不见
+   * （`installSkill` 会直接拒绝未知归属）。省略时回落到 'writer'。
+   */
+  ownerAgent?: string;
 }
 
 /** 聊天型技能模块：只有 def */

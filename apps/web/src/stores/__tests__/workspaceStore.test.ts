@@ -196,9 +196,12 @@ describe('workspaceStore · IDE 语义：预览标签', () => {
     expect(s().previewKey).toBeNull();
   });
 
-  it('气泡单击 = 预览打开（IDE 里单击文件的行为）', () => {
+  // ★ 2026-09-15 行为变更：气泡单击由「预览打开」改为「**直接固定打开**」——
+  //   看板改成全屏页面切换后，预览态（斜体 + 会被下一个预览顶掉）与「正文」标签的
+  //   常驻感不一致，作者明确要求「像正文一样打开」。断言随之更新。
+  it('气泡单击 = 直接固定打开（不再是预览态）', () => {
     s().toggleBubble('entities');
-    expect(s().previewKey).toBe('entities');
+    expect(s().previewKey).toBeNull();
     expect(s().tabs).toEqual(['entities']);
   });
 });

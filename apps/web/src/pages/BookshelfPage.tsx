@@ -56,7 +56,7 @@ function CalligraphyTitle() {
       }}
     >
       <span className="opacity-90">Novel</span>
-      <span style={{ color: '#2383C7' }}>Muse</span>
+      <span style={{ color: 'hsl(var(--primary))' }}>Muse</span>
     </h1>
   );
 }
@@ -223,7 +223,9 @@ export function BookshelfPage() {
           //   /project/:bookId/:chapterId 两种形状，`/project/<id>` 单段会落到 404
           //   （2026-09-13 GUI 走查实测踩到）。书卡点击也是这两步，保持一致。
           setCurrentProject(result);
-          navigate('/project');
+          // ★ 带上 bookId 进 URL（2026-09-15）：项目身份不能只活在内存 store 里，
+          //   否则刷新即丢、页面塌成空态。带 id 后由 ProjectLayout 的 URL→store 恢复逻辑接手。
+          navigate(`/project/${result.id}`);
           return;
         }
       }
@@ -283,7 +285,8 @@ export function BookshelfPage() {
     useTimelineStore.setState({ events: [] });
     useNoteStore.setState({ notes: [] });
     setCurrentProject(book);
-    navigate('/project');
+    // ★ 同上：URL 带 bookId，刷新才能靠 ProjectLayout 的恢复逻辑救回当前书
+    navigate(`/project/${book.id}`);
   }, [navigate, setCurrentProject]);
   return (
     <div className="relative min-h-screen overflow-x-hidden">
@@ -304,7 +307,7 @@ export function BookshelfPage() {
               {/* Search bar — 液态玻璃胶囊 */}
               <div
                 className={`glass-surface flex items-center gap-2 rounded-full transition-all duration-300 ${
-                  searchFocused ? 'ring-2 ring-[#2383C7]/30' : 'glass-hover'
+                  searchFocused ? 'ring-2 ring-primary/30' : 'glass-hover'
                 }`}
                 style={{ padding: '6px 6px 6px 16px' }}
               >
@@ -324,7 +327,7 @@ export function BookshelfPage() {
                   <button
                     onClick={() => setFilter(f => ({ ...f, search: '' }))}
                     className="flex items-center justify-center w-5 h-5 rounded-full transition-colors"
-                    style={{ background: 'rgba(35,131,199,0.1)', color: '#2383C7' }}
+                    style={{ background: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))' }}
                     aria-label="清除搜索"
                   >
                     <X size={12} />
@@ -337,7 +340,7 @@ export function BookshelfPage() {
                 onClick={() => navigate('/settings')}
                 onPointerDown={handleSettingsPointerDown}
                 className="glass-surface glass-hover glass-ripple glass-pressable flex items-center justify-center w-9 h-9 rounded-full"
-                style={{ color: '#2383C7' }}
+                style={{ color: 'hsl(var(--primary))' }}
                 aria-label="设置"
               >
                 <Settings size={16} strokeWidth={1.5} />
@@ -372,8 +375,8 @@ export function BookshelfPage() {
                     className="px-2.5 sm:px-3 py-1.5 rounded-full text-[11px] sm:text-[12px] font-medium transition-all duration-200"
                     style={{
                       color: active ? '#ffffff' : 'hsl(var(--muted-foreground))',
-                      background: active ? 'rgba(35,131,199,0.92)' : 'transparent',
-                      boxShadow: active ? '0 2px 10px rgba(35,131,199,0.35)' : 'none',
+                      background: active ? 'hsl(var(--primary) / 0.92)' : 'transparent',
+                      boxShadow: active ? '0 2px 10px hsl(var(--primary) / 0.35)' : 'none',
                       fontFamily: "'Noto Serif SC', serif",
                     }}
                   >
@@ -386,7 +389,7 @@ export function BookshelfPage() {
                 type="button"
                 onClick={() => setFilter(f => ({ ...f, sortOrder: f.sortOrder === 'asc' ? 'desc' : 'asc' }))}
                 className="flex items-center justify-center w-7 h-7 rounded-full transition-all shrink-0"
-                style={{ color: '#2383C7', background: 'rgba(35,131,199,0.1)' }}
+                style={{ color: 'hsl(var(--primary))', background: 'hsl(var(--primary) / 0.1)' }}
                 aria-label={filter.sortOrder === 'desc' ? '当前降序，点击切换为升序' : '当前升序，点击切换为降序'}
                 title={filter.sortOrder === 'desc' ? '降序' : '升序'}
               >
@@ -400,7 +403,7 @@ export function BookshelfPage() {
           {/* Loading state */}
           {loading && (
             <div className="flex flex-col items-center justify-center py-32">
-              <div className="w-10 h-10 rounded-full border-2 animate-spin" style={{ borderColor: 'rgba(35,131,199,0.15)', borderTopColor: '#2383C7' }} />
+              <div className="w-10 h-10 rounded-full border-2 animate-spin" style={{ borderColor: 'hsl(var(--primary) / 0.15)', borderTopColor: 'hsl(var(--primary))' }} />
               <p className="mt-4 text-[14px]" style={{ color: 'hsl(var(--muted-foreground))', fontFamily: "'Noto Serif SC', serif" }}>墨香渐浓...</p>
             </div>
           )}
@@ -498,10 +501,10 @@ export function BookshelfPage() {
         main::-webkit-scrollbar { width: 6px; }
         main::-webkit-scrollbar-track { background: transparent; }
         main::-webkit-scrollbar-thumb {
-          background: rgba(35,131,199,0.15);
+          background: hsl(var(--primary) / 0.15);
           border-radius: 3px;
         }
-        main::-webkit-scrollbar-thumb:hover { background: rgba(35,131,199,0.25); }
+        main::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.25); }
       `}</style>
     </div>
   );

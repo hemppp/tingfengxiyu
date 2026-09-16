@@ -39,7 +39,7 @@ import { declareSkillTarget, undeclareSkillTarget, listSkillTargets } from '../a
 import { listEnabledSkills } from '../services/skill-library.js';
 import { Agent, Runner } from '@openai/agents';
 import { getAIConfig } from '../ai/providers/provider-factory.js';
-import { getSdkProvider } from '../ai/agents/sdk/provider.js';
+import { getSdkProvider, runWithThinkingSink } from '../ai/agents/sdk/provider.js';
 import { getAllSdkTools, type NovelAgentContext } from '../ai/agents/sdk/tools.js';
 import { createSqliteKvService } from './kv-service.js';
 import { createStaticFallback } from './frontend-static.js';
@@ -258,7 +258,9 @@ export function createServerPluginHost(options: ServerPluginHostOptions = {}): S
     projectId?: string;
     userId?: string;
     allowWriteChapter?: boolean;
-  }): Promise<{ text: string; model: string }> {
+    /** 思维链增量回调；不传 = 不做旁路截取（零开销，也不会去解析 reasoning_content） */
+    onThinking?: (delta: string) => void;
+  }): Promise<{ text: string; model: string; thinking?: string }> {
     const config = await getAIConfig(o.userId);
     const provider = await getSdkProvider(o.userId);
     const model = o.model ?? config.model;
@@ -289,11 +291,35 @@ export function createServerPluginHost(options: ServerPluginHostOptions = {}): S
       userId: o.userId ?? '',
       allowWriteChapter: o.allowWriteChapter === true,
     };
-    const result = await runner.run(agent, o.input as any, {
-      context,
-      maxTurns: o.maxTurns ?? 8,
-    } as any);
-    return { text: String(result.finalOutput ?? ''), model };
+
+    // ★ 思维链旁路：SDK 的 Chat Completions 通道不解析 reasoning_content（见 sdk/provider.ts 文件头），
+    //   所以这里把 sink 放进 ALS，由 provider 的 fetch 旁路推回来。
+    //   不传 onThinking 时完全不注册 sink —— 不白花解流的开销。
+    let thinking = '';
+    const sink = o.onThinking
+      ? (d: string) => { thinking += d; o.onThinking?.(d); }
+      : undefined;
+
+    // ★★ 必须走 `stream: true`：旁路只挂在 SSE 响应上。
+    //   非流式时中转站返回的是 `application/json`（实测 content-type 就是它），
+    //   reasoning_content 在那一整个 JSON body 里，旁路**一次都不会触发** ——
+    //   表现就是「思维链一条都没有」，而且不报任何错。
+    //   流式结果的 `finalOutput` 与之前一样可用（已实测：正文一致，工具轮次不会污染它），
+    //   所以正文口径没变。整个 run（含流消费）都在 sink 作用域内，保证旁路拿得到接收器。
+    const result = await runWithThinkingSink(sink, async () => {
+      const streamed = await runner.run(agent, o.input as any, {
+        stream: true,
+        context,
+        maxTurns: o.maxTurns ?? 8,
+      } as any);
+      // 流式结果必须被**消费**才会真正跑完（模型调用就发生在这一步）
+      for await (const _ev of streamed as unknown as AsyncIterable<unknown>) {
+        /* 只为驱动流；正文取 finalOutput，不逐字推送（子代理没有逐字展示的需求） */
+      }
+      return streamed;
+    });
+    const text = String(result.finalOutput ?? '');
+    return thinking ? { text, model, thinking } : { text, model };
   }
 
   const aiService = {
@@ -340,6 +366,7 @@ export function createServerPluginHost(options: ServerPluginHostOptions = {}): S
         projectId: opts.context.projectId,
         userId: opts.context.userId,
         allowWriteChapter: opts.allowWriteChapter,
+        onThinking: opts.onThinking,
       }),
     },
     providers: {

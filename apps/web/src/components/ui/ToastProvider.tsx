@@ -75,10 +75,10 @@ const TOAST_ICONS: Record<ToastType, string> = {
 
 /** 液态玻璃风格图标颜色映射（按类型区分色相） */
 const TOAST_ICON_COLORS: Record<ToastType, string> = {
-  success: 'hsl(142 71% 45%)',
+  success: 'hsl(0 0% 26%)',
   error: 'hsl(var(--destructive))',
-  warning: 'hsl(38 92% 50%)',
-  info: 'hsl(199 89% 48%)',
+  warning: 'hsl(0 0% 40%)',
+  info: 'hsl(0 0% 52%)',
 };
 
 // ============================================================

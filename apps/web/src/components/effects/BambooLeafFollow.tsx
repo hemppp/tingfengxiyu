@@ -19,9 +19,10 @@ interface BambooLeafRainProps {
   count?: number;
 }
 
-// 竹叶颜色
+// 竹叶颜色 —— 水墨化（2026-09-15）：原为 4 种竹绿，现改为 4 档墨阶。
+// 飘落的语义保留（仍是「落下的笔触」），但只用明度区分深浅，不再带色相。
 const LEAF_COLORS: [number, number, number][] = [
-  [25, 80, 25], [35, 100, 30], [55, 95, 40], [70, 120, 45],
+  [22, 22, 22], [42, 42, 42], [66, 66, 66], [98, 98, 98],
 ];
 const SPRITE_SIZES = [
   { length: 35, width: 7 }, { length: 50, width: 10 }, { length: 65, width: 13 },
@@ -68,7 +69,9 @@ function resetLeaf(data: Float32Array, off: number, w: number, h: number) {
 
 export function BambooLeafFollow({
   active = true,
-  count = 45,
+  // 水墨化调参（2026-09-15）：45 → 24。数十片叶子在内容少的页面（空态、设置页）
+  // 会喧宾夺主；减半后更像「偶有落叶飘过」，而不是「下叶子雨」。
+  count = 24,
 }: BambooLeafRainProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dataRef = useRef<Float32Array>(new Float32Array(0));
@@ -106,7 +109,8 @@ export function BambooLeafFollow({
         ctx.closePath();
         ctx.fillStyle = 'rgb(' + color[0] + ',' + color[1] + ',' + color[2] + ')';
         ctx.fill();
-        ctx.strokeStyle = 'rgb(' + Math.max(0, color[0] - 10) + ',' + Math.max(0, color[1] - 10) + ',' + Math.max(0, color[2] - 5) + ')';
+        // 描边：等量减，保持中性灰（原为 -10/-10/-5，在灰阶下会产生偏色）
+        ctx.strokeStyle = 'rgb(' + Math.max(0, color[0] - 12) + ',' + Math.max(0, color[1] - 12) + ',' + Math.max(0, color[2] - 12) + ')';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(cx, cy - halfLen * 0.9);

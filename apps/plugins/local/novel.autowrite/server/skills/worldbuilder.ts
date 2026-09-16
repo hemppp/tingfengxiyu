@@ -3,10 +3,12 @@ import type { SkillDef } from '../framework/types.js';
 
 export const worldbuilder: SkillDef = {
   id: 'worldbuilder',
+  // 归属智能体 —— 2026-09-15 重分配（此前被 ensureSeeded 统一硬编码为 writer）
+  ownerAgent: 'world-architect',
   contextKeys: ['locations', 'items'],
   name: '世界观顾问',
   description: '核对地点物品设定、补全世界观空白',
-  color: '#10b981',
+  color: 'hsl(0 0% 30%)',
   systemPrompt: `【已激活技能：世界观顾问】
 你现在同时兼任"世界观顾问"。在回答中请侧重：
 1. 结合注入的"地点库"与"物品库"，核对当前章节的设定一致性

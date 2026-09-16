@@ -23,33 +23,60 @@
 // 待接入：正文流式落点（右栏）、按台账回放历史运行过程。
 // ============================================================
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowLeft, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Send, Sparkles,
-  Workflow, ClipboardList, Boxes, ShieldCheck, Wand2, Bot, ChevronDown, X,
+  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Send, Sparkles,
+  Workflow, ClipboardList, Network, ShieldCheck, Wand2, ChevronDown, X, BookOpen,
+  BrainCircuit, ChevronUp,
 } from 'lucide-react';
+import { InkBackButton } from '@/components/ui/InkBackButton';
 import { nanoid } from 'nanoid';
 import type { Project } from '@novel/shared';
 import { useChapterStore, useCharacterStore, useItemStore, useLocationStore, useForeshadowStore } from '@/stores';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
-import { WorldStateBoard } from '@/components/layout/WorldStateBoard';
 import type { StageKey, StageState } from '@/components/layout/WorkbenchPlan';
-import { EntityRail } from '@/components/layout/EntityRail';
-import { PipelinePanel, type PipelineTurn } from '@/components/layout/PipelinePanel';
+// 只留类型：面板本体一律惰性加载（见下方 lazy 块）
+import type { PipelineTurn } from '@/components/layout/PipelineGraphPanel';
 import { BubbleRail, type PanelSignal } from '@/components/layout/BubbleRail';
-import { WorkspacePane, clampPaneHeight, type PaneMode } from '@/components/layout/WorkspacePane';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { TabBar } from '@/components/layout/TabBar';
 import { QuickOpen } from '@/components/layout/QuickOpen';
-import { MemoryAuditPanel } from '@/components/layout/MemoryAuditPanel';
 import { EntrySkillPanel } from '@/components/ai/EntrySkillPanel';
 import { AgentSkillsPanel } from '@/components/ai/AgentSkillsPanel';
 import { fetchMemoryView, type MemoryView } from '@/services/ai/memorySession';
 import {
-  BODY_MIN_SOFT, BODY_MIN_WIDTH, BODY_PAD_X, EDITOR_BG, PANE_H_DEFAULT, PANE_W_MIN_SOFT, RAIL_WIDTH,
+  BODY_MIN_WIDTH, BODY_PAD_X, EDITOR_BG, RAIL_WIDTH,
   type WorkbenchPanel,
 } from '@/components/layout/workspaceDefs';
 import { runSession, type SessionEvent } from '@/services/ai/autowriteSession';
 import type { PipelineView } from '@/services/ai/pipelineSession';
+
+/**
+ * ★ 工作台里**四个图谱面板全部惰性加载**。
+ *
+ * 为什么必须这样（2026-09-15 用生产产物确认过）：四个面板都直接或间接 import
+ * `GraphShell`，而 `GraphShell` 的静态 import 里明确列着 `vendor-three`（1,181 kB）
+ * 与 `vendor-export`（94 kB，html-to-image）。只要有一个是静态 import，
+ * **进 AI 工作台就会白拉 1.18 MB 的 three.js** —— 哪怕用户一个图谱面板都不打开。
+ *
+ * 现状：
+ *   · 三个自带面板（流水线 / 本章计划 / 记忆审计）—— 本文件 lazy
+ *   · 「实体与设定」用的是手写模式的 `RelationGraph` —— 也 lazy
+ *   · `GraphShell` 内部的 3D 视图（Graph3D）与导出库（html-to-image）同样惰性，
+ *     所以连"打开了关系图谱但只用 2D"都不付 three 的钱。
+ */
+const RelationGraph = React.lazy(
+  () => import('@/components/knowledge/RelationGraph').then((m) => ({ default: m.RelationGraph })),
+);
+const PipelineGraphPanel = React.lazy(
+  () => import('@/components/layout/PipelineGraphPanel').then((m) => ({ default: m.PipelineGraphPanel })),
+);
+const ChapterPlanGraphPanel = React.lazy(
+  () => import('@/components/layout/ChapterPlanGraphPanel').then((m) => ({ default: m.ChapterPlanGraphPanel })),
+);
+const MemoryGraphPanel = React.lazy(
+  () => import('@/components/layout/MemoryGraphPanel').then((m) => ({ default: m.MemoryGraphPanel })),
+);
 
 /**
  * 底部花名册 —— 设计讨论层阵容，与后端 `discuss/roles.ts` 一一对应。
@@ -106,11 +133,73 @@ interface ChatTurn {
   tone?: 'warn' | 'ok';
   /** 'conclusion' 用卡片形式呈现（本章结论） */
   kind?: 'say' | 'conclusion';
+  /**
+   * 该次发言的思维链原文（推理型模型的 reasoning_content）。
+   * 没有 = 模型没吐推理内容（非推理模型 / 中转站剥了字段），此时不渲染入口。
+   */
+  thinking?: string;
+}
+
+/** 正在流式产出的思维链（还没结算到某条发言上） */
+interface LiveThinking {
+  agent: string;
+  name: string;
+  short: string;
+  color: string;
+  text: string;
 }
 
 function nowHHMM(): string {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/**
+ * 思维链折叠块。
+ *
+ * 刻意做成「次要证据」的观感：小字号、次要色、左侧细墨线 ——
+ * 它是给人核对「它为什么这么说」用的，**不该抢发言正文的注意力**，所以默认收起。
+ */
+function ThinkingTrace({ text, defaultOpen }: { text: string; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(!!defaultOpen);
+  return (
+    <div className="mt-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label={open ? '收起思维链' : '展开思维链（模型推理过程原文）'}
+        className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors"
+        style={{
+          color: 'hsl(var(--muted-foreground))',
+          border: '0.5px solid hsl(var(--border) / 0.8)',
+          background: open ? 'hsl(var(--muted) / 0.5)' : 'transparent',
+        }}
+        title="模型的推理过程原文（思维链），不是发言内容"
+      >
+        <BrainCircuit size={11} aria-hidden="true" />
+        思维链
+        <span style={{ opacity: 0.7 }}>{text.length} 字</span>
+        {open ? <ChevronUp size={11} aria-hidden="true" /> : <ChevronDown size={11} aria-hidden="true" />}
+      </button>
+      {open && (
+        <pre
+          className="mt-1 whitespace-pre-wrap rounded-lg px-2.5 py-2 text-[11px] leading-[1.7]"
+          style={{
+            color: 'hsl(var(--muted-foreground))',
+            background: 'hsl(var(--muted) / 0.45)',
+            borderLeft: '2px solid hsl(var(--border))',
+            margin: 0,
+            fontFamily: 'inherit',
+            maxHeight: 260,
+            overflowY: 'auto',
+          }}
+        >
+          {text}
+        </pre>
+      )}
+    </div>
+  );
 }
 
 interface AutoWriteWorkbenchProps {
@@ -139,6 +228,11 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
   const [hotSplitter, setHotSplitter] = useState<null | 'left'>(null);
 
   const [turns, setTurns] = useState<ChatTurn[]>([]);
+  /**
+   * 正在流式产出的思维链。
+   * 讨论是**串行**的（同一时刻只有一个角色在发言），所以只需要留一个实时区。
+   */
+  const [liveThinking, setLiveThinking] = useState<LiveThinking | null>(null);
   const [draft, setDraft] = useState('');
   /** 正在等智能体回应（此时可打断） */
   const [busy, setBusy] = useState(false);
@@ -175,6 +269,13 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
   const taRef = useRef<HTMLTextAreaElement | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
+  /**
+   * 思维链增量缓冲。
+   * 分片**极多**（一次发言几十到上千条，实测一个小问题就有 104 片），
+   * 所以不在每个分片上 setState —— 那会打出上百次渲染。攒进 ref，每 120ms 刷一次。
+   */
+  const thinkingBufRef = useRef('');
+  const thinkingFlushRef = useRef<number | null>(null);
   /** 交流流发言推送（定义在下方，这里留 ref 供分页区的面板回调） */
   const onTurnRef = useRef<(t: PipelineTurn) => void>(() => {});
 
@@ -203,12 +304,18 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
   const promotePane = useWorkspaceStore((s) => s.promote);
   const movePaneTab = useWorkspaceStore((s) => s.moveTab);
   const setPaneOpen = useWorkspaceStore((s) => s.setPaneOpen);
-  const setPaneWidth = useWorkspaceStore((s) => s.setWidth);
   const previewKey = useWorkspaceStore((s) => s.previewKey);
+
+  /**
+   * 正文（主文档）是否打开。
+   * ★ 2026-09-15：正文标签改为可关闭（作者要求「正文做可以关闭的页面」）。
+   *   关掉后由占位接管，占位里给出「重新打开正文」入口，避免关了就找不回来。
+   *   刻意**不做持久化** —— 刷新后回到打开状态，符合「正文是主文档」的默认预期。
+   */
+  const [bodyOpen, setBodyOpen] = useState(true);
 
   const [quickOpen, setQuickOpen] = useState(false);
 
-  const [paneHeight, setPaneHeight] = useState(PANE_H_DEFAULT);
   const [pipelineView, setPipelineView] = useState<PipelineView | null>(null);
   const [viewport, setViewport] = useState(() => ({
     w: typeof window === 'undefined' ? 1600 : window.innerWidth,
@@ -232,40 +339,28 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
    * ★ 预算要含正文外框的内边距（BODY_PAD_X）：漏算的话判定"放得下"、正文实测却比最小宽还窄。
    */
   const bodyBudget = BODY_MIN_WIDTH + BODY_PAD_X;
-  const bodyBudgetSoft = BODY_MIN_SOFT + BODY_PAD_X;
-  const paneWanted = paneOpen ? paneWidth : 0;
-  let aiVisible = railOpen;
-  let paneMode: PaneMode = 'right';
-  let effectivePaneWidth = paneWidth;
-  if (paneOpen) {
-    if (viewport.w - RAIL_WIDTH - railWidth - paneWanted < bodyBudget) {
-      // ② 收 AI 栏
-      aiVisible = false;
-      if (viewport.w - RAIL_WIDTH - paneWanted < bodyBudget) {
-        // ③ 压窄侧组，保住"在正文旁边"
-        effectivePaneWidth = Math.max(
-          PANE_W_MIN_SOFT,
-          Math.min(paneWanted, viewport.w - RAIL_WIDTH - bodyBudget),
-        );
-        if (viewport.w - RAIL_WIDTH - effectivePaneWidth < bodyBudgetSoft) {
-          // ④ 实在放不下：落到下方（仍不覆盖正文）
-          paneMode = 'bottom';
-          effectivePaneWidth = paneWanted;
-          aiVisible = railOpen && (viewport.w - RAIL_WIDTH - railWidth >= bodyBudgetSoft);
-        }
-      }
-    }
-  }
-  /** 下方档也要给正文留高：窗口很矮时把分页区压回去，而不是把正文挤没 */
-  const effectivePaneHeight = Math.min(paneHeight, Math.max(160, viewport.h - 320));
+  /**
+   * AI 栏是否显示。
+   * ★ 2026-09-15「页面切换」改造后**不再需要为看板留宽** —— 正文与看板互斥、各自占满，
+   *   所以预算里只剩「气泡列 + AI 栏 + 正文」三项。
+   *   原先那条四级让位阶梯（收 AI 栏 → 压窄侧组 → 落下方）整体作废，
+   *   `paneMode` / `effectivePaneWidth` / `effectivePaneHeight` / `paneHeight` 均已移除。
+   */
+  const aiVisible = railOpen && viewport.w - RAIL_WIDTH - railWidth >= bodyBudget;
 
-  // ---- AI 模式的看板清单（**不挂手写面板**：两套 UI 互斥的既有约定不变）----
+  // ---- AI 模式的看板清单 ----
+  //
+  // ★ 2026-09-15 全面图谱化（作者决定）：四个看板的内容全部换成**图谱**。
+  //   原先「不挂手写面板：两套 UI 互斥」这条约定**已被作者本人推翻** ——
+  //   实体那一栏现在就是手写模式的关系图谱组件（RelationGraph，三 Tab：
+  //   角色 / 物品 / 地点），另外三栏是本工作台自己的图谱版面板。
+  //   别再按旧约定把 RelationGraph 摘下去。
   const aiPanels = useMemo<WorkbenchPanel[]>(() => [
-    { key: 'pipeline', label: '流水线', icon: Workflow, group: 'live', Component: PipelinePanel as WorkbenchPanel['Component'] },
-    { key: 'chapterPlan', label: '本章计划', icon: ClipboardList, group: 'live', Component: WorldStateBoard as WorkbenchPanel['Component'] },
-    { key: 'entities', label: '实体与设定', icon: Boxes, group: 'data', Component: EntityRail as WorkbenchPanel['Component'] },
+    { key: 'pipeline', label: '流水线', icon: Workflow, group: 'live', Component: PipelineGraphPanel as WorkbenchPanel['Component'] },
+    { key: 'chapterPlan', label: '本章计划', icon: ClipboardList, group: 'live', Component: ChapterPlanGraphPanel as WorkbenchPanel['Component'] },
+    { key: 'entities', label: '实体与设定', icon: Network, group: 'data', Component: RelationGraph as WorkbenchPanel['Component'] },
     // M-e：记忆审计 / 冲突（分层记忆架构的用户可见面）
-    { key: 'memory', label: '记忆审计', icon: ShieldCheck, group: 'data', Component: MemoryAuditPanel as WorkbenchPanel['Component'] },
+    { key: 'memory', label: '记忆审计', icon: ShieldCheck, group: 'data', Component: MemoryGraphPanel as WorkbenchPanel['Component'] },
   ], []);
 
   /** 面板实时 props：宿主把工作台的状态绑进去（面板本身不接 props 的那套是插件浮窗，不是这里） */
@@ -418,6 +513,36 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
   }, [scrollStreamToEnd]);
   onTurnRef.current = pushTurn;
 
+  /**
+   * 思维链增量（实时）。
+   * 攒进 ref，每 120ms 刷一次 state —— 见 thinkingBufRef 上的说明。
+   * **不做自动滚动**：它每 120ms 长一次，自动滚会把正在往回翻的作者一直拽到底部。
+   */
+  const handleThinkingDelta = useCallback((e: Omit<LiveThinking, 'text'> & { delta: string }) => {
+    thinkingBufRef.current += e.delta;
+    if (thinkingFlushRef.current !== null) return;
+    thinkingFlushRef.current = window.setTimeout(() => {
+      thinkingFlushRef.current = null;
+      setLiveThinking({ agent: e.agent, name: e.name, short: e.short, color: e.color, text: thinkingBufRef.current });
+    }, 120);
+  }, []);
+
+  /** 发言到达：把攒着的思维链结算出来，并清空实时区（返回的即「本次发言的思维链」） */
+  const settleThinking = useCallback((): string | undefined => {
+    if (thinkingFlushRef.current !== null) {
+      clearTimeout(thinkingFlushRef.current);
+      thinkingFlushRef.current = null;
+    }
+    const t = thinkingBufRef.current;
+    thinkingBufRef.current = '';
+    setLiveThinking(null);
+    return t.trim() ? t : undefined;
+  }, []);
+  // 卸载时别把定时器留下
+  useEffect(() => () => {
+    if (thinkingFlushRef.current !== null) clearTimeout(thinkingFlushRef.current);
+  }, []);
+
   /** 一轮设计讨论：后端逐个扮演角色把发言推回来，事件自带身份（不再靠前端猜） */
   const runAgent = useCallback(async (text: string) => {
     const ac = new AbortController();
@@ -459,10 +584,15 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
           if (e.index >= e.total) setProgress(null);
         } else if (e.type === 'phase') {
           setPhase(e.label);
+        } else if (e.type === 'thinking') {
+          handleThinkingDelta(e);
         } else if (e.type === 'turn') {
+          // 思维链结算到这条发言上：后端 turn 事件带的整段优先（权威），
+          // 本地攒的只是「边跑边看」的副本，两者同源。
+          const local = settleThinking();
           push({
             from: e.agent, name: e.name, color: e.color, short: e.short,
-            text: e.text, meta: e.meta,
+            text: e.text, meta: e.meta, thinking: e.thinking ?? local,
           });
         } else if (e.type === 'conclusion') {
           // 结论是契约：既进交流流（留痕），也进中栏计划卡（供后续写作/复核对照）
@@ -552,11 +682,13 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
       }
     } finally {
       abortRef.current = null;
+      // 收尾时清掉没结算完的思维链：中断/报错会让最后一段留在实时区里不走
+      settleThinking();
       setBusy(false);
       setPhase('');
       scrollStreamToEnd();
     }
-  }, [pushTurn, scrollStreamToEnd, onProjectDataChanged, chapterCount]);
+  }, [pushTurn, scrollStreamToEnd, onProjectDataChanged, chapterCount, handleThinkingDelta, settleThinking]);
 
   /** 作者发言：先落到流里，再交给编排器 */
   const send = useCallback(() => {
@@ -621,15 +753,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
         className="shrink-0 flex items-center gap-2.5 relative z-40"
         style={{ height: 48, padding: '0 12px' }}
       >
-        <button
-          type="button"
-          onClick={onBack}
-          className="nm-btn-apple-icon-sm"
-          title="返回"
-          aria-label="返回"
-        >
-          <ArrowLeft size={15} />
-        </button>
+        <InkBackButton onClick={onBack} size={15} label="返回" />
         <span
           className="text-[13px] font-semibold truncate max-w-[140px] sm:max-w-[220px]"
           style={{ color: 'hsl(var(--foreground))', letterSpacing: '-0.2px' }}
@@ -710,7 +834,7 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
               </div>
 
               <div ref={streamRef} className="flex-1 overflow-y-auto px-3 py-3.5">
-                {turns.length === 0 ? (
+                {turns.length === 0 && !liveThinking ? (
                   <div className="h-full flex items-center justify-center">
                     <div className="text-center px-2" style={{ maxWidth: 250 }}>
                       <Sparkles size={20} className="mx-auto mb-2.5" style={{ color: 'hsl(var(--primary) / 0.65)' }} />
@@ -799,10 +923,53 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                                 {t.meta}
                               </div>
                             )}
+
+                            {/* 思维链：默认收起，作为「它为什么这么说」的核对材料 */}
+                            {t.thinking && <ThinkingTrace text={t.thinking} />}
                           </div>
                         </div>
                       )
                     ))}
+
+                    {/*
+                      实时思维链：正在想的时候直接铺开（这一块的价值就在"看见它怎么想"，
+                      藏起来等于没有），发言一到达就结算进上方那条发言并消失。
+                    */}
+                    {liveThinking && (
+                      <div className="flex gap-2.5">
+                        <span
+                          className="shrink-0 inline-flex items-center justify-center rounded-full text-white"
+                          style={{ width: 24, height: 24, background: colorOf(liveThinking.agent, liveThinking.color), fontSize: 10, marginTop: 1, opacity: 0.85 }}
+                          aria-hidden="true"
+                        >
+                          {liveThinking.short}
+                        </span>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-[12px] font-medium" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                              {liveThinking.name}
+                            </span>
+                            <span className="text-[10px]" style={{ color: 'hsl(var(--muted-foreground) / 0.75)' }}>
+                              思考中…
+                            </span>
+                          </div>
+                          <pre
+                            className="mt-1 whitespace-pre-wrap rounded-lg px-2.5 py-2 text-[11px] leading-[1.7]"
+                            style={{
+                              color: 'hsl(var(--muted-foreground))',
+                              background: 'hsl(var(--muted) / 0.4)',
+                              borderLeft: '2px solid hsl(var(--border))',
+                              margin: 0,
+                              fontFamily: 'inherit',
+                              maxHeight: 300,
+                              overflowY: 'auto',
+                            }}
+                          >
+                            {liveThinking.text}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -813,32 +980,28 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                 · 智能体 Skills：先列全部智能体 → 点进去看左关右开的开关；技能库（安装/删除）也在这
               */}
               <div className="shrink-0 px-2.5 pt-2">
+                {/* ★ 2026-09-15：原来并排两个按钮（写作 Skills / 智能体 Skills），
+                    现在收成**一个入口「技能」**，两者的切换挪进弹层里当 Tab。
+                    理由：它们本是同一件事的两面 —— 前者是「写作官**这一个** agent 的技能」，
+                    后者是「**全部** agent + 技能库（安装/删除）」。并排两个按钮既占宽，
+                    也让人分不清该点哪个。 */}
                 <div className="flex items-center gap-1.5">
-                  {([
-                    ['writer', '写作 Skills', Wand2],
-                    ['agents', '智能体 Skills', Bot],
-                  ] as Array<['writer' | 'agents', string, typeof Wand2]>).map(([key, label, Icon]) => {
-                    const open = skillsPanel === key;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => setSkillsPanel((v) => (v === key ? null : key))}
-                        aria-expanded={open}
-                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] transition-colors"
-                        style={{
-                          border: '0.5px solid hsl(var(--border) / 0.7)',
-                          background: open ? 'hsl(var(--muted) / 0.7)' : 'transparent',
-                          color: open ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
-                        }}
-                        title={key === 'writer' ? '写作智能体的技能开关' : '全部智能体 + 技能库（安装/删除）'}
-                      >
-                        <Icon size={12} aria-hidden="true" />
-                        {label}
-                        <ChevronDown size={11} className={open ? 'rotate-180 transition-transform' : 'transition-transform'} aria-hidden="true" />
-                      </button>
-                    );
-                  })}
+                  <button
+                    type="button"
+                    onClick={() => setSkillsPanel((v) => (v ? null : 'writer'))}
+                    aria-expanded={!!skillsPanel}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] transition-colors"
+                    style={{
+                      border: '0.5px solid hsl(var(--border) / 0.7)',
+                      background: skillsPanel ? 'hsl(var(--muted) / 0.7)' : 'transparent',
+                      color: skillsPanel ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
+                    }}
+                    title="技能：写作官的技能开关 / 全部智能体与技能库"
+                  >
+                    <Wand2 size={12} aria-hidden="true" />
+                    技能
+                    <ChevronDown size={11} className={skillsPanel ? 'rotate-180 transition-transform' : 'transition-transform'} aria-hidden="true" />
+                  </button>
                 </div>
 
                 {skillsPanel && (
@@ -847,16 +1010,38 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                     style={{ border: '0.5px solid hsl(var(--border) / 0.7)', background: 'hsl(var(--background))' }}
                   >
                     <div
-                      className="flex items-center justify-between px-2.5 py-1.5"
+                      className="flex items-center gap-1 px-2 py-1.5"
                       style={{ borderBottom: '0.5px solid hsl(var(--border) / 0.6)' }}
                     >
-                      <span className="text-[11px] font-semibold">
-                        {skillsPanel === 'writer' ? '写作 Skills' : '智能体 Skills'}
-                      </span>
+                      {/* ★ 两个 Tab 占掉原来那行纯文字标题 —— 同一个气泡里切换，
+                          不用再在输入栏上方并排两个按钮 */}
+                      {([
+                        ['writer', '写作 Skills'],
+                        ['agents', '智能体 Skills'],
+                      ] as Array<['writer' | 'agents', string]>).map(([key, label]) => {
+                        const on = skillsPanel === key;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            role="tab"
+                            aria-selected={on}
+                            onClick={() => setSkillsPanel(key)}
+                            className="px-2 py-0.5 rounded-md text-[11px] transition-colors"
+                            style={{
+                              background: on ? 'hsl(var(--foreground) / 0.1)' : 'transparent',
+                              color: on ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
+                              fontWeight: on ? 600 : 400,
+                            }}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
                       <button
                         type="button"
                         onClick={() => setSkillsPanel(null)}
-                        className="w-5 h-5 flex items-center justify-center rounded-md"
+                        className="w-5 h-5 ml-auto flex items-center justify-center rounded-md"
                         style={{ color: 'hsl(var(--muted-foreground))' }}
                         aria-label="收起技能面板"
                       >
@@ -1020,26 +1205,44 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             {/* ★ 编辑器组 1 的标签栏：只有一个固定的「正文」项，不可关闭。
                 它是"主编辑器里打开的那份稿子" —— 组 2 怎么切都动不到这里 */}
+            {/* ★ 2026-09-15 改为「页面切换」：正文与看板**互斥**，共用一条标签栏。
+                点哪个标签哪个占满 —— 像浏览器切标签页（作者在「看板占满全屏」的选项里选的这一档）。
+                这**推翻了 2026-09-13「正文永不被挡」的分栏约定**，是作者本人的决定，别再改回去。 */}
             <TabBar
               panels={aiPanels}
               tabs={tabs}
               active={activePane}
-              variant="main"
-              onActivate={() => activatePane(null)}
+              variant="unified"
+              previewKey={previewKey}
+              onActivate={activatePane}
+              onClose={closePane}
+              onCloseOthers={closeOthers}
+              onCloseRight={closeToRight}
+              onPromote={promotePane}
+              onMove={movePaneTab}
               onBackToBody={() => activatePane(null)}
-              bodyFocused={!paneOpen || activePane === null}
+              bodyFocused={activePane === null}
               bodySubtitle={viewChapter ? `第 ${viewChapter.order} 章 · ${viewChapter.wordCount ?? 0} 字` : undefined}
+              onCloseBody={() => setBodyOpen(false)}
             />
             {/* 正文区域：占据剩余全部高度。★ **永不参与分页、永不卸载** ——
                 切标签只影响侧编辑器组，这里的 DOM 与滚动位置一个字节都不动 */}
+            {/* ★ 2026-09-15 页面切换：正文与看板互斥。
+                这里用 **display 切换**而不是条件卸载 —— 正文里有编辑器实例与滚动位置，
+                「永不卸载」是既有硬约定；卸载再挂载会丢滚动位置并重建编辑器。 */}
             <section
               className="flex-1 min-h-0 flex flex-col overflow-hidden"
-              style={{ background: EDITOR_BG }}
+              style={{ background: EDITOR_BG, display: activePane === null ? undefined : 'none' }}
               aria-label="正文"
             >
+            {bodyOpen ? (
+              <>
             <div
               className="shrink-0 flex items-center gap-2"
-              style={{ height: 30, padding: '0 14px', borderBottom: '0.5px solid hsl(var(--border) / 0.45)' }}
+              // ★ 2026-09-15「让标题贴紧」：原为 height 30 + 0.5px 底边框。
+              //   它与上方 35px 的标签栏叠在一起，正文顶部堆了 65px 浅色区，
+              //   连成一片看着就像「标签下面挂了一条空白带」。压到 24px 并去掉底边框。
+              style={{ height: 24, padding: '0 14px' }}
             >
               {/* 编辑器头部：章节切换 + 稿件状态（IDE 这里放的是面包屑，我们放章号） */}
               <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))', letterSpacing: '0.06em' }}>
@@ -1107,54 +1310,90 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                 </div>
               )}
             </div>
+              </>
+            ) : (
+              /* 正文已被关闭（× 关掉的）：给一个安静的占位 + 明确的重新打开入口，
+                 避免「关了就找不回来」。刻意不做持久化，刷新即恢复打开。 */
+              <div className="flex-1 flex items-center justify-center" style={{ background: EDITOR_BG }}>
+                <div className="text-center">
+                  <BookOpen size={26} className="mx-auto mb-3" style={{ color: 'hsl(var(--ink-pale))', opacity: 0.6 }} />
+                  <div className="font-serif mb-1.5" style={{ fontSize: 14, color: 'hsl(var(--ink-light))' }}>
+                    正文已关闭
+                  </div>
+                  <p className="text-[11px] mb-4" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                    稿子还在库里，随时可以重新打开
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setBodyOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md transition-all"
+                    style={{
+                      fontFamily: "'Noto Serif SC', serif",
+                      fontSize: 12.5,
+                      color: 'hsl(var(--card))',
+                      background: 'hsl(var(--mountain-deep))',
+                      border: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <BookOpen size={13} />
+                    重新打开正文
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
-          </div>
 
-          {/* 下方分页区：只有宽度真的不够（收掉 AI 栏也放不下正文）时才落到这里 ——
-              正文保持**完整宽度**，只是高度变小；**绝不覆盖正文** */}
-          {paneMode === 'bottom' && (
-            <WorkspacePane
-              mode="bottom"
-              open={paneOpen}
-              height={effectivePaneHeight}
-              onHeightChange={(h) => setPaneHeight(clampPaneHeight(h))}
-              panels={aiPanels}
-              tabs={tabs}
-              active={activePane}
-              previewKey={previewKey}
-              onActivate={activatePane}
-              onClose={closePane}
-              onCloseOthers={closeOthers}
-              onCloseRight={closeToRight}
-              onPromote={promotePane}
-              onOpenQuick={() => setQuickOpen(true)}
-              onMoveTab={movePaneTab}
-              panelProps={panelProps}
-            />
-          )}
+          {/* ★ 2026-09-15 页面切换：看板不再有独立容器（右侧栏 / 下方横栏都没了），
+              而是与正文**互斥地占满同一块区域**。原先这里的两处 WorkspacePane
+              连同四级让位阶梯（收 AI 栏 → 压窄侧组 → 落下方）一并移除。
+              标签栏已由上面的 unified TabBar 统一渲染。 */}
+          {activePane !== null && (() => {
+            const p = aiPanels.find((x) => x.key === activePane);
+            const C = p?.Component;
+            return (
+              <section
+                className="flex-1 min-h-0 flex flex-col overflow-hidden"
+                style={{ background: EDITOR_BG }}
+                aria-label="看板"
+              >
+                {/* ★ 给所有看板一份统一内边距 —— 原来面板直接贴着容器边缘，
+                    看板改成「占满整屏」后那块区域变宽变大，贴边就显不出结构。
+                    ★ 2026-09-15 全面图谱化后由 `overflow-y-auto` 改为 **overflow-hidden**：
+                      四个面板现在都是 `h-full` 的图谱（内部各自滚自己的侧栏 / 画布），
+                      外层再开一层滚动会出现"滚动条套滚动条"，而且 ReactFlow 需要一个
+                      **确定高度**的容器 —— 放进可变高度的滚动盒里画布会被压成 0。 */}
+                <div className="flex-1 min-h-0 overflow-hidden p-3" data-pane-content={activePane}>
+                  {C ? (
+                    <Suspense
+                      fallback={(
+                        <div className="h-full flex items-center justify-center text-[12px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                          正在载入「{p?.label}」图谱…
+                        </div>
+                      )}
+                    >
+                      <ErrorBoundary
+                        fallback={(
+                          <div className="p-4 text-[12px]" style={{ color: 'hsl(var(--destructive))' }}>
+                            「{p?.label}」面板出错了 —— 正文与其它标签不受影响，可关闭此标签后重开。
+                          </div>
+                        )}
+                      >
+                        <C {...(panelProps ?? {})} />
+                      </ErrorBoundary>
+                    </Suspense>
+                  ) : (
+                    <div className="p-6 text-center text-[12px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                      这个看板已经下线了 —— 换个标签或关掉它。
+                    </div>
+                  )}
+                </div>
+              </section>
+            );
+          })()}
+          </div>
         </div>
 
-        {/* ── 编辑器组 2（侧组）：看板在这里以标签方式打开 ── */}
-        {paneMode === 'right' && (
-          <WorkspacePane
-            mode="right"
-            open={paneOpen}
-            width={effectivePaneWidth}
-            onWidthChange={setPaneWidth}
-            panels={aiPanels}
-            tabs={tabs}
-            active={activePane}
-            previewKey={previewKey}
-            onActivate={activatePane}
-            onClose={closePane}
-            onCloseOthers={closeOthers}
-            onCloseRight={closeToRight}
-            onPromote={promotePane}
-            onOpenQuick={() => setQuickOpen(true)}
-            onMoveTab={movePaneTab}
-            panelProps={panelProps}
-          />
-        )}
       </div>
 
       {/* ── 状态栏（IDE 的底条）：左＝花名册，右＝当前状态 ── */}

@@ -125,10 +125,14 @@ export async function ensureSeeded(): Promise<number> {
       description: def.description ?? '插件注册技能',
       color: def.color ?? '#94a3b8',
       iconKey: def.id,
-      // ★ 注册表里现有的这批技能都是"写作场景的对话技能"，归属写作官；
-      //   智能体本体（assistant）名下暂时为空 —— 不凭空造，等真装了再出现。
+      // ★ 归属由技能**自己声明**（`SkillDef.ownerAgent`）：不同技能本就该归不同 agent
+      //   （角色分析师 → 角色设计师、情节构思师 → 剧情设计师、伏笔追踪者 → 设定管家…）。
+      //   2026-09-15 之前这里硬编码 'writer'，导致 10 条技能全堆在写作官名下、
+      //   另外 7 个 agent 的技能列表全空。
+      //   未声明时回落 'writer' —— 写作场景的默认归属。
+      //   智能体本体（assistant）名下仍为空 —— 不凭空造，等真装了再出现。
       category: 'agent',
-      ownerAgent: 'writer',
+      ownerAgent: (def as { ownerAgent?: string }).ownerAgent ?? 'writer',
       systemPrompt: def.systemPrompt ?? '',
       contextKeys: JSON.stringify(def.contextKeys ?? []),
       source: 'builtin',

@@ -71,7 +71,7 @@ function ErrorFallback({ error, retryCount, onRetry, onGoHome }: ErrorFallbackPr
               borderRadius: '20px',
               background: isFatal
                 ? 'hsl(var(--destructive) / 0.12)'
-                : 'hsl(38 92% 50% / 0.12)',
+                : 'hsl(0 0% 45% / 0.12)',
               border: `1px solid hsl(${isFatal ? 'var(--destructive)' : '38 92% 50%'} / 0.3)`,
               backdropFilter: 'blur(24px) saturate(180%)',
               WebkitBackdropFilter: 'blur(24px) saturate(180%)',
@@ -85,7 +85,7 @@ function ErrorFallback({ error, retryCount, onRetry, onGoHome }: ErrorFallbackPr
               className="text-3xl"
               style={{
                 fontFamily: "'Noto Serif SC', serif",
-                color: isFatal ? 'hsl(var(--destructive))' : 'hsl(38 92% 50%)',
+                color: isFatal ? 'hsl(var(--destructive))' : 'hsl(0 0% 45%)',
                 fontWeight: 600,
               }}
               aria-hidden="true"
@@ -100,7 +100,7 @@ function ErrorFallback({ error, retryCount, onRetry, onGoHome }: ErrorFallbackPr
           className="mb-3 text-base tracking-wide"
           style={{
             fontFamily: "'Noto Serif SC', serif",
-            color: isFatal ? 'hsl(var(--destructive))' : 'hsl(38 92% 50%)',
+            color: isFatal ? 'hsl(var(--destructive))' : 'hsl(0 0% 45%)',
             fontWeight: 600,
           }}
         >

@@ -19,107 +19,107 @@
  * ============================================================ */
 
 /* ============================================================
- * 主题：arcade —— 电玩街机
+ * 主题：soot —— 松烟（原 arcade「电玩街机」的形态，墨色化重制 2026-09-15）
  *
- * 设计取向：深空蓝紫底 + 霓虹青主色 + 硬边小圆角 + 实边面板。
- *   · 底色压到 6% 明度，让霓虹有"发光"的余地
- *   · 强调色不用大面积铺，只用于边框 / 状态 / 数据
- *   · glass 组刻意调"实"（模糊 4px、不透明度拉高）—— 电玩面板是硬屏，不是毛玻璃
- *   · radius 收到 4/6/8px，与青霭玻璃的 16/20/24px 形成明确对比
+ * 设计取向：松烟墨底 + 亮墨主色 + 硬边小圆角 + 实边面板。
+ *   · 底色压到 5% 明度，让「亮墨」有发光的余地（夜里的灯下字）
+ *   · 强调色只用于边框 / 状态 / 数据，不大面积铺
+ *   · glass 组刻意调「实」（模糊 4px、不透明度拉高）—— 硬屏不是宣纸
+ *   · radius 收到 4/6/8px，与「水墨」的 16/20/24px 形成纸性差异
  *
  * 注：本主题本身即暗色。选它时 UI 会同时挂 dark，不提供浅色变体。
  * ============================================================ */
 
-html[data-theme="arcade"] {
-  /* —— 基底：深空蓝紫 —— */
-  --background: 232 30% 6%;              /* #0a0d18 */
-  --foreground: 187 90% 92%;             /* #d6f7ff 青白 */
-  --card: 232 26% 10%;                   /* #12162a */
-  --card-foreground: 187 90% 92%;
+html[data-theme="soot"] {
+  /* —— 基底：松烟墨 —— */
+  --background: 0 0% 5%;                 /* #0d0d0d */
+  --foreground: 0 0% 93%;                /* 亮墨 */
+  --card: 0 0% 9%;
+  --card-foreground: 0 0% 93%;
 
-  /* —— 主色：霓虹青 —— */
-  --primary: 187 100% 50%;               /* #00e5ff */
-  --primary-foreground: 232 40% 7%;
+  /* —— 主色：亮墨（暗底上的墨）—— */
+  --primary: 0 0% 92%;
+  --primary-foreground: 0 0% 6%;
 
   /* —— 辅助 —— */
-  --secondary: 232 22% 17%;              /* #212640 */
-  --secondary-foreground: 187 60% 88%;
-  --muted: 232 20% 15%;
-  --muted-foreground: 200 22% 62%;       /* #7ba0b5 冷灰蓝 */
-  --accent: 327 100% 59%;                /* #ff2e88 品红 */
-  --accent-foreground: 0 0% 100%;
-  --destructive: 353 90% 61%;            /* #ff3b4e */
-  --destructive-foreground: 0 0% 100%;
+  --secondary: 0 0% 16%;
+  --secondary-foreground: 0 0% 88%;
+  --muted: 0 0% 13%;
+  --muted-foreground: 0 0% 60%;
+  --accent: 0 0% 80%;
+  --accent-foreground: 0 0% 6%;
+  --destructive: 0 0% 88%;
+  --destructive-foreground: 0 0% 8%;
 
-  /* —— 边框 / 输入 / 焦点：霓虹描边 —— */
-  --border: 199 55% 30%;                 /* #23566f */
-  --input: 232 22% 14%;
-  --ring: 187 100% 50%;
+  /* —— 边框 / 输入 / 焦点：硬边勾线 —— */
+  --border: 0 0% 26%;
+  --input: 0 0% 14%;
+  --ring: 0 0% 78%;
 
-  /* —— 圆角：硬边（与青霭玻璃的大圆角形成主题差异）—— */
+  /* —— 圆角：硬边（与水墨的大圆角形成纸性差异）—— */
   --radius: 0.25rem;                     /* 4px */
   --radius-lg: 0.375rem;                 /* 6px */
   --radius-xl: 0.5rem;                   /* 8px */
 
-  /* —— 项目专色：全部改成霓虹变体，避免继承青霭玻璃的靛调 —— */
-  --mountain-cyan: 187 100% 50%;         /* 主强调 → 霓虹青 */
-  --mountain-light: 187 80% 68%;
-  --mountain-deep: 260 90% 66%;          /* 深锚点 → 电紫 */
-  --mountain-pale: 187 60% 22%;          /* 淡色在暗底上要"深"，否则面板会发灰 */
-  --mist-blue: 220 90% 70%;
-  --mist-pale: 220 50% 22%;
-  --mist-deep: 220 80% 55%;
-  --ink: 187 90% 92%;                    /* 文字类：暗底反相 */
-  --ink-light: 195 40% 72%;
-  --ink-pale: 200 25% 55%;
-  --cinnabar: 353 90% 61%;               /* 危险 → 霓虹红 */
-  --cinnabar-pale: 353 60% 20%;
-  --willow: 150 100% 61%;                /* 成功 → 荧光绿 */
-  --willow-pale: 150 60% 18%;
-  --ochre: 38 100% 56%;                  /* 警示 → 琥珀霓虹 */
-  --ochre-pale: 38 70% 18%;
+  /* —— 项目专色：全部改成墨阶变体，避免继承水墨的亮底值 —— */
+  --mountain-cyan: 0 0% 90%;             /* 主强调 → 亮墨 */
+  --mountain-light: 0 0% 66%;
+  --mountain-deep: 0 0% 96%;             /* 深锚点在暗底上要"亮" */
+  --mountain-pale: 0 0% 20%;
+  --mist-blue: 0 0% 70%;
+  --mist-pale: 0 0% 20%;
+  --mist-deep: 0 0% 56%;
+  --ink: 0 0% 93%;                       /* 文字类：暗底反相 */
+  --ink-light: 0 0% 72%;
+  --ink-pale: 0 0% 55%;
+  --cinnabar: 0 0% 88%;                  /* 危险 → 亮墨 */
+  --cinnabar-pale: 0 0% 18%;
+  --willow: 0 0% 80%;                    /* 成功 → 亮墨 */
+  --willow-pale: 0 0% 18%;
+  --ochre: 0 0% 72%;                     /* 警示 → 中亮墨 */
+  --ochre-pale: 0 0% 18%;
 
-  /* —— 玻璃 token：电玩不是毛玻璃，是"硬屏 + 微透" —— */
+  /* —— 质感：硬屏 + 微透，不是宣纸 —— */
   --glass-blur: 4px;
-  --glass-saturate: 120%;
-  --glass-tint: 18 22 42;                /* 面板底色偏靛蓝 */
-  --glass-highlight: 0 229 255;          /* 高光染霓虹青 */
-  --glass-shadow: 187 100% 50%;          /* 投影色 → 辉光用青 */
+  --glass-saturate: 100%;
+  --glass-tint: 18 18 18;                /* 面板底色偏墨 */
+  --glass-highlight: 255 255 255;
+  --glass-shadow: 0 0% 0%;
 
   --glass-surface-bg: 0.55;              /* 小控件：足够实，保证暗底可读 */
   --glass-surface-border: 0.55;
-  --glass-surface-highlight: 0.10;
+  --glass-surface-highlight: 0.08;
   --glass-panel-bg: 0.60;
   --glass-panel-border: 0.55;
-  --glass-panel-highlight: 0.10;
+  --glass-panel-highlight: 0.08;
   --glass-frost-bg: 0.72;
   --glass-frost-border: 0.60;
-  --glass-frost-highlight: 0.12;
+  --glass-frost-highlight: 0.10;
   --glass-strong-bg: 0.82;
   --glass-strong-border: 0.55;
-  --glass-strong-highlight: 0.12;
+  --glass-strong-highlight: 0.10;
   --glass-modal-bg: 0.90;
   --glass-modal-border: 0.45;
-  --glass-modal-highlight: 0.14;
+  --glass-modal-highlight: 0.12;
 
-  /* —— 语义扩展层：实体分类色（霓虹变体）—— */
-  --entity-character: 195 100% 62%;
-  --entity-location: 150 100% 58%;
-  --entity-item: 187 100% 50%;
-  --entity-foreshadow: 38 100% 58%;
-  --entity-event: 260 90% 70%;
-  --entity-outline: 220 90% 72%;
+  /* —— 语义扩展层：实体分类色（墨阶）—— */
+  --entity-character: 0 0% 94%;
+  --entity-location: 0 0% 80%;
+  --entity-item: 0 0% 70%;
+  --entity-foreshadow: 0 0% 60%;
+  --entity-event: 0 0% 50%;
+  --entity-outline: 0 0% 42%;
 
   /* —— 语义扩展层：智能体色 —— */
-  --agent-plot: 187 100% 50%;
-  --agent-character: 195 100% 64%;
-  --agent-continuity: 38 100% 58%;
-  --agent-convener: 150 100% 58%;
-  --agent-writer: 327 100% 64%;
+  --agent-plot: 0 0% 84%;
+  --agent-character: 0 0% 74%;
+  --agent-continuity: 0 0% 64%;
+  --agent-convener: 0 0% 54%;
+  --agent-writer: 0 0% 96%;
 
   /* —— 语义扩展层：状态色 —— */
-  --state-idle: 220 18% 46%;
-  --state-running: 38 100% 58%;
-  --state-done: 150 100% 58%;
-  --state-blocked: 353 90% 64%;
+  --state-idle: 0 0% 40%;
+  --state-running: 0 0% 62%;
+  --state-done: 0 0% 90%;
+  --state-blocked: 0 0% 97%;
 }

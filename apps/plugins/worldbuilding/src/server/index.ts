@@ -113,7 +113,8 @@ export function apply(ctx: ServerPluginContext): void {
     id: 'worldbuilding-advisor',
     name: '势力顾问',
     description: '核对势力设定一致性、补全组织与阵营空白',
-    color: '#4F918C',
+    color: 'hsl(0 0% 30%)', // 水墨化：原 #4F918C（远山青）
+    ownerAgent: 'world-architect', // 2026-09-15 重分配：势力/世界观归策划官
     systemPrompt: `【已激活技能：世界观顾问】你现在同时兼任 世界观顾问。在回答中请侧重：
 1. 核对当前章节中的势力/阵营设定是否与已有记录一致（人名、组织名、立场）
 2. 评估势力的动机与目标是否合理，有无前后矛盾

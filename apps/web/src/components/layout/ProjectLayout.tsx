@@ -1,11 +1,12 @@
 import React, { useState, useEffect, Suspense, useCallback, useRef, useMemo, lazy } from 'react';
 import { Outlet, useNavigate, useParams } from 'react-router-dom';
 import {
-  BookOpen, Settings, LogOut, User, ArrowLeft, MessageSquare,
+  BookOpen, Settings, LogOut, User, MessageSquare,
   X, Shield, AlertTriangle,
 } from 'lucide-react';
 import { useProjectStore } from '@/stores';
 import { useReferenceStore } from '@/stores/referenceStore';
+import { InkBackButton } from '@/components/ui/InkBackButton';
 import { useAuthStore } from '@/stores/authStore';
 import { PATHS } from '@/routes/paths';
 import { apiClient } from '@/services/api/apiClient';
@@ -603,14 +604,7 @@ export function ProjectLayout() {
       >
         {/* 左侧：返回书架 + 项目名 */}
         <div className="flex items-center gap-2 justify-self-start">
-          <button
-            onClick={handleBack}
-            className="nm-btn-apple-icon-sm"
-            title="返回"
-            aria-label="返回"
-          >
-            <ArrowLeft size={15} />
-          </button>
+          <InkBackButton onClick={handleBack} size={15} label="返回" />
           <span
             className="text-[13px] font-semibold select-none cursor-pointer truncate max-w-[120px] sm:max-w-[200px]"
             style={{ color: 'hsl(var(--foreground))', letterSpacing: '-0.2px' }}

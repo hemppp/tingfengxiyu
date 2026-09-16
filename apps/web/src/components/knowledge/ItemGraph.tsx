@@ -29,36 +29,37 @@ import { GraphShell, RelationTypeDialog, type RelationTypeOption } from './graph
 // 同属/同类衍生边：保留现有逻辑，作为弱关系显示
 // ============================================================
 
+// 水墨化（2026-09-15）：按类型配色 → 按墨阶配色（饱和度恒 0）
 const itemTypeColors: Record<string, string> = {
-  weapon: '#ef4444',
-  token: '#3b82f6',
-  artifact: '#8b5cf6',
-  document: '#06b6d4',
-  key: '#f59e0b',
-  medicine: '#22c55e',
-  other: '#6b7280',
-  clothing: '#a855f7',
-  vehicle: '#0ea5e9',
-  treasure: '#facc15',
-  book: '#0891b2',
-  food: '#84cc16',
-  plant: '#16a34a',
-  animal: '#dc2626',
-  tool: '#64728b',
-  prop: '#94a3b8',
-  potion: '#22c55e',
-  armor: '#a16207',
-  scroll: '#ec4899',
-  gem: '#06b6d4',
+  weapon: 'hsl(0 0% 12%)',
+  token: 'hsl(0 0% 34%)',
+  artifact: 'hsl(0 0% 14%)',
+  document: 'hsl(0 0% 52%)',
+  key: 'hsl(0 0% 22%)',
+  medicine: 'hsl(0 0% 44%)',
+  other: 'hsl(0 0% 50%)',
+  clothing: 'hsl(0 0% 40%)',
+  vehicle: 'hsl(0 0% 42%)',
+  treasure: 'hsl(0 0% 20%)',
+  book: 'hsl(0 0% 30%)',
+  food: 'hsl(0 0% 58%)',
+  plant: 'hsl(0 0% 46%)',
+  animal: 'hsl(0 0% 28%)',
+  tool: 'hsl(0 0% 36%)',
+  prop: 'hsl(0 0% 60%)',
+  potion: 'hsl(0 0% 48%)',
+  armor: 'hsl(0 0% 26%)',
+  scroll: 'hsl(0 0% 38%)',
+  gem: 'hsl(0 0% 16%)',
 };
 
 const itemRelationColors: Record<ItemRelationType, string> = {
-  paired_with: '#0ea5e9',
-  contains: '#f59e0b',
-  part_of: '#8b5cf6',
-  opposite_of: '#ef4444',
-  transforms_into: '#10b981',
-  related_to: '#6b7280',
+  paired_with: 'hsl(0 0% 42%)',
+  contains: 'hsl(0 0% 30%)',
+  part_of: 'hsl(0 0% 50%)',
+  opposite_of: 'hsl(0 0% 12%)',
+  transforms_into: 'hsl(0 0% 24%)',
+  related_to: 'hsl(0 0% 60%)',
 };
 
 const itemRelationLabels: Record<ItemRelationType, string> = {
@@ -71,7 +72,7 @@ const itemRelationLabels: Record<ItemRelationType, string> = {
 };
 
 function getItemColor(type?: string): string {
-  return type ? (itemTypeColors[type.toLowerCase()] || '#6b7280') : '#6b7280';
+  return type ? (itemTypeColors[type.toLowerCase()] || 'hsl(0 0% 50%)') : 'hsl(0 0% 50%)';
 }
 
 function getItemSize(holderCount: number, relationCount: number): number {

@@ -4,10 +4,12 @@ import type { SkillDef } from '../framework/types.js';
 
 export const outlineArchitect: SkillDef = {
   id: 'outline-architect',
+  // 归属智能体 —— 2026-09-15 重分配（此前被 ensureSeeded 统一硬编码为 writer）
+  ownerAgent: 'plot-designer',
   contextKeys: ['outline', 'characters', 'events'],
   name: '大纲架构师',
   description: '与AI讨论剧情走向，完善核心冲突与每章细节',
-  color: '#0ea5e9',
+  color: 'hsl(0 0% 34%)',
   systemPrompt: `【已激活技能：大纲架构师】
 你现在同时兼任"大纲架构师"。你的任务是与作者讨论剧情走向，帮助完善小说大纲。请遵循以下原则：
 

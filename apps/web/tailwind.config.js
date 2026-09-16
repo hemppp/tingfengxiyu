@@ -1,4 +1,27 @@
 /** @type {import('tailwindcss').Config} */
+
+// ============================================================
+// 水墨化：Tailwind 内置彩色调色板 → 中性灰阶（墨分五色）
+//
+// 为什么在配置层做：组件里散落着大量 text-amber-500 / bg-green-100 / text-red-500
+//   这类彩色工具类，逐处改既慢又必漏。此处一次性重映射 —— 所有彩色类自动落到灰阶，
+//   且**明暗两种模式都可读**（500 档取 52% 灰，深底/浅底上对比都够）。
+// 墨阶：50 极淡 / 100 淡 / 300 清 / 500 中 / 700 重 / 900 浓 / 950 焦
+// ============================================================
+const INK_STEPS = {
+  50: 97, 100: 94, 200: 88, 300: 80, 400: 66,
+  500: 52, 600: 42, 700: 32, 800: 24, 900: 15, 950: 10,
+};
+const INK_SCALE = Object.fromEntries(
+  Object.entries(INK_STEPS).map(([step, l]) => [step, `hsl(0 0% ${l}%)`]),
+);
+/** 需要水墨化的内置彩色调色板（gray/slate/zinc/neutral/stone 本就是灰，不动） */
+const CHROMATIC_PALETTES = [
+  'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal',
+  'cyan', 'sky', 'blue', 'indigo', 'violet', 'purple', 'fuchsia', 'pink', 'rose',
+];
+const INK_PALETTE = Object.fromEntries(CHROMATIC_PALETTES.map((c) => [c, INK_SCALE]));
+
 export default {
   darkMode: 'class',
   // ★ 插件 Web 面也要扫描（novel.autowrite / worldbuilding 等）：
@@ -8,6 +31,8 @@ export default {
   theme: {
     extend: {
       colors: {
+        // —— 水墨化：彩色调色板整体重映射为灰阶（说明见文件顶部）——
+        ...INK_PALETTE,
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',

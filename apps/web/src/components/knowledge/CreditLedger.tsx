@@ -141,17 +141,17 @@ export function CreditLedger() {
 
   if (!projectId) {
     return (
-      <div className="h-full flex items-center justify-center bg-[#ffffff]">
+      <div className="h-full flex items-center justify-center bg-card">
         <p className="text-sm text-gray-500 font-medium">请先选择一个项目</p>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#ffffff]">
+    <div className="h-full flex flex-col bg-card">
       <div className="flex-1 flex overflow-hidden">
         {/* 左侧：人物搜索 + 列表（徽标 = 当前结余） */}
-        <div className="w-64 border-r border-gray-200 flex flex-col bg-[#fbfbfa]">
+        <div className="w-64 border-r border-gray-200 flex flex-col bg-muted/40">
           <div className="px-3 pt-3 pb-2">
             <div className="relative">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -187,7 +187,7 @@ export function CreditLedger() {
                     <div className="flex items-center gap-2 min-w-0">
                       <div
                         className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
-                        style={{ backgroundColor: c.color || '#6b7280' }}
+                        style={{ backgroundColor: c.color || 'hsl(0 0% 50%)' }}
                       >
                         {c.name[0]}
                       </div>

@@ -3,10 +3,12 @@ import type { SkillDef } from '../framework/types.js';
 
 export const plotArchitect: SkillDef = {
   id: 'plot-architect',
+  // 归属智能体 —— 2026-09-15 重分配（此前被 ensureSeeded 统一硬编码为 writer）
+  ownerAgent: 'plot-designer',
   contextKeys: ['outline', 'events'],
   name: '情节构思师',
   description: '定位章节结构、设计冲突升级与转折',
-  color: '#ef4444',
+  color: 'hsl(0 0% 18%)',
   systemPrompt: `【已激活技能：情节构思师】
 你现在同时兼任"情节构思师"。在回答中请侧重：
 1. 结合注入的"大纲"与"事件列表"，定位当前章节在整体结构中的位置

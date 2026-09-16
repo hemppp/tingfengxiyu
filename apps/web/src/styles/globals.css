@@ -11,80 +11,86 @@
 
 @layer base {
   :root {
-    /* —— 基底：靛调瓷白（避免纯黑纯白）—— */
-    --background: 220 27% 96%;             /* #f2f3f7 冷调瓷白 */
-    --foreground: 224 28% 12%;             /* #151a26 靛墨 */
-    --card: 216 32% 99%;                   /* #fbfcfe 卡片白 */
-    --card-foreground: 224 28% 12%;
+    /* —— 基底：宣纸（严格中性灰，饱和度恒为 0）—— */
+    --background: 0 0% 96%;                /* #f5f5f5 宣纸白 */
+    --foreground: 0 0% 9%;                 /* #171717 焦墨 */
+    --card: 0 0% 99%;                      /* #fcfcfc 生宣 */
+    --card-foreground: 0 0% 9%;
 
-    /* —— 主色：霁青 azure（玻璃 HUD 强调色）—— */
-    --primary: 205 70% 46%;                /* #2383c7 */
-    --primary-foreground: 0 0% 100%;
+    /* —— 主色：墨（取代霁青）—— */
+    --primary: 0 0% 12%;                   /* #1f1f1f 浓墨 */
+    --primary-foreground: 0 0% 98%;
 
     /* —— 辅助色 —— */
-    --secondary: 220 16% 92%;              /* #e5e8ee */
-    --secondary-foreground: 222 20% 20%;
-    --muted: 220 18% 95%;                  /* #f0f2f6 */
-    --muted-foreground: 221 10% 46%;       /* Apple 次要文字 */
-    --accent: 205 70% 46%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
+    --secondary: 0 0% 92%;
+    --secondary-foreground: 0 0% 20%;
+    --muted: 0 0% 94%;
+    --muted-foreground: 0 0% 42%;          /* 淡墨 */
+    --accent: 0 0% 22%;
+    --accent-foreground: 0 0% 98%;
+    /* ⚠️ 严格黑白灰下危险色不再用红：改以「最深墨 + 描边」表达重量。
+       若某处需要彩色警示，把下行换成 `0 72% 45%` 即可局部恢复。 */
+    --destructive: 0 0% 16%;
+    --destructive-foreground: 0 0% 98%;
 
     /* —— 边框 / 输入 / 焦点 —— */
-    --border: 220 16% 88%;                 /* #dbdee5 */
-    --input: 220 16% 92%;
-    --ring: 205 70% 46%;
+    --border: 0 0% 82%;
+    --input: 0 0% 92%;
+    --ring: 0 0% 25%;
 
     /* —— 圆角（苹果大圆角）—— */
     --radius: 1rem;                        /* 16px */
     --radius-lg: 1.25rem;                  /* 20px */
     --radius-xl: 1.5rem;                   /* 24px */
 
-    /* —— 语义色板（沿用旧命名，值已切换为青→靛体系）—— */
-    --mountain-cyan: 205 70% 46%;          /* 主强调：霁青 */
-    --mountain-light: 205 45% 68%;         /* 冰青 */
-    --mountain-deep: 222 55% 34%;          /* 靛蓝（深锚点/文字强调） */
-    --mountain-pale: 205 45% 89%;          /* 淡霁 */
-    --mist-blue: 222 48% 72%;              /* 雾靛 */
-    --mist-pale: 221 38% 90%;              /* 淡雾 */
-    --mist-deep: 222 42% 52%;              /* 深雾 */
-    --ink: 224 28% 12%;
-    --ink-light: 221 12% 38%;
-    --ink-pale: 221 10% 58%;
-    --cinnabar: 12 60% 48%;                /* 朱砂：唯一暖点缀 */
-    --cinnabar-pale: 12 50% 90%;
-    --willow: 152 45% 42%;                 /* 成功/生长：玉青 */
-    --willow-pale: 152 40% 88%;
-    --ochre: 38 55% 52%;                   /* 警示：赭 */
-    --ochre-pale: 38 50% 90%;
+    /* —— 语义色板（沿用旧命名，值改为「墨分五色」灰阶）——
+       焦墨 9% / 浓墨 16% / 重墨 30% / 淡墨 50% / 清墨 68%。
+       命名保留是为了不动组件；语义已从「山水色」转为「墨色深浅」。 */
+    --mountain-cyan: 0 0% 12%;             /* 主强调：浓墨 */
+    --mountain-light: 0 0% 52%;            /* 淡墨 */
+    --mountain-deep: 0 0% 20%;             /* 深墨（深锚点 / 文字强调） */
+    --mountain-pale: 0 0% 90%;             /* 极淡墨（纸面浅痕） */
+    --mist-blue: 0 0% 62%;                 /* 中淡墨 */
+    --mist-pale: 0 0% 92%;                 /* 淡雾 → 纸灰 */
+    --mist-deep: 0 0% 44%;                 /* 深雾 → 重墨偏淡 */
+    --ink: 0 0% 9%;                        /* 焦墨 */
+    --ink-light: 0 0% 38%;                 /* 淡墨 */
+    --ink-pale: 0 0% 58%;                  /* 清墨 */
+    --cinnabar: 0 0% 18%;                  /* 朱砂 → 最重墨 */
+    --cinnabar-pale: 0 0% 90%;
+    --willow: 0 0% 28%;                    /* 成功/生长 → 浓墨 */
+    --willow-pale: 0 0% 90%;
+    --ochre: 0 0% 46%;                     /* 警示 → 重墨 */
+    --ochre-pale: 0 0% 90%;
 
-    /* —— 液态玻璃专用 token —— */
-    --glass-blur: 24px;
-    --glass-saturate: 180%;
-    --glass-tint: 240 246 252;             /* 玻璃表面色调 — 靛调冷白 */
+    /* —— 质感 token：由「液态玻璃」转为「宣纸」——
+       纸不折射、不染饱和度，故 blur 下调、saturate 归 100%，
+       投影自中性墨黑发出（而非靛蓝），高光是纸面的「蛤白」。 */
+    --glass-blur: 10px;
+    --glass-saturate: 100%;
+    --glass-tint: 250 250 250;             /* 纸面基调 — 中性白（饱和度 0） */
     --glass-highlight: 255 255 255;        /* 顶部高光 (RGB 三元组) */
-    --glass-shadow: 224 35% 14%;           /* 投影色 (HSL 三元组) */
+    --glass-shadow: 0 0% 0%;               /* 投影色 → 纯墨黑 */
 
-    /* 各层级不透明度（亮色主题：降低覆盖层，让背景透过；
-       边框/高光/阴影增强对比，避免玻璃"隐形"。
+    /* 各层级不透明度（纸是不透明的：整体上调；
+       边框取墨线，比玻璃更低的不透明度即可形成"勾线"感。
        surface 用于小控件（按钮/搜索框）需较高不透明度保证可读性；
-       panel/frost 用于大面积面板，保留折射感）*/
-    --glass-surface-bg: 0.24;              /* 轻表面 — 小控件 */
-    --glass-surface-border: 0.50;
-    --glass-surface-highlight: 0.22;
-    --glass-panel-bg: 0.28;                /* 中等面板 */
-    --glass-panel-border: 0.50;
-    --glass-panel-highlight: 0.22;
-    --glass-frost-bg: 0.38;                /* 顶栏霜 */
-    --glass-frost-border: 0.55;
-    --glass-frost-highlight: 0.28;
-    --glass-strong-bg: 0.48;               /* 重面板 */
-    --glass-strong-border: 0.45;
-    --glass-strong-highlight: 0.25;
-    --glass-modal-bg: 0.58;                /* 模态 */
-    --glass-modal-border: 0.35;
-    --glass-modal-highlight: 0.30;
+       panel/frost 用于大面积面板，保留纸的呼吸感）*/
+    --glass-surface-bg: 0.55;              /* 轻表面 — 小控件 */
+    --glass-surface-border: 0.34;
+    --glass-surface-highlight: 0.30;
+    --glass-panel-bg: 0.62;                /* 中等面板 */
+    --glass-panel-border: 0.34;
+    --glass-panel-highlight: 0.30;
+    --glass-frost-bg: 0.72;                /* 顶栏霜 */
+    --glass-frost-border: 0.38;
+    --glass-frost-highlight: 0.34;
+    --glass-strong-bg: 0.80;               /* 重面板 */
+    --glass-strong-border: 0.32;
+    --glass-strong-highlight: 0.28;
+    --glass-modal-bg: 0.90;                /* 模态 */
+    --glass-modal-border: 0.26;
+    --glass-modal-highlight: 0.32;
 
     /* ============================================================
      * 语义扩展层 —— 换肤契约（2026-09-11）
@@ -99,88 +105,92 @@
      *      前者该跟着数据走，后者是用户选的，都不该被主题覆盖。
      * ============================================================ */
 
-    /* —— 实体分类色（知识库 / 状态看板里的实体类型）—— */
-    --entity-character: 195 40% 32%;   /* 角色 · 深青 */
-    --entity-location: 88 30% 48%;     /* 地点 · 柳绿 */
-    --entity-item: 178 35% 42%;        /* 物品 · 远山青 */
-    --entity-foreshadow: 38 55% 52%;   /* 伏笔 · 赭石 */
-    --entity-event: 222 42% 52%;       /* 事件 · 雾靛 */
-    --entity-outline: 205 45% 68%;     /* 大纲 · 冰青 */
+    /* —— 实体分类色（知识库 / 状态看板里的实体类型）——
+       区分手段由「色相」改为「墨阶」：靠深浅而非颜色。 */
+    --entity-character: 0 0% 12%;      /* 角色 · 焦墨 */
+    --entity-location: 0 0% 26%;       /* 地点 · 浓墨 */
+    --entity-item: 0 0% 36%;           /* 物品 · 重墨 */
+    --entity-foreshadow: 0 0% 46%;     /* 伏笔 · 中墨 */
+    --entity-event: 0 0% 58%;          /* 事件 · 淡墨 */
+    --entity-outline: 0 0% 68%;        /* 大纲 · 清墨 */
 
     /* —— 智能体色（AI 写作工作台的四官 + 写作官）—— */
-    --agent-plot: 178 35% 42%;         /* 剧情设计师 */
-    --agent-character: 195 40% 32%;    /* 角色设计师 */
-    --agent-continuity: 38 55% 52%;    /* 设定管家 */
-    --agent-convener: 88 30% 48%;      /* 定稿官 */
-    --agent-writer: 168 65% 24%;       /* 写作官 */
+    --agent-plot: 0 0% 20%;            /* 剧情设计师 */
+    --agent-character: 0 0% 30%;       /* 角色设计师 */
+    --agent-continuity: 0 0% 40%;      /* 设定管家 */
+    --agent-convener: 0 0% 50%;        /* 定稿官 */
+    --agent-writer: 0 0% 8%;           /* 写作官 · 落笔最重 */
 
     /* —— 状态色（阶段推进 / 门槛结果）—— */
-    --state-idle: 220 10% 72%;         /* 待开始 */
-    --state-running: 38 55% 52%;       /* 进行中 */
-    --state-done: 168 65% 24%;         /* 已完成 */
-    --state-blocked: 0 72% 51%;        /* 被挡下 */
+    --state-idle: 0 0% 72%;            /* 待开始 · 纸未着墨 */
+    --state-running: 0 0% 40%;         /* 进行中 · 墨在晕 */
+    --state-done: 0 0% 14%;            /* 已完成 · 墨已定 */
+    --state-blocked: 0 0% 8%;          /* 被挡下 · 焦墨压住 */
   }
 
-  /* —— 暗色模式（靛夜玻璃）—— */
+  /* —— 暗色模式（夜墨：纸转入夜，墨转为亮）—— */
   .dark {
-    --background: 226 28% 8%;              /* #0e1019 靛夜 */
-    --foreground: 220 25% 96%;
-    --card: 225 22% 13%;                   /* #191d29 */
-    --card-foreground: 220 25% 96%;
-    --primary: 205 85% 62%;                /* 暗色下提亮 */
-    --primary-foreground: 226 28% 8%;
-    --secondary: 222 16% 20%;
-    --secondary-foreground: 220 16% 92%;
-    --muted: 222 18% 17%;
-    --muted-foreground: 221 10% 64%;
-    --accent: 205 85% 62%;
-    --accent-foreground: 226 28% 8%;
-    --border: 223 18% 24%;
-    --input: 222 16% 20%;
-    --ring: 205 85% 62%;
+    --background: 0 0% 7%;                 /* #121212 夜宣 */
+    --foreground: 0 0% 94%;                /* 反相焦墨 → 亮墨 */
+    --card: 0 0% 11%;
+    --card-foreground: 0 0% 94%;
+    --primary: 0 0% 92%;                   /* 暗底主色反相 */
+    --primary-foreground: 0 0% 8%;
+    --secondary: 0 0% 18%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 62%;
+    --accent: 0 0% 86%;
+    --accent-foreground: 0 0% 8%;
+    /* ⚠️ 必须覆盖：亮色的 --destructive 是 16% 深墨，在夜底上完全不可见 */
+    --destructive: 0 0% 88%;
+    --destructive-foreground: 0 0% 8%;
+    --border: 0 0% 24%;
+    --input: 0 0% 18%;
+    --ring: 0 0% 70%;
 
-    --ink: 220 20% 96%;
-    --ink-light: 220 10% 70%;
-    --ink-pale: 220 8% 52%;
+    --ink: 0 0% 94%;
+    --ink-light: 0 0% 70%;
+    --ink-pale: 0 0% 52%;
 
-    /* 暗色玻璃：更通透，高光更弱 */
+    /* 夜墨质感：纸在夜里近乎不显，高光更弱、叠加略高于玻璃期（纸不透明） */
     --glass-tint: 255 255 255;
     --glass-highlight: 255 255 255;
     --glass-shadow: 0 0% 0%;
-    --glass-surface-bg: 0.04;
-    --glass-surface-border: 0.08;
+    --glass-surface-bg: 0.06;
+    --glass-surface-border: 0.10;
     --glass-surface-highlight: 0.04;
-    --glass-panel-bg: 0.06;
-    --glass-panel-border: 0.10;
+    --glass-panel-bg: 0.08;
+    --glass-panel-border: 0.12;
     --glass-panel-highlight: 0.06;
-    --glass-frost-bg: 0.08;
-    --glass-frost-border: 0.12;
+    --glass-frost-bg: 0.10;
+    --glass-frost-border: 0.14;
     --glass-frost-highlight: 0.08;
-    --glass-strong-bg: 0.10;
-    --glass-strong-border: 0.14;
+    --glass-strong-bg: 0.12;
+    --glass-strong-border: 0.16;
     --glass-strong-highlight: 0.10;
-    --glass-modal-bg: 0.14;
-    --glass-modal-border: 0.20;
+    --glass-modal-bg: 0.16;
+    --glass-modal-border: 0.22;
     --glass-modal-highlight: 0.12;
 
-    /* —— 语义扩展层：暗底上必须提亮，否则深青/柳绿这类低明度色会糊在背景里 —— */
-    --entity-character: 195 45% 58%;
-    --entity-location: 88 35% 60%;
-    --entity-item: 178 35% 58%;
-    --entity-foreshadow: 38 60% 62%;
-    --entity-event: 222 45% 68%;
-    --entity-outline: 205 45% 72%;
+    /* —— 语义扩展层：暗底反相 —— 墨阶整体上翻，并保持彼此可辨的距离 —— */
+    --entity-character: 0 0% 92%;      /* 焦墨 → 最亮 */
+    --entity-location: 0 0% 78%;
+    --entity-item: 0 0% 68%;
+    --entity-foreshadow: 0 0% 58%;
+    --entity-event: 0 0% 48%;
+    --entity-outline: 0 0% 40%;
 
-    --agent-plot: 178 35% 58%;
-    --agent-character: 195 45% 58%;
-    --agent-continuity: 38 60% 62%;
-    --agent-convener: 88 35% 60%;
-    --agent-writer: 168 45% 52%;
+    --agent-plot: 0 0% 82%;
+    --agent-character: 0 0% 72%;
+    --agent-continuity: 0 0% 62%;
+    --agent-convener: 0 0% 52%;
+    --agent-writer: 0 0% 95%;
 
-    --state-idle: 220 10% 45%;
-    --state-running: 38 60% 62%;
-    --state-done: 168 45% 52%;
-    --state-blocked: 0 72% 62%;
+    --state-idle: 0 0% 38%;
+    --state-running: 0 0% 60%;
+    --state-done: 0 0% 88%;
+    --state-blocked: 0 0% 96%;
   }
 }
 
@@ -734,6 +744,78 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   color: hsl(var(--primary));
 }
 
+/* ============================================================
+ * 毛笔化：按钮外勾一道「手绘墨线」（2026-09-15）
+ *
+ * 为什么不改形状：这些按钮的统一语言是 980px 胶囊（两端半圆）。
+ *   把圆角改成多值「手绘圆角」会直接把胶囊变成方圆形块 —— 形态破坏太大。
+ *   毛笔味的本质是「笔锋」而非「形状」，所以改为**在按钮外再勾一道微倾的墨线**，
+ *   像写完一个字又用笔尖轻轻描了一遍。
+ *
+ * 成本：纯 CSS 伪元素（1px 边框 + 0.5° 旋转），零滤镜、零重绘，
+ *   不像背景那套 feTurbulence 需要逐像素计算。
+ * ============================================================ */
+.nm-btn-apple,
+.nm-btn-apple-primary,
+.nm-btn-apple-secondary,
+.nm-btn-apple-ghost,
+.nm-btn-apple-destructive {
+  position: relative;
+}
+
+.nm-btn-apple::after,
+.nm-btn-apple-primary::after,
+.nm-btn-apple-secondary::after,
+.nm-btn-apple-ghost::after,
+.nm-btn-apple-destructive::after {
+  content: '';
+  position: absolute;
+  inset: -2.5px;
+  border-radius: inherit;
+  border: 1px solid hsl(var(--ink) / 0.2);
+  /* 微倾 + 四角半径本就均匀，所以观感是「歪了一点的手描线」而非机械外框 */
+  transform: rotate(-0.5deg);
+  pointer-events: none;
+  opacity: 0.8;
+  transition: opacity 0.3s ease, inset 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease;
+}
+
+/* hover：笔尖再描一遍 —— 墨线略扩、略深 */
+.nm-btn-apple-primary:hover:not(:disabled)::after,
+.nm-btn-apple-secondary:hover:not(:disabled)::after,
+.nm-btn-apple-ghost:hover:not(:disabled)::after,
+.nm-btn-apple-destructive:hover:not(:disabled)::after {
+  inset: -3.6px;
+  border-color: hsl(var(--ink) / 0.32);
+  opacity: 1;
+}
+
+/* active：落笔收紧，墨线贴近纸面 */
+.nm-btn-apple-primary:active:not(:disabled)::after,
+.nm-btn-apple-secondary:active:not(:disabled)::after,
+.nm-btn-apple-ghost:active:not(:disabled)::after,
+.nm-btn-apple-destructive:active:not(:disabled)::after {
+  inset: -1.4px;
+  opacity: 1;
+}
+
+.nm-btn-apple-primary:disabled::after,
+.nm-btn-apple-secondary:disabled::after,
+.nm-btn-apple-ghost:disabled::after,
+.nm-btn-apple-destructive:disabled::after {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nm-btn-apple::after,
+  .nm-btn-apple-primary::after,
+  .nm-btn-apple-secondary::after,
+  .nm-btn-apple-ghost::after,
+  .nm-btn-apple-destructive::after {
+    transition: none !important;
+  }
+}
+
 /* —— 兼容旧 .nm-glass-* 命名：已与新 .glass-* 类共用同一声明（见上方逗号分隔选择器）—— */
 
 /* ============================================================
@@ -1184,9 +1266,10 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 }
 
 /* ============================================================
-   AmbientBackdrop — 全局环境背景（CSS + SVG）
-   固定铺满视口、z-index:-1、pointer-events:none，
-   由 App.tsx 全局挂载，为玻璃质感提供可折射的背景层次。
+   AmbientBackdrop — 全局环境背景（水墨作画层，2026-09-15 重制）
+   固定铺满视口、z-index:-1、pointer-events:none，由 App.tsx 全局挂载。
+   构成：宣纸基底 → 水墨作画（远山 / 竹枝 / 云气 / 飞白 / 溅墨，见组件内 SVG）
+         → 纸纹噪点。
    ============================================================ */
 .ambient-backdrop {
   position: fixed;
@@ -1196,95 +1279,43 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   pointer-events: none;
 }
 
-/* 基底：瓷白 → 淡霁青 → 底部晕入靛（青→靛氛围渐变） */
+/* 基底：宣纸色 + 两处大范围淡墨晕 —— 作画层之下的「底水」 */
 .ambient-base {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(to bottom, hsl(var(--mist-pale) / 0) 40%, hsl(230 42% 78% / 0.26) 100%),
-    radial-gradient(120% 90% at 50% 0%, hsl(var(--background)) 0%, hsl(var(--mist-pale) / 0.6) 55%, hsl(var(--mountain-pale) / 0.55) 100%);
+    radial-gradient(ellipse 62% 52% at 14% 10%, hsl(var(--ink) / 0.05), transparent 68%),
+    radial-gradient(ellipse 54% 46% at 88% 92%, hsl(var(--ink) / 0.042), transparent 70%),
+    linear-gradient(to bottom, hsl(var(--background)) 0%, hsl(var(--background)) 64%, hsl(var(--ink) / 0.035) 100%);
 }
 
-/* 远山层：底部对齐，缓慢 GPU 平移（避免触发重排/重绘）。
-   玻璃 HUD 下仅作低透明度地平线剪影，不再承担水墨叙事 */
-.ambient-mountains {
+/* ★ 水墨作画层：铺满视口（slice 保证不留边）。
+   整张画是静态的，只做极缓慢横向漂移 —— 像人站在画前轻轻移步；
+   走 translate3d 交合成器，不触发重排/重绘。 */
+.ambient-ink-painting {
   position: absolute;
-  bottom: 0;
-  left: -4%;
-  width: 108%;
-  height: 42%;
-  opacity: 0.28;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   transform: translateZ(0);
   will-change: transform;
-  animation: ambient-mountains-drift 70s ease-in-out infinite alternate;
+  animation: ambient-ink-drift 120s ease-in-out infinite alternate;
 }
 
-.ambient-mountain-far {
-  fill: hsl(var(--mountain-pale)); /* #D9E6E4 淡远山 */
+/* 竹枝极轻摇曳：幅度不到 1 度，几乎察觉不到，只为「活着」 */
+.ambient-ink-bamboo {
+  transform-origin: 40px 300px;
+  animation: ambient-bamboo-sway 14s ease-in-out infinite alternate;
 }
 
-.ambient-mountain-near {
-  fill: hsl(var(--mountain-light) / 0.85); /* #A4C5C2 中远山 */
+@keyframes ambient-ink-drift {
+  from { transform: translate3d(-0.8%, 0, 0); }
+  to   { transform: translate3d(0.8%, 0, 0); }
 }
 
-@keyframes ambient-mountains-drift {
-  from { transform: translate3d(-1.5%, 0, 0); }
-  to   { transform: translate3d(1.5%, 0, 0); }
-}
-
-/* 光晕：远山青 / 雾蓝 柔光，缓慢呼吸 */
-.ambient-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(60px);
-  pointer-events: none;
-  will-change: transform, opacity;
-}
-
-.ambient-orb-a {
-  top: 12%;
-  left: 8%;
-  width: 420px;
-  height: 420px;
-  background: radial-gradient(circle, hsl(var(--mountain-cyan) / 0.22), transparent 70%);
-  animation: ambient-orb-breathe-a 26s ease-in-out infinite alternate;
-}
-
-.ambient-orb-b {
-  bottom: 10%;
-  right: 6%;
-  width: 540px;
-  height: 540px;
-  background: radial-gradient(circle, hsl(var(--mist-blue) / 0.24), transparent 70%);
-  animation: ambient-orb-breathe-b 32s ease-in-out infinite alternate;
-}
-
-/* 第三颗靛色光球：青→靛过渡的中间氛围源 */
-.ambient-orb-c {
-  top: 46%;
-  left: 34%;
-  width: 440px;
-  height: 440px;
-  background: radial-gradient(circle, hsl(232 45% 58% / 0.16), transparent 70%);
-  animation: ambient-orb-breathe-c 38s ease-in-out infinite alternate;
-}
-
-/* ★ 光球呼吸只做 translate + opacity、不做 scale：scale 变化会改变 blur(60px)
-   的采样结果，迫使每帧重算大半径模糊；纯位移/透明度可被合成器整层缓存。
-   （orb-b 原 from 态 scale(1.1) 已折算进其尺寸 460→506px） */
-@keyframes ambient-orb-breathe-a {
-  from { transform: translate3d(0, 0, 0); opacity: 0.7; }
-  to   { transform: translate3d(40px, -30px, 0); opacity: 1; }
-}
-
-@keyframes ambient-orb-breathe-b {
-  from { transform: translate3d(0, 0, 0); opacity: 0.8; }
-  to   { transform: translate3d(-50px, 20px, 0); opacity: 1; }
-}
-
-@keyframes ambient-orb-breathe-c {
-  from { transform: translate3d(0, 0, 0); opacity: 0.6; }
-  to   { transform: translate3d(30px, -40px, 0); opacity: 1; }
+@keyframes ambient-bamboo-sway {
+  from { transform: rotate(-0.35deg); }
+  to   { transform: rotate(0.35deg); }
 }
 
 /* 噪点纹理：极低透明度增加纸面质感 */
@@ -1297,17 +1328,17 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 
 /* 系统偏好减少动态时关闭所有背景动画 */
 @media (prefers-reduced-motion: reduce) {
-  .ambient-mountains,
-  .ambient-orb {
+  .ambient-ink-painting,
+  .ambient-ink-bamboo {
     animation: none;
   }
 }
 
-/* ★ 拖拽浮窗时暂停背景持续动画：光球呼吸/远山漂移的逐帧变化会让所有玻璃面板
-   的 backdrop-filter 缓存失效、逐帧重采样，与拖拽合成抢占 GPU
+/* ★ 拖拽浮窗时暂停背景持续动画：逐帧变化会让所有玻璃面板的 backdrop-filter
+   缓存失效、逐帧重采样，与拖拽合成抢占 GPU
    （竹叶雨效已在 JS 侧消费同一 class 暂停）。 */
-body.nm-dragging-active .ambient-orb,
-body.nm-dragging-active .ambient-mountains {
+body.nm-dragging-active .ambient-ink-painting,
+body.nm-dragging-active .ambient-ink-bamboo {
   animation-play-state: paused !important;
 }
 
@@ -1843,4 +1874,202 @@ body.nm-dragging-active .ambient-mountains {
 }
 @media (prefers-reduced-motion: reduce) {
   .nm-qp-blob-drift, .nm-qp-blob-morph, .nm-qp-edge-wave { animation: none !important; }
+}
+
+/* ============================================================
+ * 毛笔手绘返回按钮（InkBackButton）—— 水墨化 2026-09-15
+ *
+ * 交互语言借自书法：
+ *   hover  → 墨落在纸上「晕开」（径向渐变 + blur 柔边自中心扩散）
+ *   active → 笔尖按下后墨点向外「化开」一圈墨环，笔身同时下沉左移
+ *   focus  → 墨环替代系统 outline（键盘可达）
+ * 全部动效尊重 prefers-reduced-motion。
+ * ============================================================ */
+.nm-ink-back {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 9999px;
+  background: transparent;
+  color: hsl(var(--ink-light));
+  cursor: pointer;
+  isolation: isolate;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.25s ease;
+}
+
+/* 墨迹晕开：自中心向外扩散 */
+.nm-ink-back::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at 50% 50%,
+    hsl(var(--ink) / 0.14) 0%,
+    hsl(var(--ink) / 0.07) 45%,
+    transparent 72%
+  );
+  filter: blur(3px);
+  opacity: 0;
+  transform: scale(0.35);
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+}
+
+/* 墨点扩散：按下时一圈墨环向外化开 */
+.nm-ink-back::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid hsl(var(--ink) / 0.38);
+  opacity: 0;
+  transform: scale(0.72);
+  pointer-events: none;
+}
+
+.nm-ink-back:hover {
+  color: hsl(var(--ink));
+}
+.nm-ink-back:hover::before {
+  opacity: 1;
+  transform: scale(1);
+}
+/* 起笔：笔锋先向左探出一点（返回的方向） */
+.nm-ink-back:hover .nm-ink-back-icon {
+  transform: translateX(-1.5px);
+}
+
+.nm-ink-back:active::before {
+  opacity: 0.92;
+  transform: scale(1.22);
+  transition-duration: 0.12s;
+}
+.nm-ink-back:active::after {
+  animation: nm-ink-ripple 0.62s cubic-bezier(0.16, 1, 0.3, 1);
+}
+/* 落笔：按下时笔身下沉并再向左一点 */
+.nm-ink-back:active .nm-ink-back-icon {
+  transform: translateX(-3px) scale(0.94);
+}
+
+/* 键盘可达：墨环替代 outline */
+.nm-ink-back:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring) / 0.5);
+}
+
+.nm-ink-back:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.nm-ink-back:disabled::before,
+.nm-ink-back:disabled::after {
+  display: none;
+}
+
+.nm-ink-back-icon {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: 50% 50%;
+}
+
+@keyframes nm-ink-ripple {
+  0%   { opacity: 0.55; transform: scale(0.72); }
+  100% { opacity: 0;    transform: scale(1.65); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nm-ink-back::before,
+  .nm-ink-back::after,
+  .nm-ink-back-icon { transition: none !important; animation: none !important; }
+}
+
+/* ============================================================
+ * 水墨质感层（2026-09-15）
+ *
+ * 三样东西，全部只用 background-image 实现（不引入图片、不用大面积
+ * filter / backdrop-filter，避免滚动掉帧）：
+ *   ① 纸纹     —— 两组不同角度的 1px 细线，模拟宣纸纤维
+ *   ② 墨晕     —— 两处大范围 radial-gradient，像纸上化开的淡墨
+ *   ③ 飞白分隔 —— .nm-ink-divider：中间浓两端淡，替代生硬的 1px 实线
+ * 明暗两套独立取值（暗底要把墨"反相"成亮痕，否则看不出纸性）。
+ * ============================================================ */
+@layer base {
+  body {
+    background-color: hsl(var(--background));
+    background-image:
+      /* ② 墨晕：左上、右下各一团淡墨 */
+      radial-gradient(ellipse 55% 45% at 16% 6%, hsl(var(--ink) / 0.030), transparent 68%),
+      radial-gradient(ellipse 45% 40% at 86% 94%, hsl(var(--ink) / 0.022), transparent 70%),
+      /* ① 纸纹：纵横两组细线 */
+      repeating-linear-gradient(0deg, hsl(var(--ink) / 0.013) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, hsl(var(--ink) / 0.009) 0 1px, transparent 1px 4px);
+  }
+
+  .dark body {
+    background-image:
+      radial-gradient(ellipse 55% 45% at 16% 6%, hsl(var(--foreground) / 0.045), transparent 68%),
+      radial-gradient(ellipse 45% 40% at 86% 94%, hsl(var(--foreground) / 0.036), transparent 70%),
+      repeating-linear-gradient(0deg, hsl(var(--foreground) / 0.015) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, hsl(var(--foreground) / 0.011) 0 1px, transparent 1px 4px);
+  }
+}
+
+@layer components {
+  /* ③ 飞白分隔线：中间浓、两端淡并渐隐，像毛笔一横的起收 */
+  .nm-ink-divider {
+    height: 1px;
+    border: 0;
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--ink) / 0.18) 10%,
+      hsl(var(--ink) / 0.34) 50%,
+      hsl(var(--ink) / 0.18) 90%,
+      transparent 100%
+    );
+  }
+
+  /* 题字式标题：衬线 + 微收字距，像落款。与 .nm-ink-divider 配套使用 */
+  .nm-ink-title {
+    font-family: 'Noto Serif SC', 'Source Han Serif SC', serif;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: hsl(var(--ink));
+  }
+
+  /* 笔触感的卡片悬停：抬升同时墨色略深，模拟纸张被拈起 */
+  .nm-ink-lift {
+    transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.32s ease;
+  }
+  .nm-ink-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 26px -12px hsl(var(--ink) / 0.24);
+  }
+
+  /* 只读图谱的节点手柄：**藏起来**。
+     流程/变动图是给人看的（不能拖出新边），节点边缘挂小圆点纯属噪音。
+     为什么写成 `.react-flow__handle.stage-handle` 双类：xyflow 自带的
+     `.react-flow__handle` 是单类选择器，而它的 style.css 与 globals.css
+     的相对注入顺序不确定 —— 靠提一级特异性取胜，不靠顺序。 */
+  .react-flow__handle.stage-handle {
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    min-width: 1px;
+    min-height: 1px;
+    border: none;
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nm-ink-lift { transition: none !important; }
+  .nm-ink-lift:hover { transform: none; }
 }

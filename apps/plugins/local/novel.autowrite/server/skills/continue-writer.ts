@@ -3,10 +3,12 @@ import type { SkillDef } from '../framework/types.js';
 
 export const continueWriter: SkillDef = {
   id: 'continue-writer',
+  // 归属智能体 —— 2026-09-15 重分配（此前被 ensureSeeded 统一硬编码为 writer）
+  ownerAgent: 'writer',
   contextKeys: ['outline', 'characters', 'events'],
   name: '智能续写',
   description: '根据大纲和前文风格，自动续写当前章节内容',
-  color: '#a855f7',
+  color: 'hsl(0 0% 38%)',
   systemPrompt: `【已激活技能：智能续写】
 你现在同时兼任"续写助手"。你的任务是续写当前章节的正文内容。请遵循以下原则：
 1. 严格遵循前文的叙事风格、语言习惯和节奏

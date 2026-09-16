@@ -123,8 +123,17 @@ export interface ServerPluginContext extends BasePluginContext {
         name?: string;
         /** 一句话描述 */
         description?: string;
-        /** 主题色（hex） */
+        /** 主题色（hex / hsl 皆可；水墨主题下统一给灰阶） */
         color?: string;
+        /**
+         * 归属智能体 —— 集中式 skills 库种子用（落到 `skill_library.owner_agent`）。
+         *
+         * 2026-09-15 新增：此前种子逻辑把注册表里的技能**一律**归到写作官（硬编码），
+         * 后果是 10 条技能全堆在 writer 名下、另外 7 个 agent 的技能列表全空。
+         * 归属是技能的固有属性，应当由技能自己声明。
+         * 取值必须是 `ctx.ai.skillTargets.declare()` 声明过的 agent id；省略时回落 'writer'。
+         */
+        ownerAgent?: string;
       }): () => void;
       getAll(): Record<string, unknown>;
     };
@@ -342,6 +351,15 @@ export interface AgentRunOptions {
   allowWriteChapter?: boolean;
   /** 最大工具轮数（防失控，缺省 8） */
   maxTurns?: number;
+  /**
+   * 思维链增量的实时回调（推理型模型的 reasoning_content）。
+   *
+   * 为什么要这个口子：宿主用的 OpenAI Agents SDK（0.14.3）在 Chat Completions 通道下
+   * **完全不解析 reasoning_content**，SDK 层拿不到 —— 宿主改为在 provider 的 fetch 上做只读旁路
+   * 截取，再从这里推给调用方。拿不到（模型不吐 / 非推理模型 / 非流式）时**一次都不回调**，
+   * 调用方必须按「可能没有」处理。
+   */
+  onThinking?: (delta: string) => void;
 }
 
 /** 子代理运行结果（审计台账的最小记录面） */
@@ -350,6 +368,12 @@ export interface AgentRunResult {
   text: string;
   /** 实际使用的模型名（审计台账用） */
   model: string;
+  /**
+   * 本次运行的完整思维链（无则 undefined）。
+   * 与 onThinking 是**同一份内容**：这里给「结束后要展示/落库」的调用方，
+   * 那里给「边跑边显示」的调用方。
+   */
+  thinking?: string;
 }
 
 export interface WebPluginContext extends BasePluginContext {

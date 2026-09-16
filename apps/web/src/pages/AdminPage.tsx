@@ -11,8 +11,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { InkBackButton } from '@/components/ui/InkBackButton';
 import {
-  ArrowLeft,
   Shield,
   KeyRound,
   Trash2,
@@ -159,14 +159,7 @@ export function AdminPage() {
       >
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate('/')}
-              className="p-2 rounded-lg transition-colors hover:bg-black/5"
-              style={{ color: 'hsl(var(--ink-soft))' }}
-              title="返回首页"
-            >
-              <ArrowLeft size={18} />
-            </button>
+            <InkBackButton onClick={() => navigate('/')} size={18} label="返回首页" />
             <Shield size={20} style={{ color: 'hsl(var(--mountain-cyan))' }} />
             <h1
               className="text-[20px] font-semibold"

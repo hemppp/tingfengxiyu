@@ -643,7 +643,7 @@ function CharacterRelationsEditor({ character, onSave }: CharacterRelationsEdito
                   type="button"
                   onClick={addRelation}
                   disabled={!targetId || !relType.trim()}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-[#322D26] hover:bg-[#45403a] rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-primary hover:bg-primary/90 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   保存关系
                 </button>
@@ -843,7 +843,7 @@ function ItemRelationsEditor({ item, onSave }: ItemRelationsEditorProps) {
                   type="button"
                   onClick={addRelation}
                   disabled={!targetId}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-[#322D26] hover:bg-[#45403a] rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-primary hover:bg-primary/90 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   保存关系
                 </button>

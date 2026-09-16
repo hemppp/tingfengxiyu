@@ -34,13 +34,13 @@ function legendFor(isDark: boolean) {
   return isDark
     ? [
         { label: '深海', color: '#0e2033' },
-        { label: '浅海', color: '#264a60' },
+        { label: '浅海', color: 'hsl(0 0% 34%)' },
         { label: '平原', color: '#4a5a42' },
         { label: '山地', color: '#585450' },
         { label: '雪峰', color: '#a8aca8' },
       ]
     : [
-        { label: '深海', color: '#265476' },
+        { label: '深海', color: 'hsl(0 0% 26%)' },
         { label: '浅海', color: '#a8cde0' },
         { label: '平原', color: '#b9cc8f' },
         { label: '山地', color: '#8d8776' },

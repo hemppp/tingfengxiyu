@@ -68,12 +68,12 @@ export function ChapterEditor() {
             width: '48px',
             height: '48px',
             borderRadius: '50%',
-            backgroundColor: 'hsl(var(--error-bg, #fef2f2))',
+            backgroundColor: 'hsl(var(--error-bg, 0 0% 95%))',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            <RefreshCw size={24} style={{ color: 'hsl(var(--error, #dc2626))' }} />
+            <RefreshCw size={24} style={{ color: 'hsl(var(--error, 0 0% 35%))' }} />
           </div>
           <div>
             <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'hsl(var(--ink))', marginBottom: '8px' }}>

@@ -26,7 +26,7 @@ NovelMuse 是一款以人为核心的长篇小说创作协作工具，帮助作�
 ## 🧩 Cordis 基座架构（v2，已落地）
 
 > 服务端已全面迁移到 **@deepseek-ai/cordis 4.0.1** 插件基座（DeepSeek Harness 同款内核）。
-> 19 个 API 模块 + AI 层 + 管理端 + 外部插件，**全部以 cordis 插件形式装配**。
+> **20 个 API 模块** + AI 层 + 管理端 + 外部插件，**全部以 cordis 插件形式装配**（运行时共 **25 个插件**）。
 
 ### 架构总览
 
@@ -39,11 +39,13 @@ NovelMuse 是一款以人为核心的长篇小说创作协作工具，帮助作�
 │ apps/server = cordis Context 宿主（@deepseek-ai/cordis） │
 │   ctx.plugin(WebServer, {host,port})  ← dsh-host-webserver
 │   ctx.provide('routes'|'db'|'ai'|'events'|…)  ← 扩展点    │
-│   ├─ novel.auth / projects / chapters / …（19 内置模块）   │
+│   ├─ novel.auth / projects / chapters / …（20 内置模块）   │
 │   ├─ novel.ai（AI 层：tools/skills/agents）                │
 │   ├─ novel.admin + novel.plugin-manager（插件管理）        │
 │   ├─ novel.worldbuilding（示例完整插件）                   │
-│   └─ novel.typography（本地插件：apps/plugins/local/*）    │
+│   └─ 本地插件（ apps/plugins/local/* ）：                  │
+│        novel.autowrite（AI 写作引擎）/ novel.bookscan /    │
+│        novel.typography                                    │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -70,11 +72,12 @@ pnpm build && pnpm start:server   # 生产：静态由基座托管
 
 | 检查项 | 结果 |
 |--------|------|
-| 全工作区类型检查 `pnpm type-check` | ✅ 8/8 包通过 |
+| 全工作区类型检查 `pnpm type-check` | ✅ 7/7 包通过 |
 | 服务端构建 `tsc` + 前端构建 `vite build` | ✅ |
-| `GET /api/health` | ✅ 200 · 22 个插件全部 ok |
-| 插件挂载 | ✅ 19 内置模块 + AI + 管理 + worldbuilding + plugin-manager + typography 均以 cordis fiber 挂载 |
+| `GET /api/health` | ✅ 200 · **25 个插件**全部 ok |
+| 插件挂载 | ✅ **20 个内置模块** + AI + 管理 + worldbuilding + plugin-manager + 本地插件（`novel.autowrite` / `novel.bookscan` / `novel.typography`）均以 cordis fiber 挂载 |
 | 业务链路（登录→建项目→读取→删除） | ✅ 200/201/200/200 |
+| AI 写作链路（多角色讨论 → 三道门 → 交付 → 实体沉淀） | ✅ 真机验证，逐条证据见 `docs/verify-report-*.md` |
 | 生产静态托管 / SPA 回退 / 未授权 401 | ✅ |
 
 ## 🛠 技术栈
@@ -88,8 +91,11 @@ pnpm build && pnpm start:server   # 生产：静态由基座托管
 - **路由**: React Router v6
 
 ### 后端
-- **API 框架**: Hono (轻量级 Web 框架)
-- **数据库**: SQLite + Drizzle ORM
+- **插件基座**: `@deepseek-ai/cordis` 4.0.1 —— 全部业务模块以插件形式装配
+- **API 框架**: Hono（经自研 `hono-adapter` 接入基座的 HTTP 层 `dsh-host-webserver`）
+- **数据库**: SQLite（better-sqlite3）· 多库结构：主库 `novelmuse.db` + 每项目一库 `projects/{id}.db`
+- **ORM**: Drizzle ORM 0.45.2
+- **运行时**: **Node.js 24**（better-sqlite3 编译于 ABI 137，Node 22 会 `ERR_DLOPEN_FAILED`）
 
 ### AI 集成
 - **API**: OpenAI-compatible API
@@ -105,26 +111,21 @@ pnpm build && pnpm start:server   # 生产：静态由基座托管
 ## 📂 项目结构
 
 ```
-novel-companion/
+NovelMuse/
 ├── apps/
-│   ├── web/              # React 前端应用
-│   │   ├── src/
-│   │   │   ├── components/    # UI 组件
-│   │   │   ├── services/      # 业务逻辑
-│   │   │   ├── stores/        # Zustand 状态管理
-│   │   │   ├── hooks/         # 自定义 Hooks
-│   │   │   └── pages/         # 页面组件
-│   │   └── package.json
-│   └── server/           # Hono 后端 API
-│       ├── src/
-│       │   ├── modules/       # API 路由模块
-│       │   ├── services/      # 数据服务层
-│       │   └── ai/            # AI 集成
-│       └── package.json
+│   ├── web/              # React SPA（前端插件注册表 @novel/core/web）
+│   ├── server/           # cordis 宿主：20 个业务模块 + AI 层 + 管理端
+│   ├── agents/           # Python Strands Agents 微服务（可选，docker profile）
+│   ├── desktop/          # 桌面端（空壳，尚未落地）
+│   └── plugins/
+│       ├── worldbuilding/   # 示例完整插件
+│       └── local/           # 本地插件：novel.autowrite / novel.bookscan / novel.typography
 ├── packages/
-│   ├── db/               # 共享数据库 Schema
+│   ├── core/             # 纯契约包（manifest zod + 类型 + 浏览器安全入口 @novel/core/web）
+│   ├── db/               # 数据库 Schema 与迁移
 │   └── shared/           # 共享类型定义
-├── docs/                 # 项目文档
+├── scripts/              # 验证与运维脚本（verify-*.mjs / run-chapters.mjs / clean-*.mjs）
+├── docs/                 # 项目文档；AI 写作模块以 ai-writing-handover.md 为准
 └── README.md             # 本文件
 ```
 
@@ -276,8 +277,12 @@ import { BambooMistBackground } from '@/components/backgrounds/BambooMistBackgro
 
 ### 环境要求
 
-- Node.js >= 20
+- **Node.js 22+**（本项目 Dockerfile 使用 `node:22-alpine`）
 - pnpm >= 8
+
+> ⚠️ **better-sqlite3 是 native 模块，其 ABI 必须与「安装依赖时所用的 Node 大版本」一致。**
+> 切换 Node 大版本后必须重跑 `pnpm install` 重新编译，否则启动报 `ERR_DLOPEN_FAILED`，
+> 并被**静默降级**为 `status:degraded` —— 不报错、只是插件全部加载失败，非常难排查。
 
 ### 安装依赖
 
@@ -301,13 +306,17 @@ pnpm dev:web
 ### 运行测试
 
 ```bash
-# 运行单元测试
-cd apps/web
+# 一键全量验证（两侧单测 + 记忆不变量抽查，串行；server 套件走 Node 24）
+node scripts/verify-all.mjs        # 等价于 npm run verify:all
+
+# 仅单元测试
 pnpm test
 
 # 查看测试覆盖率
 pnpm test:coverage
 ```
+
+> 单测基线：**server 186 例 / web 139 例**。真机验证脚本（`scripts/verify-*.mjs`）会自建探测账号、复制管理员的 AI 配置、跑完打印清理命令，必须**串行**执行（并发会争模型）。
 
 ### 构建生产版本
 
@@ -448,7 +457,8 @@ chore: 构建/工具更新
 
 ## 📄 许可证
 
-本项目采用 MIT 许可证
+⚠️ **仓库当前未包含 `LICENSE` 文件**，`package.json` 也未声明 `license` 字段。（此前 README 写「MIT」但无对应文件，属不一致。）
+如需对外发布，请先补齐许可证再改回本节 —— 本仓历史的远程初始提交曾带 Apache-2.0 LICENSE。
 
 ---
 
@@ -464,4 +474,4 @@ chore: 构建/工具更新
 
 **用 NovelMuse 创作你的下一个伟大故事！** 📖✨
 
-*最后更新: 2026-06-14*
+*最后更新: 2026-09-15*

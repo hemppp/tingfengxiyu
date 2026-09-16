@@ -201,6 +201,13 @@ const AppRoutes: React.FC = () => {
         <Route path={PATHS.bookshelf} element={<ProtectedRoute><PageFade><BookshelfPage /></PageFade></ProtectedRoute>} />
         <Route path={PATHS.project} element={<ProtectedRoute><PageFade><ProjectLayout /></PageFade></ProtectedRoute>}>
           <Route index element={<ProjectIndexPage />} />
+          {/* ★ 带 bookId 的 index 路由（2026-09-15 加）——
+              没有它时 `/project/<id>` 单段会落到 path='*' 变 404（2026-09-13 GUI 走查踩过），
+              所以那时书架只能**不带 id** 跳 /project，代价是项目身份只活在内存 store 里、
+              一刷新就丢（表现为「刷新后内容塌成空态」）。
+              加上这条后带 id 的项目页有了自己的 URL，刷新由 ProjectLayout 的
+              URL→store 恢复逻辑救回，**URL 成为项目身份的单点真相**。 */}
+          <Route path=':bookId' element={<ProjectIndexPage />} />
           <Route path=':bookId/:chapterId' element={<ChapterEditor />} />
         </Route>
         <Route path={PATHS.settings} element={<ProtectedRoute><PageFade><SettingsPage /></PageFade></ProtectedRoute>} />

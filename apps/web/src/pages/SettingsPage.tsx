@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useStatsStore } from '@/stores';
-import { ArrowLeft, Lock, Trash2, Settings2, Palette, Bot, ShieldCheck, Plug, Keyboard, MonitorUp } from 'lucide-react';
+import { Lock, Trash2, Settings2, Palette, Bot, ShieldCheck, Plug, Keyboard, MonitorUp } from 'lucide-react';
+import { InkBackButton } from '@/components/ui/InkBackButton';
 import { AppearancePanel } from '@/components/settings/AppearancePanel';
 import { safeConfirm } from '@/utils/safeConfirm';
 import { useNavigate } from 'react-router-dom';
@@ -103,14 +104,7 @@ export function SettingsPage() {
       <div className="max-w-5xl mx-auto px-8 py-10">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <button
-            onClick={handleBack}
-            className="nm-btn-mist-soft p-2 rounded-md flex items-center justify-center"
-            aria-label="返回项目页"
-            title="返回项目页"
-          >
-            <ArrowLeft size={18} />
-          </button>
+          <InkBackButton onClick={handleBack} size={18} label="返回项目页" />
           <h1
             className="font-serif"
             style={{

@@ -10,7 +10,7 @@ import { useReferenceStore } from '@/stores/referenceStore';
 import { useProjectStore } from '@/stores';
 import { useToast } from '@/components/ui/ToastProvider';
 
-const ACCENT = '#2383C7';
+const ACCENT = 'hsl(0 0% 20%)'; // 水墨化：原霁青 #2383C7 → 浓墨
 
 interface ScanSource {
   id: string;
@@ -196,7 +196,7 @@ export function BookScanDirectory({ onGoLibrary }: { onGoLibrary: () => void }) 
         {!loading && !fetchedAt && '选择书源与榜单'}
       </div>
       {error && (
-        <div className="shrink-0 mx-3 mb-1.5 flex items-start gap-1.5 rounded-lg px-2 py-1.5" style={{ background: 'rgba(239,68,68,0.06)', color: '#c95454' }}>
+        <div className="shrink-0 mx-3 mb-1.5 flex items-start gap-1.5 rounded-lg px-2 py-1.5" style={{ background: 'hsl(0 0% 40% / 0.06)', color: 'hsl(0 0% 38%)' }}>
           <AlertCircle size={12} className="mt-0.5 shrink-0" /> {error}
         </div>
       )}
@@ -232,7 +232,7 @@ export function BookScanDirectory({ onGoLibrary }: { onGoLibrary: () => void }) 
                   disabled={collected || isCollecting || processing}
                   className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] transition-all hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-90"
                   style={collected
-                    ? { background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.22)', color: '#10b981' }
+                    ? { background: 'hsl(0 0% 32% / 0.08)', border: '1px solid hsl(0 0% 32% / 0.22)', color: 'hsl(0 0% 30%)' }
                     : { background: 'rgba(35,131,199,0.08)', border: '1px solid rgba(35,131,199,0.22)', color: ACCENT }}
                   title={collected ? '已收藏进书架' : `收藏《${item.title}》，之后在 AI 对话中拆书`}
                 >

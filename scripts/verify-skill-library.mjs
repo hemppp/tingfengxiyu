@@ -57,7 +57,14 @@ const skills = lib.json?.data?.skills ?? [];
 const byCat = lib.json?.data?.byCategory ?? { assistant: [], agent: [] };
 check('★ 库里有种子技能（界面不会是空的）', skills.length >= 9, `${skills.length} 条`);
 check('★ 已有的写作技能都归到 agent skills', byCat.agent.length >= 9, `agent 类 ${byCat.agent.length} 条`);
-check('内置技能的 source 标为 builtin', skills.every((s) => s.source === 'builtin'), skills.map((s) => s.source).join(','));
+// ★ 2026-09-15：库里现在**既有 builtin（插件种子）也有 installed（从外部装进来的）** ——
+//   例如从 GitHub 找来的「去 AI 味」就是 installed。所以断言从「全都必须是 builtin」
+//   改为「取值合法且无空值」。
+check(
+  'source 取值合法（builtin / installed，无空值）',
+  skills.every((s) => s.source === 'builtin' || s.source === 'installed'),
+  skills.map((s) => s.source).join(','),
+);
 check('★ 归属都解析成了智能体名（不是裸 id）', skills.every((s) => !!s.ownerAgentName), skills.map((s) => s.ownerAgentName).join(','));
 check('归属到未声明智能体的孤儿为 0', (lib.json?.data?.orphans ?? []).length === 0, JSON.stringify(lib.json?.data?.orphans));
 
@@ -69,12 +76,16 @@ check('★ 智能体本体在清单里', ids.includes('chat'), ids.join(','));
 check('★ 写作官在清单里', ids.includes('writer'));
 check('写作流水线其余角色齐备', ['plot-designer', 'character-designer', 'continuity-keeper', 'convener', 'reviewer'].every((i) => ids.includes(i)));
 const writer = targets.find((t) => t.id === 'writer');
-check('写作官的技能计数 > 0', (writer?.total ?? 0) >= 9, `${writer?.enabled}/${writer?.total}`);
+// ★ 2026-09-15：技能已按语义分给 6 个智能体（不再全归写作官），
+//   所以这里只断言「写作官名下有技能」；「有没有真的分发开」另立一条断言。
+check('写作官名下有技能', (writer?.total ?? 0) >= 1, `${writer?.enabled}/${writer?.total}`);
+const agentsWithSkills = targets.filter((t) => t.kind === 'agent' && (t.total ?? 0) > 0);
+check('★ 技能已分发到多个智能体（不再全归写作官）', agentsWithSkills.length >= 5, `${agentsWithSkills.length} 个 agent 有技能：${agentsWithSkills.map((t) => t.id).join(', ')}`);
 
 // ---- ③ 某智能体的技能 + 开关（默认关）----
 console.log('\n▶ 写作官的技能与开关');
 const w1 = (await req('/api/ai/skill-targets/writer')).json?.data;
-check('读取写作官的技能', Array.isArray(w1?.skills) && w1.skills.length >= 9, `${w1?.skills?.length} 条`);
+check('读取写作官的技能', Array.isArray(w1?.skills) && w1.skills.length >= 1, `${w1?.skills?.length} 条`);
 check('默认全部未配置（configured=false）', w1.skills.every((s) => s.configured === false));
 check('默认全部为关', w1.skills.every((s) => s.enabled === false));
 
@@ -89,7 +100,7 @@ check('★ 重新读取仍是开（真持久化了，不是内存里的假象）
 check('计数跟着变', (w2.target.enabled ?? 0) >= 1, `${w2.target.enabled}/${w2.target.total}`);
 
 const all = await req('/api/ai/skill-targets/writer/toggle-all', { method: 'PUT', body: JSON.stringify({ enabled: true }) });
-check('批量开启', all.status === 200 && (all.json?.data?.count ?? 0) >= 9, JSON.stringify(all.json?.data));
+check('批量开启', all.status === 200 && (all.json?.data?.count ?? 0) >= 1, JSON.stringify(all.json?.data));
 const w3 = (await req('/api/ai/skill-targets/writer')).json?.data;
 check('★ 批量开启后逐条都是开', w3.skills.every((s) => s.enabled));
 await req('/api/ai/skill-targets/writer/toggle-all', { method: 'PUT', body: JSON.stringify({ enabled: false }) });

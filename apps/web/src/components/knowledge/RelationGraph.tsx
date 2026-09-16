@@ -25,15 +25,17 @@ import { GraphShell, RelationTypeDialog, type RelationTypeOption } from './graph
 // 互通关系（friend/family/ally/mutual）双向写入
 // ============================================================
 
+// 水墨化（2026-09-15）：原有「按类型配色」改为「按墨阶配色」——
+// 区分手段由色相转为明度深浅（饱和度恒 0），与整体水墨风格一致。
 const relationColors: Record<string, string> = {
-  friend: '#22c55e',
-  enemy: '#ef4444',
-  lover: '#ec4899',
-  family: '#f59e0b',
-  ally: '#3b82f6',
-  rival: '#f97316',
-  mentor: '#8b5cf6',
-  mutual: '#06b6d4',
+  friend: 'hsl(0 0% 30%)',
+  enemy: 'hsl(0 0% 12%)',
+  lover: 'hsl(0 0% 24%)',
+  family: 'hsl(0 0% 36%)',
+  ally: 'hsl(0 0% 42%)',
+  rival: 'hsl(0 0% 18%)',
+  mentor: 'hsl(0 0% 50%)',
+  mutual: 'hsl(0 0% 58%)',
 };
 
 const relationLabels: Record<string, string> = {
@@ -47,15 +49,15 @@ const relationLabels: Record<string, string> = {
   mutual: '互通',
 };
 
-// 角色分类颜色（用于节点填色）
+// 角色分类颜色（用于节点填色）—— 水墨化：改用墨阶
 const roleColors: Record<string, string> = {
-  protagonist: '#06b6d4',
-  femaleLead: '#ec4899',
-  supporting: '#f59e0b',
-  minor: '#8b5cf6',
-  antagonist: '#ef4444',
-  narrator: '#6b7280',
-  other: '#6b7280',
+  protagonist: 'hsl(0 0% 12%)',
+  femaleLead: 'hsl(0 0% 20%)',
+  supporting: 'hsl(0 0% 34%)',
+  minor: 'hsl(0 0% 52%)',
+  antagonist: 'hsl(0 0% 8%)',
+  narrator: 'hsl(0 0% 62%)',
+  other: 'hsl(0 0% 62%)',
 };
 
 const roleLabels: Record<string, string> = {
@@ -69,7 +71,7 @@ const roleLabels: Record<string, string> = {
 };
 
 function getRoleColor(role?: string): string {
-  return roleColors[role || 'other'] || '#6b7280';
+  return roleColors[role || 'other'] || 'hsl(0 0% 50%)';
 }
 
 function getCharSize(relationCount: number, role?: string): number {
@@ -94,12 +96,12 @@ const itemLabels: Record<string, string> = {
   food: '食物', plant: '植物', animal: '动物', prop: '道具', other: '物品',
 };
 const itemColors: Record<string, string> = {
-  weapon: '#ef4444', armor: '#a16207', clothing: '#a855f7', treasure: '#facc15', token: '#3b82f6',
-  artifact: '#8b5cf6', medicine: '#22c55e', potion: '#22c55e', book: '#0891b2', scroll: '#ec4899',
-  document: '#06b6d4', key: '#f59e0b', gem: '#06b6d4', vehicle: '#0ea5e9', tool: '#64728b',
-  food: '#84cc16', plant: '#16a34a', animal: '#dc2626', prop: '#94a3b8', other: '#6b7280',
+  weapon: 'hsl(0 0% 12%)', armor: 'hsl(0 0% 26%)', clothing: 'hsl(0 0% 40%)', treasure: 'hsl(0 0% 20%)', token: 'hsl(0 0% 34%)',
+  artifact: 'hsl(0 0% 14%)', medicine: 'hsl(0 0% 44%)', potion: 'hsl(0 0% 48%)', book: 'hsl(0 0% 30%)', scroll: 'hsl(0 0% 38%)',
+  document: 'hsl(0 0% 52%)', key: 'hsl(0 0% 22%)', gem: 'hsl(0 0% 16%)', vehicle: 'hsl(0 0% 42%)', tool: 'hsl(0 0% 36%)',
+  food: 'hsl(0 0% 58%)', plant: 'hsl(0 0% 46%)', animal: 'hsl(0 0% 28%)', prop: 'hsl(0 0% 60%)', other: 'hsl(0 0% 50%)',
 };
-const HOLD_EDGE_COLOR = '#64748b';
+const HOLD_EDGE_COLOR = 'hsl(0 0% 46%)';
 
 export function CharacterGraph() {
   const characters = useCharacterStore((s) => s.characters);
