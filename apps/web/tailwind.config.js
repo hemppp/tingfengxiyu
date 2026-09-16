@@ -81,6 +81,17 @@ export default {
           light: 'hsl(var(--ink-light))',
           pale: 'hsl(var(--ink-pale))',
         },
+        // 章节区分墨阶（8 档）——原 6 色高饱和板改墨阶，见 globals.css 注释
+        chapter: {
+          1: 'hsl(var(--chapter-1))',
+          2: 'hsl(var(--chapter-2))',
+          3: 'hsl(var(--chapter-3))',
+          4: 'hsl(var(--chapter-4))',
+          5: 'hsl(var(--chapter-5))',
+          6: 'hsl(var(--chapter-6))',
+          7: 'hsl(var(--chapter-7))',
+          8: 'hsl(var(--chapter-8))',
+        },
         cinnabar: {
           DEFAULT: 'hsl(var(--cinnabar))',
           pale: 'hsl(var(--cinnabar-pale))',

@@ -5,19 +5,25 @@ import { useCurrentProjectId } from '@/hooks/useCurrentProjectId';
 import { CalendarClock, ArrowUpRight } from 'lucide-react';
 import type { TimelineEvent } from '@novel/shared';
 
+// ★ 原为 3 色硬编码（#4a90d9 蓝 / #d4a853 金 / #6bc4a0 绿）。
+//   这些色作「文字压在自身 10% 底」时对比度仅 1.86–2.86:1，全部低于 AA(4.5)，
+//   且与黑白水墨主题冲突 → 改走墨阶 token（见 globals.css 的 --chapter-* 注释）。
+//   取值形式保持 `hsl(var(--x))`，因为下面的用法要拼 `${accent}40` 这类 alpha 后缀。
 const typeColors: Record<string, string> = {
-  event: '#4a90d9',
-  foreshadow: '#d4a853',
-  state_change: '#6bc4a0',
+  event: 'hsl(var(--chapter-5))',
+  foreshadow: 'hsl(var(--chapter-3))',
+  state_change: 'hsl(var(--chapter-7))',
 };
 
 const chapterAccents = [
-  '#4a90d9',
-  '#8b5cf6',
-  '#ec4899',
-  '#f97316',
-  '#14b8a6',
-  '#eab308',
+  'hsl(var(--chapter-1))',
+  'hsl(var(--chapter-2))',
+  'hsl(var(--chapter-3))',
+  'hsl(var(--chapter-4))',
+  'hsl(var(--chapter-5))',
+  'hsl(var(--chapter-6))',
+  'hsl(var(--chapter-7))',
+  'hsl(var(--chapter-8))',
 ];
 
 function getChapterAccent(chapter: number): string {
@@ -122,7 +128,7 @@ export function TimelineFlowChart({ selectedChapter = 'all' }: TimelineFlowChart
             <CalendarClock size={28} className="text-gray-400" />
           </div>
           <p className="text-sm text-gray-700 font-medium mb-1">暂无时间线事件</p>
-          <p className="text-xs text-gray-400">AI 识别或手动添加的事件将按章节分栏显示</p>
+          <p className="text-xs text-muted-foreground">AI 识别或手动添加的事件将按章节分栏显示</p>
         </div>
       </div>
     );
@@ -224,7 +230,7 @@ export function TimelineFlowChart({ selectedChapter = 'all' }: TimelineFlowChart
                   }}
                 >
                   {group.events.map((ev, idx) => {
-                    const color = ev.color || typeColors[ev.type] || '#9b9a97';
+                    const color = ev.color || typeColors[ev.type] || 'hsl(var(--muted-foreground))';
                     const eventChars = characters.filter((c) => ev.characterIds?.includes(c.id));
                     const charNames = eventChars.map((c) => c.name);
                     const isFirst = idx === 0;

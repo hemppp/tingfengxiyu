@@ -13,13 +13,16 @@ const DEFAULT_EVENT_TYPES = [
   { value: 'state_change', label: '状态变化' },
 ];
 
+// ★ 原为 6 色高饱和板，改墨阶（与 TimelineFlowChart 同源，注释见 globals.css 的 --chapter-*）
 const chapterAccents = [
-  '#4a90d9',
-  '#8b5cf6',
-  '#ec4899',
-  '#f97316',
-  '#14b8a6',
-  '#eab308',
+  'hsl(var(--chapter-1))',
+  'hsl(var(--chapter-2))',
+  'hsl(var(--chapter-3))',
+  'hsl(var(--chapter-4))',
+  'hsl(var(--chapter-5))',
+  'hsl(var(--chapter-6))',
+  'hsl(var(--chapter-7))',
+  'hsl(var(--chapter-8))',
 ];
 
 function getChapterAccent(chapter: number): string {

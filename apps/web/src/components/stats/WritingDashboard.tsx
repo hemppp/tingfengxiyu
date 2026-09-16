@@ -198,7 +198,7 @@ export function WritingDashboard() {
               className="dashboard-card rounded-xl p-4 transition-shadow hover:shadow-sm"
               style={{ background: '#f6f5f4', border: '1px solid rgba(15,15,15,0.05)' }}
             >
-              <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-2">
+              <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-2">
                 <m.icon size={13} />
                 <span style={{ letterSpacing: '0.03em' }}>{m.label}</span>
               </div>
@@ -217,7 +217,7 @@ export function WritingDashboard() {
                 </div>
               )}
               {m.sub && (
-                <div className="text-xs text-gray-400 mt-1.5">{m.sub}</div>
+                <div className="text-xs text-muted-foreground mt-1.5">{m.sub}</div>
               )}
             </div>
           ))}
@@ -237,7 +237,7 @@ export function WritingDashboard() {
           <div className="flex items-end gap-2 h-36">
             {last7Days.map((d, i) => (
               <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
-                <div className="text-xs text-gray-400 font-medium">
+                <div className="text-xs text-muted-foreground font-medium">
                   {d.words > 0 ? d.words : ''}
                 </div>
                 <div
@@ -249,7 +249,7 @@ export function WritingDashboard() {
                     opacity: d.words > 0 ? 0.8 : 0.4,
                   }}
                 />
-                <div className="text-xs text-gray-400">{d.day}</div>
+                <div className="text-xs text-muted-foreground">{d.day}</div>
               </div>
             ))}
           </div>
@@ -283,13 +283,13 @@ export function WritingDashboard() {
                     {i + 1}
                   </span>
                   <span className="text-sm flex-1 truncate text-gray-700">{ch.title}</span>
-                  <span className="text-sm font-mono text-gray-400">
+                  <span className="text-sm font-mono text-muted-foreground">
                     {ch.wordCount.toLocaleString()}
                   </span>
                 </div>
               ))}
             {chapters.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-4">暂无章节数据</p>
+              <p className="text-sm text-muted-foreground text-center py-4">暂无章节数据</p>
             )}
           </div>
         </div>
@@ -305,7 +305,7 @@ export function WritingDashboard() {
           >
             <Award size={14} />
             成就徽章
-            <span className="text-xs font-normal text-gray-400 ml-auto normal-case">
+            <span className="text-xs font-normal text-muted-foreground ml-auto normal-case">
               {unlockedIds.size}/{ALL_ACHIEVEMENTS.length}
             </span>
           </h3>

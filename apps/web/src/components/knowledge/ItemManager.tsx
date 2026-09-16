@@ -165,7 +165,7 @@ export function ItemManager() {
             <>
               <Coins size={14} className="text-amber-500" />
               积分账本
-              <span className="text-[10px] font-normal text-gray-400">系统文</span>
+              <span className="text-[10px] font-normal text-muted-foreground">系统文</span>
             </>
           )}
         </h2>
@@ -214,14 +214,14 @@ export function ItemManager() {
           </div>
 
           <div className="px-3 pt-2 pb-1">
-            <p className="text-[11px] text-gray-400">共 {projectChars.length} 个人物</p>
+            <p className="text-[11px] text-muted-foreground">共 {projectChars.length} 个人物</p>
           </div>
 
           <div className="flex-1 overflow-y-auto px-2 pb-2">
             {filteredChars.length === 0 ? (
               <div className="px-3 py-8 text-center">
                 <User size={20} className="mx-auto mb-2 text-gray-300" />
-                <p className="text-xs text-gray-400">未找到相关人物</p>
+                <p className="text-xs text-muted-foreground">未找到相关人物</p>
               </div>
             ) : (
               filteredChars.map((c) => {
@@ -252,7 +252,7 @@ export function ItemManager() {
                       </div>
                       <span className="text-sm text-gray-800 truncate">{c.name}</span>
                     </div>
-                    <span className="text-[11px] text-gray-400 shrink-0 ml-2">
+                    <span className="text-[11px] text-muted-foreground shrink-0 ml-2">
                       {holderCount} 件
                     </span>
                   </button>
@@ -280,14 +280,14 @@ export function ItemManager() {
                 '全部物品'
               )}
             </h3>
-            <span className="text-xs text-gray-400">({displayItems.length})</span>
+            <span className="text-xs text-muted-foreground">({displayItems.length})</span>
           </div>
 
           <div className="flex-1 overflow-y-auto px-2 pb-2">
             {displayItems.length === 0 ? (
               <div className="px-4 py-12 text-center">
                 <PackageOpen size={24} className="mx-auto mb-2 text-gray-300" />
-                <p className="text-sm text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   {selectedChar ? '该人物暂无持有物品' : '暂无物品'}
                 </p>
               </div>
@@ -309,7 +309,7 @@ export function ItemManager() {
                     <ArrowRight size={12} className="text-gray-300 shrink-0" />
                   </div>
                   <div className="flex items-center gap-1.5 mt-1 ml-4">
-                    <span className="text-[10px] text-gray-400">
+                    <span className="text-[10px] text-muted-foreground">
                       {ITEM_TYPE_LABELS[item.type || 'other'] || item.type}
                     </span>
                   </div>
@@ -333,7 +333,7 @@ export function ItemManager() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-bold text-gray-800">{selectedItem.name}</h3>
-                  <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
+                  <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
                     <span>{ITEM_TYPE_LABELS[selectedItem.type || 'other'] || selectedItem.type}</span>
                     {selectedItem.creditPrice != null && (
                       <span className="inline-flex items-center gap-0.5 text-amber-600 font-medium">
@@ -393,7 +393,7 @@ export function ItemManager() {
                   流转历史
                 </div>
                 {itemTransferHistory.length === 0 ? (
-                  <div className="text-xs text-gray-400 bg-gray-50 rounded-2xl p-3 text-center">
+                  <div className="text-xs text-muted-foreground bg-gray-50 rounded-2xl p-3 text-center">
                     暂无流转记录
                   </div>
                 ) : (
@@ -421,7 +421,7 @@ export function ItemManager() {
                             <div className="text-sm text-gray-800">
                               {char?.name || '未知角色'} {isGained ? '获得' : '失去'}
                             </div>
-                            <div className="text-[11px] text-gray-400 mt-0.5">
+                            <div className="text-[11px] text-muted-foreground mt-0.5">
                               第 {h.chapter} 章
                             </div>
                           </div>
@@ -450,7 +450,7 @@ export function ItemManager() {
               )}
             </div>
           ) : (
-            <div className="h-full flex items-center justify-center text-gray-400">
+            <div className="h-full flex items-center justify-center text-muted-foreground">
               <div className="text-center">
                 <Package size={36} className="mx-auto mb-3 opacity-30" />
                 <p className="text-sm">选择物品查看详情</p>

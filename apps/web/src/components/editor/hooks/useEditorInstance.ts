@@ -13,7 +13,7 @@ import { useChapterStore, useStatsStore, useForeshadowStore, useAnnotationStore,
 import { useEditorStore } from '@/stores/editorStore';
 import { saveSnapshot } from '@/services/data/databaseService';
 import { cacheChapterContent } from '@/services/data/chapterLocalCache';
-import { getToken } from '@/services/api/apiClient';
+import { getToken, getCurrentProjectId } from '@/services/api/apiClient';
 import { analyzeLocalStyle } from '../panels/StyleAdvisor';
 import { usePluginRegistry } from '@/plugin/registry';
 import type { StyleProfile } from '@/services/editor/styleService';
@@ -444,12 +444,20 @@ export function useEditorInstance({ initialContent, styleProfile }: UseEditorIns
         return;
       }
 
+      // ★ 本项目所有项目级路由（含 PUT /api/chapters/:id）都靠 requireProjectScope
+      // 从 X-Project-Id 头（或 URL :projectId）取 projectId，缺失直接 400。
+      // 这里用原生 fetch 绕过了 apiClient，必须手工补上该头 —— 否则这道
+      // 「防丢稿」最后防线每次都是 400 静默失败（实测抓包：headerKeys 只有
+      // Content-Type，无 X-Project-Id）。getCurrentProjectId 即 apiClient
+      // dynamicHeaders 所用的同一个 getter，避免重复一套项目上下文逻辑。
+      const projectId = getCurrentProjectId();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      if (projectId) headers['X-Project-Id'] = projectId;
+
       fetch(`${baseUrl}/chapters/${cid}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers,
         body,
         keepalive: true,
       }).catch(() => { /* silent: 页面正在卸载，错误无法告知用户 */ });

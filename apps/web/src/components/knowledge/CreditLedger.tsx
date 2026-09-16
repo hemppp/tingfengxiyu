@@ -164,13 +164,13 @@ export function CreditLedger() {
             </div>
           </div>
           <div className="px-3 pt-2 pb-1">
-            <p className="text-[11px] text-gray-400">绑定系统的人物</p>
+            <p className="text-[11px] text-muted-foreground">绑定系统的人物</p>
           </div>
           <div className="flex-1 overflow-y-auto px-2 pb-2">
             {filteredChars.length === 0 ? (
               <div className="px-3 py-8 text-center">
                 <User size={20} className="mx-auto mb-2 text-gray-300" />
-                <p className="text-xs text-gray-400">未找到相关人物</p>
+                <p className="text-xs text-muted-foreground">未找到相关人物</p>
               </div>
             ) : (
               filteredChars.map((c) => {
@@ -230,12 +230,12 @@ export function CreditLedger() {
                 </div>
                 <div className="mt-2.5 flex items-end gap-3">
                   <div>
-                    <p className="text-[11px] text-gray-400">当前结余</p>
+                    <p className="text-[11px] text-muted-foreground">当前结余</p>
                     <p className={`text-2xl font-bold tabular-nums ${charBalance < 0 ? 'text-red-500' : 'text-gray-800'}`}>
                       {charBalance}
                     </p>
                   </div>
-                  <div className="text-[11px] text-gray-400 pb-1 leading-relaxed">
+                  <div className="text-[11px] text-muted-foreground pb-1 leading-relaxed">
                     <p>累计获得 <span className="text-green-600 font-medium">+{charSummary?.gained ?? 0}</span></p>
                     <p>累计消耗 <span className="text-red-500 font-medium">-{charSummary?.spent ?? 0}</span></p>
                   </div>
@@ -246,7 +246,7 @@ export function CreditLedger() {
                 {ledger.length === 0 ? (
                   <div className="px-4 py-12 text-center">
                     <Coins size={24} className="mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm text-gray-400">暂无积分流水</p>
+                    <p className="text-sm text-muted-foreground">暂无积分流水</p>
                     <p className="text-[11px] text-gray-300 mt-1">点击"记一笔"记录任务奖励或商城兑换</p>
                   </div>
                 ) : (
@@ -277,12 +277,12 @@ export function CreditLedger() {
                             {isGain ? '+' : '-'}{t.amount}
                           </span>
                           <span className="text-sm text-gray-700 truncate flex-1">{t.reason || (isGain ? '获得积分' : '消耗积分')}</span>
-                          <span className="text-[11px] text-gray-400 shrink-0">余 {t.balanceAfter}</span>
+                          <span className="text-[11px] text-muted-foreground shrink-0">余 {t.balanceAfter}</span>
                         </div>
                         <div className="flex items-center gap-1.5 mt-1 ml-8">
-                          <span className="text-[10px] text-gray-400">第 {t.chapter} 章</span>
+                          <span className="text-[10px] text-muted-foreground">第 {t.chapter} 章</span>
                           {relatedItem && (
-                            <span className="text-[10px] text-gray-400 flex items-center gap-0.5">
+                            <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
                               · <ShoppingCart size={9} /> {relatedItem.name}
                             </span>
                           )}
@@ -299,7 +299,7 @@ export function CreditLedger() {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-400">
+            <div className="flex-1 flex items-center justify-center text-muted-foreground">
               <div className="text-center">
                 <Coins size={36} className="mx-auto mb-3 opacity-30" />
                 <p className="text-sm">选择人物查看积分账本</p>
@@ -402,7 +402,7 @@ export function CreditLedger() {
                     ))}
                   </select>
                   {form.type === 'spend' && formItem?.creditPrice && (
-                    <p className="text-[11px] text-gray-400 mt-1">
+                    <p className="text-[11px] text-muted-foreground mt-1">
                       该物品积分定价 {formItem.creditPrice}
                     </p>
                   )}
@@ -444,7 +444,7 @@ export function CreditLedger() {
                   <h3 className="font-bold text-gray-800">
                     {selectedTx.type === 'gain' ? '获得' : '消耗'} {selectedTx.amount} 积分
                   </h3>
-                  <p className="text-xs text-gray-400 mt-0.5">第 {selectedTx.chapter} 章</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">第 {selectedTx.chapter} 章</p>
                 </div>
               </div>
 
@@ -465,7 +465,7 @@ export function CreditLedger() {
                       <ShoppingCart size={14} className="text-gray-400" />
                       <span className="text-sm text-gray-700">{relatedItem.name}</span>
                       {relatedItem.creditPrice != null && (
-                        <span className="text-[11px] text-gray-400 flex items-center gap-0.5">
+                        <span className="text-[11px] text-muted-foreground flex items-center gap-0.5">
                           <Coins size={9} /> {relatedItem.creditPrice}
                         </span>
                       )}
@@ -495,7 +495,7 @@ export function CreditLedger() {
               </div>
             </div>
           ) : (
-            <div className="h-full flex items-center justify-center text-gray-400">
+            <div className="h-full flex items-center justify-center text-muted-foreground">
               <div className="text-center">
                 <Coins size={36} className="mx-auto mb-3 opacity-30" />
                 <p className="text-sm">选择流水查看详情</p>

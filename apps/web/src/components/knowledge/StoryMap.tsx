@@ -317,17 +317,17 @@ export function StoryMap() {
               <MapPin size={16} className="text-foreground/60" aria-hidden="true" />
               <h2 className="text-sm font-semibold text-foreground/80">地点标记</h2>
               <span
-                className="text-xs text-foreground/40 ml-auto"
+                className="text-xs text-muted-foreground ml-auto"
                 aria-label={`共 ${projectLocations.length} 个地点`}
               >
                 {projectLocations.length}
               </span>
             </div>
-            <p className="text-[10px] text-foreground/30 mt-1">右键地图添加 · 拖拽移动</p>
+            <p className="text-[10px] text-muted-foreground mt-1">右键地图添加 · 拖拽移动</p>
           </div>
           <nav className="flex-1 overflow-y-auto" role="list" aria-label="地点导航列表">
             {projectLocations.length === 0 ? (
-              <div className="p-4 text-center text-xs text-foreground/30" role="status">
+              <div className="p-4 text-center text-xs text-muted-foreground" role="status">
                 暂无地点标记
                 <br />
                 右键地图添加
@@ -353,7 +353,7 @@ export function StoryMap() {
                       <div className="text-foreground/80 truncate" title={loc.name}>
                         {loc.name}
                       </div>
-                      <div className="text-[10px] text-foreground/30 truncate">
+                      <div className="text-[10px] text-muted-foreground truncate">
                         {pos.x.toFixed(1)}, {pos.y.toFixed(1)}
                       </div>
                     </div>
@@ -519,7 +519,7 @@ export function StoryMap() {
                   取消
                 </button>
               </div>
-              <p className="text-[10px] text-foreground/30 mt-1.5">Enter 确认 · Esc 取消</p>
+              <p className="text-[10px] text-muted-foreground mt-1.5">Enter 确认 · Esc 取消</p>
             </div>
           )}
 
@@ -552,7 +552,7 @@ export function StoryMap() {
 
           {/* 底部提示 */}
           <div
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] text-foreground/30 bg-background/80 px-3 py-1 rounded-full pointer-events-none select-none"
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] text-muted-foreground bg-background/80 px-3 py-1 rounded-full pointer-events-none select-none"
             aria-hidden="true"
           >
             右键添加地点 · 拖拽移动标记 · 地势由高斯泼溅实时生成
@@ -590,7 +590,7 @@ export function StoryMap() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-3 space-y-3">
-              <div className="text-xs text-foreground/40">
+              <div className="text-xs text-muted-foreground">
                 世界坐标：{effWorld(selectedLocation).x.toFixed(1)},{' '}
                 {effWorld(selectedLocation).y.toFixed(1)}
               </div>
@@ -598,7 +598,7 @@ export function StoryMap() {
               <div>
                 <label
                   htmlFor="location-description"
-                  className="text-[10px] text-foreground/30 uppercase tracking-wider"
+                  className="text-[10px] text-muted-foreground uppercase tracking-wider"
                 >
                   描述
                 </label>
@@ -619,7 +619,7 @@ export function StoryMap() {
 
               {selectedLocation.chapters.length > 0 && (
                 <div>
-                  <label className="text-[10px] text-foreground/30 uppercase tracking-wider">
+                  <label className="text-[10px] text-muted-foreground uppercase tracking-wider">
                     出现章节
                   </label>
                   <div className="mt-1 flex flex-wrap gap-1" role="list" aria-label="出现章节列表">
@@ -638,7 +638,7 @@ export function StoryMap() {
 
               {selectedLocation.tags.length > 0 && (
                 <div>
-                  <label className="text-[10px] text-foreground/30 uppercase tracking-wider">
+                  <label className="text-[10px] text-muted-foreground uppercase tracking-wider">
                     标签
                   </label>
                   <div className="mt-1 flex flex-wrap gap-1" role="list" aria-label="标签列表">
@@ -655,7 +655,7 @@ export function StoryMap() {
               )}
 
               {selectedLocation.chapters.length === 0 && selectedLocation.tags.length === 0 && (
-                <p className="text-xs text-foreground/20 text-center pt-4">暂无章节和标签信息</p>
+                <p className="text-xs text-muted-foreground text-center pt-4">暂无章节和标签信息</p>
               )}
             </div>
           </aside>

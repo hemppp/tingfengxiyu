@@ -20,7 +20,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useAutoEntityDetection } from '@/hooks/useAutoEntityDetection';
 import { useLatestChapterPolling } from '@/hooks/useLatestChapterPolling';
 import { useEntityChapterSync } from '@/hooks/useEntityChapterSync';
-import { htmlToText } from '@/services/editor/entityDetector';
+import { htmlToText, ensureHtmlContent } from '@/services/editor/entityDetector';
 import { FileText, Plus, BookOpen as BookOpenIcon } from 'lucide-react';
 import { FindReplaceBar } from './FindReplaceBar';
 import { saveSnapshot, saveChapter } from '@/services/data/databaseService';
@@ -385,16 +385,23 @@ export function EditorPage() {
     // 但旧 localStorage 缓存可能仍残留带 hr 的内容，需在此净化，避免重新注入或回写后端。
     const sourceContent = (sourceContentRaw || '').replace(/<hr\b[^>]*\/?>/gi, '');
 
+    // ★ 纯文本正文（AI 写作链路落库的是 `\n\n` 分段纯文本）必须转成 HTML 再注入：
+    //   tiptap 的 setContent(字符串) 按 HTML 解析，直接喂纯文本会把换行当空白吞掉、段落全并成一段。
+    //   已是 HTML 的内容原样返回，不受影响。
+    const injectContent = ensureHtmlContent(sourceContent);
+
     const currentEditorContent = editor.getHTML();
-    if (currentEditorContent !== sourceContent) {
-      editor.commands.setContent(sourceContent || '', false);
+    if (currentEditorContent !== injectContent) {
+      editor.commands.setContent(injectContent, false);
     }
     // ★ 从 HTML 内容直接计算字数，不依赖 characterCount（setContent 不触发 update 时 storage 可能未更新）
-    const actualWc = htmlToText(sourceContent || '').length;
+    //   用 injectContent 算：纯文本正文经转换后，htmlToText 才能正确按段落取到全部文字
+    //   （直接对纯文本算会把 `<` 等字符漏掉，且与编辑器实际渲染的内容不一致）
+    const actualWc = htmlToText(injectContent).length;
     _prevWordCount.current = actualWc;
     resetWordCount(actualWc);
     // ★ 修正 store 中的 wordCount + 回写缓存内容（合并为一次 updateChapter）
-    const needContentUpdate = useCached && currentEditorContent !== sourceContent;
+    const needContentUpdate = useCached && currentEditorContent !== injectContent;
     const needWcFix = currentChapter.wordCount !== actualWc;
     if (needContentUpdate || needWcFix) {
       updateChapter(currentChapterId!, {

@@ -25,7 +25,7 @@ const statusConfig: Record<Foreshadow['status'], {
     activeClass: 'bg-blue-50 text-blue-700 border-blue-300',
   },
   abandoned: {
-    label: '已废弃', Icon: CircleOff, groupIconClass: 'text-gray-400',
+    label: '已废弃', Icon: CircleOff, groupIconClass: 'text-muted-foreground',
     activeClass: 'bg-gray-100 text-gray-500 border-gray-300',
   },
 };

@@ -222,7 +222,7 @@ export function OutlineManager() {
       >
         <div className="text-center">
           <AlertCircle size={48} className="mx-auto text-gray-200 mb-4" />
-          <p className="text-sm text-gray-400">请先选择项目</p>
+          <p className="text-sm text-muted-foreground">请先选择项目</p>
         </div>
       </div>
     );
@@ -240,7 +240,7 @@ export function OutlineManager() {
           <h2 className="text-sm font-semibold text-gray-800">大纲编辑器</h2>
         </div>
 
-        <span className="text-xs text-gray-400 ml-2">
+        <span className="text-xs text-muted-foreground ml-2">
           {stats.filled}/{stats.total} 分区 · {stats.totalChars} 字
         </span>
 
@@ -344,7 +344,7 @@ export function OutlineManager() {
             >
               <Plus size={12} /> 添加分区
             </button>
-            <span className="text-[11px] text-gray-400">
+            <span className="text-[11px] text-muted-foreground">
               内容自动保存到本地 · 激活"大纲架构师"技能可与 AI 讨论并填入大纲
             </span>
           </div>
@@ -398,7 +398,7 @@ function TemplateSection({
         {templateCollapsed ? <ChevronRight size={14} style={{ color: '#0ea5e9' }} /> : <ChevronDown size={14} style={{ color: '#0ea5e9' }} />}
         <Target size={14} style={{ color: '#0ea5e9' }} />
         <h3 className="text-sm font-semibold text-gray-800">网文大纲模板</h3>
-        <span className="text-[11px] text-gray-400 ml-1">
+        <span className="text-[11px] text-muted-foreground ml-1">
           核心冲突 · 每章细节
         </span>
         <div className="flex-1" />
@@ -442,14 +442,14 @@ function TemplateSection({
                 style={{ background: '#0ea5e9' }}
               />
               每章细节
-              <span className="text-[10px] text-gray-400 font-normal ml-1">
+              <span className="text-[10px] text-muted-foreground font-normal ml-1">
                 （{chapters.length} 章）
               </span>
             </div>
 
             {chapters.length === 0 ? (
               <div
-                className="text-xs text-gray-400 rounded-xl px-3 py-4 text-center"
+                className="text-xs text-muted-foreground rounded-xl px-3 py-4 text-center"
                 style={{ background: 'rgba(15,15,15,0.02)', border: '1px dashed rgba(15,15,15,0.1)' }}
               >
                 还没有章节，请先在章节列表中创建章节

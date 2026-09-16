@@ -152,7 +152,7 @@ export function LocationManager() {
                   <h2 className="text-sm font-semibold text-gray-800 tracking-tight">地点列表</h2>
                   <button
                     onClick={handleCreate}
-                    className="p-1.5 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                    className="p-1.5 rounded-xl text-muted-foreground hover:text-gray-600 hover:bg-gray-100 transition-colors"
                     aria-label="创建新地点"
                   >
                     <Plus size={14} />
@@ -179,7 +179,7 @@ export function LocationManager() {
                     <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
                       <MapPin size={20} className="text-gray-400" />
                     </div>
-                    <p className="text-sm text-gray-400">{search ? '无匹配地点' : '暂无地点'}</p>
+                    <p className="text-sm text-muted-foreground">{search ? '无匹配地点' : '暂无地点'}</p>
                     {!search && (
                       <button onClick={handleCreate} className="mt-3 text-xs text-gray-500 hover:text-gray-700 underline underline-offset-2">
                         创建第一个地点
@@ -206,7 +206,7 @@ export function LocationManager() {
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium text-gray-800 truncate">{loc.name}</div>
                           {loc.description && (
-                            <div className="text-xs text-gray-400 truncate">{loc.description.slice(0, 30)}</div>
+                            <div className="text-xs text-muted-foreground truncate">{loc.description.slice(0, 30)}</div>
                           )}
                         </div>
                       </div>
@@ -218,7 +218,7 @@ export function LocationManager() {
                             </span>
                           ))}
                           {loc.tags.length > 3 && (
-                            <span className="inline-block px-1.5 py-0.5 text-[10px] text-gray-400">+{loc.tags.length - 3}</span>
+                            <span className="inline-block px-1.5 py-0.5 text-[10px] text-muted-foreground">+{loc.tags.length - 3}</span>
                           )}
                         </div>
                       )}
@@ -256,7 +256,7 @@ export function LocationManager() {
                     <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-4">
                       <Map size={28} className="text-gray-300" />
                     </div>
-                    <p className="text-sm text-gray-400">选择地点查看详情</p>
+                    <p className="text-sm text-muted-foreground">选择地点查看详情</p>
                   </div>
                 </div>
               )}

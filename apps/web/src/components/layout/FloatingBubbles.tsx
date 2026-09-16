@@ -271,6 +271,10 @@ export function FloatingBubbles({ panels, openKeys, onToggle }: FloatingBubblesP
       {/* 花开旋转层：收拢时整体旋 120° 缩到 0.06 并淡出（绕罗盘中心），所有卫星完全没入罗盘 */}
       <div
         className="absolute"
+        // ★ 收起态必须 inert：仅靠 opacity:0 + pointerEvents:none 挡不住键盘 ——
+        //   实测收起后有 16 个 4×4px 的 <button> 仍能被 Tab 聚焦（屏读器也会念到）。
+        //   inert 会一并移除可聚焦性与无障碍树可见性（纯无障碍修复，视觉零变化）。
+        inert={!open}
         style={{
           left: 0,
           top: 0,

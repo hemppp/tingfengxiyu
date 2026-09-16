@@ -166,7 +166,7 @@ export function GraphShell({
               <Network size={28} className="text-gray-400" />
             </div>
             <p className="text-sm text-gray-700 font-medium mb-1">暂无数据</p>
-            <p className="text-xs text-gray-400">{emptyHint}</p>
+            <p className="text-xs text-muted-foreground">{emptyHint}</p>
           </div>
         </div>
       </div>

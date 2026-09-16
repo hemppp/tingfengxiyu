@@ -358,6 +358,7 @@ export function QuickPhraseBubble({ editor }: QuickPhraseBubbleProps) {
                           cursor: 'pointer',
                         }}
                         title="删除"
+                        aria-label={`删除短语：${phrase.text}`}
                       >
                         <X size={10} />
                       </button>
@@ -373,6 +374,8 @@ export function QuickPhraseBubble({ editor }: QuickPhraseBubbleProps) {
               onClick={() => setExpanded(false)}
               className="p-1 rounded-full transition-colors hover:bg-white/30"
               style={{ color: 'hsl(var(--ink-light))' }}
+              aria-label="收起快捷短语"
+              title="收起"
             >
               <ChevronDown size={14} />
             </button>
@@ -402,6 +405,11 @@ export function QuickPhraseBubble({ editor }: QuickPhraseBubbleProps) {
             fontWeight: 500,
           }}
           onClick={() => setExpanded((v) => !v)}
+          // ★ 无障碍：图标/装饰性 class 让可访问名不好推导，显式给 aria-label；
+          //   并暴露展开态（此前只有视觉箭头，屏读器读不出开合）。
+          aria-label={expanded ? '收起快捷短语' : '展开快捷短语'}
+          aria-expanded={expanded}
+          title="快捷短语"
         >
           <Sparkles size={14} style={{ color: 'hsl(var(--mountain-cyan))' }} />
           <span>快捷短语</span>

@@ -23,6 +23,7 @@ import { OutlineFillDialog } from './OutlineFillDialog';
 import { refreshEntityStore } from '@/services/ai/entityRefresh';
 import { useReferenceStore } from '@/stores/referenceStore';
 import { useToast } from '@/components/ui/ToastProvider';
+import { plainTextToHtml } from '@/services/editor/entityDetector';
 import type { ToolCallEvent, ToolResultEvent } from '@/services/ai/chatService';
 
 interface ChatMessage {
@@ -251,14 +252,17 @@ type InsertMode = 'cursor' | 'end' | 'replace';
 function applyToEditor(editor: Editor, content: string, mode: InsertMode): boolean {
   const plain = sanitizeToPlainText(content);
   if (!plain) return false;
+  // ★ 转 HTML 再注入：plain 是纯文本（可能含 \n），直接交给 tiptap 会被当 HTML 解析 →
+  //   换行被当空白吞掉、段落全并成一段。plainTextToHtml 做 \n\n→<p>、单个 \n→<br>。
+  const html = plainTextToHtml(plain);
   try {
     if (mode === 'replace') {
-      editor.chain().focus().setContent(plain).run();
+      editor.chain().focus().setContent(html).run();
     } else if (mode === 'end') {
       const end = editor.state.doc.content.size;
-      editor.chain().focus().insertContentAt(end, plain).run();
+      editor.chain().focus().insertContentAt(end, html).run();
     } else {
-      editor.chain().focus().insertContent(plain).run();
+      editor.chain().focus().insertContent(html).run();
     }
     return true;
   } catch {
@@ -311,9 +315,13 @@ function useStreamingInsert(editor: Editor | null) {
       return;
     }
     const insertPos = st.anchorPos + st.insertedLength;
+    // ★ 转 HTML 再插入（理由同 applyToEditor）；
+    //   ⚠️ insertedLength 必须累加**插入内容的长度**（HTML），因为它同时是 rollback 的删除长度
+    //   （deleteRange 按文档位置算）。若仍累加纯文本长度，回滚会少删 → 留残片。
+    const html = plainTextToHtml(plain);
     try {
-      editor.chain().focus().insertContentAt(insertPos, plain).run();
-      st.insertedLength += plain.length;
+      editor.chain().focus().insertContentAt(insertPos, html).run();
+      st.insertedLength += html.length;
     } catch {
       // 插入失败（如编辑器已卸载），停止写入避免错乱
       st.active = false;
