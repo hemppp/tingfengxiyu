@@ -183,7 +183,7 @@ node scripts/verify-autowrite-cleanup.mjs <username> <projectId>  # 参数由上
 | 8 | 伏笔模块设计债 | `SnapshotManager` / `ConsistencyPanel` 仍用**未定义**的 `mc-*` 类；`EarmarkPanel.tsx`（398 行）与 `ForeshadowsPage.tsx` 是**无引用死代码**，已报告未删 |
 | 9 | 安全审计结论未逐条复核 | `security_best_practices_report.md`（2026-08-19）报了 1 条高危 RCE（`create_plugin` 让 LLM 生成 `serverCode` 运行时挂载，`apps/server/src/ai/tools/plugin-tools.ts:325` 仍在）+ 默认管理员口令 + 依赖漏洞。插件路由现已要求鉴权（测试断言 401），但**其余结论没有逐条确认** |
 | 10 | server 业务模块仍无单测 | 当前基线 6 文件 / 49 用例（`src/__tests__/` 3 个冒烟与迁移 + 插件内 3 个纯逻辑）。`apps/server/src/modules/` 的 20 个业务模块与 `guardian.ts` 的熔断状态机**全无测试保护**。✅ 附带清理已完成：vitest 通配扫进插件 `node_modules` 的问题已修（曾让整个套件卡到超时） |
-| 11 | 杂项 | `apps/desktop` 是空壳（无 package.json，`pnpm -r` 只扫到 8/9）；仓库根有 `.tmp-p.json` / `.tmp-ck.txt` 等临时文件；测试账号残留（`autowrite_probe`、`uiver…`、`bverify…`） |
+| 11 | 杂项 | ~~`apps/desktop` 是空壳（无 package.json，`pnpm -r` 只扫到 8/9）~~ ✅ 已于 2026-09-16 删除（空壳仅剩 3 个断链 shim），现为 8/8；仓库根有 `.tmp-p.json` / `.tmp-ck.txt` 等临时文件；测试账号残留（`autowrite_probe`、`uiver…`、`bverify…`） |
 
 ---
 

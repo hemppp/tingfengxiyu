@@ -72,7 +72,7 @@ pnpm build && pnpm start:server   # 生产：静态由基座托管
 
 | 检查项 | 结果 |
 |--------|------|
-| 全工作区类型检查 `pnpm type-check` | ✅ 8 个包通过（`Scope: 8 of 9`；`apps/desktop` 是空壳、无 package.json） |
+| 全工作区类型检查 `pnpm type-check` | ✅ 8 个包通过（`Scope: 8 of 8`；`apps/desktop` 空壳已于 2026-09-16 删除） |
 | 服务端构建 `tsc` + 前端构建 `vite build` | ✅ |
 | `GET /api/health` | ✅ 200 · **25 个插件**全部 ok |
 | 插件挂载 | ✅ **20 个内置模块** + AI + 管理 + worldbuilding + plugin-manager + 本地插件（`novel.autowrite` / `novel.bookscan` / `novel.typography`）均以 cordis fiber 挂载 |
@@ -116,7 +116,6 @@ NovelMuse/
 │   ├── web/              # React SPA（前端插件注册表 @novel/core/web）
 │   ├── server/           # cordis 宿主：20 个业务模块 + AI 层 + 管理端
 │   ├── agents/           # Python Strands Agents 微服务（可选，docker profile）
-│   ├── desktop/          # 桌面端（空壳，尚未落地）
 │   └── plugins/
 │       ├── worldbuilding/   # 示例完整插件
 │       └── local/           # 本地插件：novel.autowrite / novel.bookscan / novel.typography
