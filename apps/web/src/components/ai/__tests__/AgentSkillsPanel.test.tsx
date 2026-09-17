@@ -83,6 +83,9 @@ beforeEach(() => {
 describe('AgentSkillsPanel', () => {
   it('按智能体页签展示**全部**智能体，分组并给出各自的技能计数', async () => {
     render(<AgentSkillsPanel />);
+    // ★ 2026-09-17：默认 Tab 改成「技能库」了（三块：技能库 / 写作agent / 智能体），
+    //   所以这里要先切到「智能体」——不再是进来就落在这一页。
+    fireEvent.click(await screen.findByRole('tab', { name: '智能体' }));
     expect(await screen.findByText('对话智能体')).toBeInTheDocument();
     expect(screen.getByText('写作官')).toBeInTheDocument();
     expect(screen.getByText('剧情设计师')).toBeInTheDocument();
@@ -95,6 +98,7 @@ describe('AgentSkillsPanel', () => {
 
   it('★ 点某个智能体后下钻，看到技能与开关，且能返回清单', async () => {
     render(<AgentSkillsPanel />);
+    fireEvent.click(await screen.findByRole('tab', { name: '智能体' }));
     fireEvent.click(await screen.findByText('写作官'));
 
     expect(await screen.findByText('世界观顾问')).toBeInTheDocument();
@@ -112,6 +116,7 @@ describe('AgentSkillsPanel', () => {
 
   it('拨动开关 → 调 toggleAgentSkill，并以服务端结果为准更新界面', async () => {
     render(<AgentSkillsPanel />);
+    fireEvent.click(await screen.findByRole('tab', { name: '智能体' }));
     fireEvent.click(await screen.findByText('写作官'));
     const sw = await screen.findByRole('switch', { name: /节奏医生 技能开关/ });
     fireEvent.click(sw);
@@ -167,9 +172,18 @@ describe('AgentSkillsPanel', () => {
     expect(within(alert).getByText(/永远看不到/)).toBeInTheDocument();
   });
 
+  it('★ 写作agent 页签：直接给写作官开技能（原 AI 对话输入栏上方那个入口，2026-09-17 挪进来）', async () => {
+    render(<AgentSkillsPanel />);
+    fireEvent.click(await screen.findByRole('tab', { name: '写作agent' }));
+    // 落到写作官自己的技能清单（带开关），而不是智能体总表
+    expect(await screen.findByRole('switch', { name: /世界观顾问 技能开关/ })).toBeInTheDocument();
+    expect(mockFetchTargetSkills).toHaveBeenCalledWith('writer');
+  });
+
   it('智能体一个技能都没有时，说明去哪儿装（不留空白格）', async () => {
     mockFetchTargetSkills.mockResolvedValue({ target: T({ id: 'plot-designer', name: '剧情设计师' }), skills: [] });
     render(<AgentSkillsPanel />);
+    fireEvent.click(await screen.findByRole('tab', { name: '智能体' }));
     fireEvent.click(await screen.findByText('剧情设计师'));
     expect(await screen.findByText(/名下还没有技能/)).toBeInTheDocument();
   });

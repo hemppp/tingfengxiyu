@@ -21,6 +21,7 @@ import {
   ChevronLeft, ChevronRight, Loader2, AlertCircle, Trash2, Plus, X, PackageOpen,
 } from 'lucide-react';
 import { AgentSkillList } from './AgentSkillList';
+import { EntrySkillPanel } from './EntrySkillPanel';
 import { resolveSkillIcon } from './skillsConfig';
 import {
   fetchSkillTargets, fetchSkillLibrary, installSkillOnLibrary, removeSkillFromLibrary,
@@ -28,7 +29,7 @@ import {
 } from '@/services/ai/skillLibrary';
 import { dispatchToastEvent } from '@/utils/errors';
 
-type Tab = 'agents' | 'library';
+type Tab = 'library' | 'writer' | 'agents';
 
 /** 智能体头像（色底 + 单字）—— 与交流流里的头像同一套视觉语言 */
 function AgentAvatar({ short, color, size = 22 }: { short: string; color: string; size?: number }) {
@@ -44,7 +45,10 @@ function AgentAvatar({ short, color, size = 22 }: { short: string; color: string
 }
 
 export function AgentSkillsPanel() {
-  const [tab, setTab] = useState<Tab>('agents');
+  // ★ 2026-09-17：从「按智能体 / 技能库」两页签扩成三块 —— 技能库 / 写作agent / 智能体。
+  //   起因：AI 对话输入栏上方那个「技能」按钮被撤掉，写作官的技能开关改到这里开。
+  //   默认落在**技能库**（作者口径：进来先看库里有什么）。
+  const [tab, setTab] = useState<Tab>('library');
   const [selected, setSelected] = useState<string | null>(null);
 
   const [targets, setTargets] = useState<SkillTargetView[] | null>(null);
@@ -222,9 +226,9 @@ export function AgentSkillsPanel() {
 
   return (
     <div className="flex flex-col gap-2 p-2.5">
-      {/* 两个页签：智能体 / 技能库 —— 库只做安装与删除，配置在智能体那边 */}
+      {/* 三块：技能库（装/删）/ 写作agent（写作官的开关）/ 智能体（全部 agent 的开关） */}
       <div className="flex gap-1 p-0.5 rounded-xl" style={{ background: 'hsl(var(--muted) / 0.5)' }} role="tablist">
-        {([['agents', '按智能体'], ['library', '技能库']] as Array<[Tab, string]>).map(([k, label]) => (
+        {([['library', '技能库'], ['writer', '写作agent'], ['agents', '智能体']] as Array<[Tab, string]>).map(([k, label]) => (
           <button
             key={k}
             role="tab"
@@ -248,6 +252,12 @@ export function AgentSkillsPanel() {
       )}
 
       {tab === 'library' && <LibraryView />}
+
+      {/* 写作agent：写作官这一个 agent 的技能开关。
+          原来挂在 AI 对话输入栏上方那个「技能」按钮的 Tab 里（2026-09-17 撤掉按钮后挪来这）。 */}
+      {tab === 'writer' && (
+        <EntrySkillPanel agentId="writer" title="写作 Skills" hint="写作官 · 按本章结论落笔成文" />
+      )}
 
       {tab === 'agents' && (
         targets === null ? (
