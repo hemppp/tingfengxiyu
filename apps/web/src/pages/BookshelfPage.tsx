@@ -462,7 +462,7 @@ export function BookshelfPage() {
             color: 'hsl(var(--muted-foreground))',
             fontFamily: "'Noto Serif SC', serif",
           }}>
-            <span>NovelMuse · 墨香书阁</span>
+            <span>听风细雨 · 墨香书阁</span>
             <button
               onClick={handleLogout}
               className="transition-colors hover:opacity-70"

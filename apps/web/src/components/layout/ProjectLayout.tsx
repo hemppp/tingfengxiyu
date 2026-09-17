@@ -612,7 +612,7 @@ export function ProjectLayout() {
             title={backLabel}
             aria-label={backLabel}
           >
-            {project ? project.name : 'NovelMuse'}
+            {project ? project.name : '听风细雨'}
           </span>
         </div>
 
