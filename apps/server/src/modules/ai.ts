@@ -18,6 +18,7 @@ import { zValidator } from '@hono/zod-validator';
 import { getProvider, type AIConfig, configLoaders, applyBuiltinRelayFallback } from '../ai/providers/provider-factory.js';
 import { isBuiltinRelayKey, BUILTIN_RELAY_LABEL } from '../lib/builtin-relay.js';
 import { ensureConfigMiddleware } from '../ai/user-config-loader.js';
+import { listMarket } from '../services/skill-catalog.js';
 import { getDb, schema, eq, saveToDisk } from '@novel/db';
 import { getActiveProxy } from '../lib/proxy-agent.js';
 import {
@@ -1633,8 +1634,34 @@ aiRouter.get('/skills', requireAuth, (c) => {
 // 本库回答"这些技能归属谁、开着还是关着"。
 // ============================================================
 
-/** GET /api/ai/skill-library —— 库里的全部技能（按两类分开给，前端不必再分组） */
-aiRouter.get('/skill-library', requireAuth, async (c) => {
+/**
+ * GET /api/ai/skill-market —— 技能市场（公共目录 + 「我装没装」）
+ *
+ * ★ 2026-09-17 新增。作者要求「要能浏览公共技能源」。
+ *   目录当前是内置常量（见 services/skill-catalog.ts），接远程源时只换那一处实现。
+ *   从市场装的技能是**当前用户的私有技能**，不是公共的。
+ */
+aiRouter.get('/skill-market', requireAuth, async (c) => {
+  const user = c.get('user');
+  if (!user?.id) return c.json({ error: { code: 'UNAUTHORIZED', message: '未认证' } }, 401);
+  try {
+    const entries = await listMarket(user.id);
+    return c.json({
+      data: {
+        entries,
+        byCategory: {
+          assistant: entries.filter((e) => e.category === 'assistant'),
+          agent: entries.filter((e) => e.category === 'agent'),
+        },
+      },
+    });
+  } catch (error) {
+    console.error('[skill-market] 读取失败:', error);
+    return c.json({ error: { code: 'INTERNAL_ERROR', message: '读取技能市场失败' } }, 500);
+  }
+});
+
+/** GET /api/ai/skill-library —— 库里的全部技能（按两类分开给，前端不必再分组） */aiRouter.get('/skill-library', requireAuth, async (c) => {
   const user = c.get('user');
   if (!user?.id) return c.json({ error: { code: 'UNAUTHORIZED', message: '未认证' } }, 401);
   try {

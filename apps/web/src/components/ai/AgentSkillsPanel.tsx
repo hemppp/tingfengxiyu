@@ -24,12 +24,12 @@ import { AgentSkillList } from './AgentSkillList';
 import { EntrySkillPanel } from './EntrySkillPanel';
 import { resolveSkillIcon } from './skillsConfig';
 import {
-  fetchSkillTargets, fetchSkillLibrary, installSkillOnLibrary, removeSkillFromLibrary,
-  type SkillTargetView, type LibrarySkill, type OrphanOwner, type SkillCategory,
+  fetchSkillTargets, fetchSkillLibrary, fetchSkillMarket, installSkillOnLibrary, removeSkillFromLibrary,
+  type SkillTargetView, type LibrarySkill, type MarketEntry, type OrphanOwner, type SkillCategory,
 } from '@/services/ai/skillLibrary';
 import { dispatchToastEvent } from '@/utils/errors';
 
-type Tab = 'library' | 'writer' | 'agents';
+type Tab = 'library' | 'market' | 'writer' | 'agents';
 
 /** 智能体头像（色底 + 单字）—— 与交流流里的头像同一套视觉语言 */
 function AgentAvatar({ short, color, size = 22 }: { short: string; color: string; size?: number }) {
@@ -57,6 +57,9 @@ export function AgentSkillsPanel() {
   const [busy, setBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [installOpen, setInstallOpen] = useState(false);
+  // 技能市场（2026-09-17）：公共目录 + 「我装没装」；installing 是正在装的那条 id
+  const [market, setMarket] = useState<MarketEntry[] | null>(null);
+  const [installing, setInstalling] = useState<string | null>(null);
 
   const loadTargets = useCallback(async () => {
     try {
@@ -77,8 +80,45 @@ export function AgentSkillsPanel() {
     }
   }, []);
 
+  /** 技能市场：拉公共目录（带「我装没装」） */
+  const loadMarket = useCallback(async () => {
+    try {
+      const r = await fetchSkillMarket();
+      setMarket(r.entries);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
+  /**
+   * 从市场装一条：**装成当前用户私有的**（后端会把 id 加 `${userId}:` 前缀）。
+   * 装完刷新市场（按钮变「已安装」）与技能库（新条目立刻出现）。
+   */
+  const handleInstallFromMarket = useCallback(async (m: MarketEntry) => {
+    setInstalling(m.id);
+    try {
+      await installSkillOnLibrary({
+        id: m.id,
+        name: m.name,
+        description: m.description,
+        category: m.category,
+        ownerAgent: m.ownerAgent,
+        systemPrompt: m.systemPrompt,
+        contextKeys: m.contextKeys,
+      });
+      dispatchToastEvent({ type: 'success', message: `已安装「${m.name}」` });
+      await Promise.all([loadMarket(), loadLibrary(), loadTargets()]);
+    } catch (e) {
+      dispatchToastEvent({ type: 'error', message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setInstalling(null);
+    }
+  }, [loadMarket, loadLibrary, loadTargets]);
+
   useEffect(() => { void loadTargets(); }, [loadTargets]);
   useEffect(() => { if (tab === 'library') void loadLibrary(); }, [tab, loadLibrary]);
+  useEffect(() => { if (tab === 'market') void loadMarket(); }, [tab, loadMarket]);
 
   /** 开关改动后：左列计数与库都要刷新（同一个数据源，别让两处显示不一致） */
   const refreshAll = useCallback(() => {
@@ -195,6 +235,66 @@ export function AgentSkillsPanel() {
     );
   };
 
+  // ---- 技能市场（2026-09-17 新增）----
+  // 浏览公共技能源（后端当前读内置目录，接远程源时前端一行不用改）。
+  // 装进来的技能是**当前用户私有的**，装完可在「技能库」页看到、在「智能体」页开启。
+  function MarketView() {
+    if (market === null) {
+      return (
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground px-1 py-2">
+          <Loader2 size={13} className="animate-spin" aria-hidden="true" /> 正在读取技能市场…
+        </div>
+      );
+    }
+    if (market.length === 0) {
+      return <div className="px-1 py-3 text-[11px] text-muted-foreground">（市场里暂时没有可装的技能）</div>;
+    }
+    return (
+      <div className="flex flex-col gap-1.5">
+        <div className="px-1 text-[11px] text-muted-foreground">
+          公共技能源 · 共 {market.length} 条。装进来的技能归你自己，别人看不到。
+        </div>
+        {market.map((m) => {
+          const Icon = resolveSkillIcon(m.id);
+          return (
+            <div key={m.id} className="flex items-center gap-2 rounded-xl px-2 py-1.5 border" data-market={m.id}>
+              <Icon size={14} className="shrink-0 text-muted-foreground" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[12px] font-medium truncate">{m.name}</span>
+                  <span className="text-[10px] text-muted-foreground shrink-0">v{m.version}</span>
+                  {(m.tags ?? []).map((t) => (
+                    <span key={t} className="text-[10px] px-1 rounded bg-muted text-muted-foreground shrink-0">{t}</span>
+                  ))}
+                </div>
+                <div className="text-[11px] text-muted-foreground truncate">{m.description}</div>
+                {/* 归属写了但清单里没这个 agent —— 装了也看不见，必须提前说 */}
+                {!m.ownerKnown && (
+                  <div className="text-[11px] text-destructive">⚠ 归属智能体「{m.ownerAgent}」不在清单里，装了也看不到</div>
+                )}
+              </div>
+              {m.installed ? (
+                <span className="shrink-0 text-[11px] text-muted-foreground px-1">已安装</span>
+              ) : (
+                <button
+                  onClick={() => void handleInstallFromMarket(m)}
+                  disabled={installing === m.id || !m.ownerKnown}
+                  className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] hover:bg-muted/60 disabled:opacity-40"
+                  aria-label={`安装 ${m.name}`}
+                >
+                  {installing === m.id
+                    ? <Loader2 size={11} className="animate-spin" aria-hidden="true" />
+                    : <Plus size={11} aria-hidden="true" />}
+                  安装
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   // ---- 主渲染 ----
   if (selected) {
     const t = targets?.find((x) => x.id === selected);
@@ -228,7 +328,7 @@ export function AgentSkillsPanel() {
     <div className="flex flex-col gap-2 p-2.5">
       {/* 三块：技能库（装/删）/ 写作agent（写作官的开关）/ 智能体（全部 agent 的开关） */}
       <div className="flex gap-1 p-0.5 rounded-xl" style={{ background: 'hsl(var(--muted) / 0.5)' }} role="tablist">
-        {([['library', '技能库'], ['writer', '写作agent'], ['agents', '智能体']] as Array<[Tab, string]>).map(([k, label]) => (
+        {([['library', '技能库'], ['market', '技能市场'], ['writer', '写作agent'], ['agents', '智能体']] as Array<[Tab, string]>).map(([k, label]) => (
           <button
             key={k}
             role="tab"
@@ -252,6 +352,8 @@ export function AgentSkillsPanel() {
       )}
 
       {tab === 'library' && <LibraryView />}
+
+      {tab === 'market' && <MarketView />}
 
       {/* 写作agent：写作官这一个 agent 的技能开关。
           原来挂在 AI 对话输入栏上方那个「技能」按钮的 Tab 里（2026-09-17 撤掉按钮后挪来这）。 */}

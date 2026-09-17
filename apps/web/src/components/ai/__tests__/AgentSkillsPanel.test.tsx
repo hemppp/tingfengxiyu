@@ -29,6 +29,14 @@ vi.mock('@/services/ai/skillLibrary', () => ({
   toggleAllAgentSkills: (...a: unknown[]) => mockToggleAll(...a),
   installSkillOnLibrary: (...a: unknown[]) => mockInstall(...a),
   removeSkillFromLibrary: (...a: unknown[]) => mockRemove(...a),
+  // 技能市场（2026-09-17）：目录两条，一条已装一条未装，用来验按钮形态
+  fetchSkillMarket: () => Promise.resolve({
+    entries: [
+      { id: 'suspense-pacer', name: '悬念节奏师', description: '检查信息释放节奏', category: 'agent', ownerAgent: 'plot-designer', systemPrompt: 'x', version: '1.0.0', installed: true, ownerKnown: true },
+      { id: 'subtext-dialogue', name: '潜台词打磨师', description: '把话说透改成话里有话', category: 'agent', ownerAgent: 'writer', systemPrompt: 'x', version: '1.0.0', installed: false, ownerKnown: true },
+    ],
+    byCategory: { assistant: [], agent: [] },
+  }),
 }));
 
 vi.mock('@/utils/errors', () => ({
@@ -178,6 +186,17 @@ describe('AgentSkillsPanel', () => {
     // 落到写作官自己的技能清单（带开关），而不是智能体总表
     expect(await screen.findByRole('switch', { name: /世界观顾问 技能开关/ })).toBeInTheDocument();
     expect(mockFetchTargetSkills).toHaveBeenCalledWith('writer');
+  });
+
+  it('★ 技能市场页签：列公共目录，已装的显示「已安装」，未装的给「安装」', async () => {
+    render(<AgentSkillsPanel />);
+    fireEvent.click(await screen.findByRole('tab', { name: '技能市场' }));
+    expect(await screen.findByText('悬念节奏师')).toBeInTheDocument();
+    // 已装的那条不给安装按钮
+    expect(screen.getByText('已安装')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /安装 悬念节奏师/ })).toBeNull();
+    // 未装的那条有安装按钮
+    expect(screen.getByRole('button', { name: /安装 潜台词打磨师/ })).toBeInTheDocument();
   });
 
   it('智能体一个技能都没有时，说明去哪儿装（不留空白格）', async () => {

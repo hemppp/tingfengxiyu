@@ -71,6 +71,34 @@ export interface OrphanOwner { agentId: string; count: number; skillIds: string[
 
 const BASE = '/ai';
 
+/** 技能市场里的一条（公共目录条目 + 我装没装） */
+export interface MarketEntry {
+  id: string;
+  name: string;
+  description: string;
+  category: SkillCategory;
+  ownerAgent: string | null;
+  systemPrompt: string;
+  contextKeys?: string[];
+  version: string;
+  tags?: string[];
+  /** 已经装过（公共的同 id 或我的私有副本）—— 装了就不显示「安装」按钮 */
+  installed: boolean;
+  /** 目录声明的归属智能体在清单里是否存在；false 时界面要提示「装了也看不见」 */
+  ownerKnown: boolean;
+}
+
+/**
+ * 技能市场：浏览公共技能源（当前是内置目录，见后端 services/skill-catalog.ts）。
+ * 从市场装进来的技能是**当前用户私有的**，不是公共的。
+ */
+export function fetchSkillMarket(): Promise<{
+  entries: MarketEntry[];
+  byCategory: { assistant: MarketEntry[]; agent: MarketEntry[] };
+}> {
+  return apiClient.get(`${BASE}/skill-market`);
+}
+
 export function fetchSkillLibrary(): Promise<{
   skills: LibrarySkill[];
   byCategory: { assistant: LibrarySkill[]; agent: LibrarySkill[] };
