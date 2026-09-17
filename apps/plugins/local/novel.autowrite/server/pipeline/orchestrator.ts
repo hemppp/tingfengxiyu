@@ -40,7 +40,14 @@ const ARTIFACT_TOTAL_MAX = 9000;
 
 /** 带工具的角色需要多转几轮查库（与单章链路同口径） */
 function turnsFor(role: DesignRole): number {
-  return role.tools && role.tools.length > 0 ? 6 : 2;
+  // ★ 2026-09-17 修：无工具角色原来只给 2 轮，实测**推理模型会被卡死** ——
+  //   cast 阶段第一个发言人「角色设计师」（无工具）直接
+  //   `Max turns (2) exceeded`，整条流水线在第 2 阶段就断。
+  //   推理模型（如 glm-5.3-flash）一次响应里会先出 reasoning 再出正文，
+  //   框架按"模型调用次数"计轮，2 轮对它是紧的。
+  //   给到 4：仍然是有界预算（防跑飞），但留出了推理模型的余量。
+  //   有工具的角色维持 6（要查库，本来就多轮）。
+  return role.tools && role.tools.length > 0 ? 6 : 4;
 }
 
 function cut(s: string, n: number): string {

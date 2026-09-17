@@ -17,7 +17,7 @@ import { honoListener } from '../lib/hono-adapter.js';
 import { createApp } from '../lib/app-factory.js';
 import { requireAuth } from '../middleware/auth.js';
 import { verifyProjectOwnership } from '../lib/ownership.js';
-import { getDb, getProjectDbSync } from '@novel/db';
+import { getDb, getProjectDbSync, initProjectDb } from '@novel/db';
 import { EventBus } from '@novel/core';
 import {
   HookBus,
@@ -211,6 +211,19 @@ export function createServerPluginHost(options: ServerPluginHostOptions = {}): S
             if (projectId) {
               const denial = await verifyProjectOwnership(c as never, projectId);
               if (denial) return denial;
+              // ★★ 必须**预热项目库缓存**（2026-09-17 修）：
+              //   `ctx.db.kv.get(id, key, { projectId })` 内部走的是 **同步** 的
+              //   `getProjectDbSync()` —— 它**只查缓存，不打开库**，未命中直接返回 null，
+              //   而 KvService.get 遇到 null 是**静默返回 undefined**（不抛错）。
+              //   后果：server 一重启，项目库缓存是空的 → 所有项目级 KV 读全部读成「没有」。
+              //   实测表现：重启后 GET /pipeline 回 `started:false`（数据其实好好躺在
+              //   plugin_kv 里），接着 advance 被判 NOT_STARTED —— 整条流水线状态"消失"。
+              //   kv.set 里已经 initProjectDb 了（见 kv-service.ts），get 这条路缺了同一手。
+              try {
+                await initProjectDb(projectId);
+              } catch (e) {
+                console.warn(`[cordis-host] 预热项目库失败 (${projectId}):`, e);
+              }
             }
             await next();
           });
