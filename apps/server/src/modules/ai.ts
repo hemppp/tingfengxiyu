@@ -1635,9 +1635,12 @@ aiRouter.get('/skills', requireAuth, (c) => {
 
 /** GET /api/ai/skill-library —— 库里的全部技能（按两类分开给，前端不必再分组） */
 aiRouter.get('/skill-library', requireAuth, async (c) => {
+  const user = c.get('user');
+  if (!user?.id) return c.json({ error: { code: 'UNAUTHORIZED', message: '未认证' } }, 401);
   try {
-    const skills = await listLibrary();
-    const orphans = await listOrphanOwners();
+    // ★ 2026-09-17：只返回「公共的 + 我自己的」—— 别人上传的私有技能不该出现
+    const skills = await listLibrary(user.id);
+    const orphans = await listOrphanOwners(user.id);
     return c.json({
       data: {
         skills,
@@ -1658,8 +1661,12 @@ aiRouter.get('/skill-library', requireAuth, async (c) => {
 
 /** POST /api/ai/skill-library/install —— 安装（或重装）一个技能 */
 aiRouter.post('/skill-library/install', requireAuth, async (c) => {
+  const user = c.get('user');
+  if (!user?.id) return c.json({ error: { code: 'UNAUTHORIZED', message: '未认证' } }, 401);
   const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
   try {
+    // ★ 2026-09-17：用户从界面装的技能是**他私有的**（带 userId → id 加命名空间）。
+    //   公共技能只由内置/插件种子路径写（那条路不传 userId）。
     const skill = await installSkill({
       id: String(body.id ?? ''),
       name: String(body.name ?? ''),
@@ -1670,7 +1677,7 @@ aiRouter.post('/skill-library/install', requireAuth, async (c) => {
       ownerAgent: body.ownerAgent === undefined || body.ownerAgent === null ? null : String(body.ownerAgent),
       systemPrompt: body.systemPrompt === undefined ? undefined : String(body.systemPrompt),
       contextKeys: Array.isArray(body.contextKeys) ? body.contextKeys.map((x) => String(x)) : undefined,
-    });
+    }, user.id);
     return c.json({ data: skill }, 201);
   } catch (error) {
     // 安装失败基本都是**输入问题**（id 非法 / 未知智能体 / 缺归属），按 400 回，
@@ -1685,8 +1692,11 @@ aiRouter.delete('/skill-library/:id', requireAuth, async (c) => {
   // 本版 Hono 的 param() 类型是 string | undefined —— 缺了要显式兜住
   const id = c.req.param('id') ?? '';
   if (!id) return c.json({ error: { code: 'BAD_REQUEST', message: '缺少技能 id' } }, 400);
+  const user = c.get('user');
+  if (!user?.id) return c.json({ error: { code: 'UNAUTHORIZED', message: '未认证' } }, 401);
   try {
-    const ok = await removeSkill(id);
+    // ★ 2026-09-17：私有技能只有主人能删（服务层校验归属后返回 false）
+    const ok = await removeSkill(id, user.id);
     if (!ok) return c.json({ error: { code: 'NOT_FOUND', message: `技能库中没有 ${id}` } }, 404);
     return c.json({ data: { id, removed: true } });
   } catch (error) {

@@ -31,6 +31,13 @@ export interface LibrarySkill {
   systemPrompt: string;
   contextKeys: string[];
   source: 'builtin' | 'installed';
+  /**
+   * 归属可见性（2026-09-17 加）：
+   *   'public'  = 内置 / 插件带 —— 所有用户可见，谁都能删
+   *   'private' = 当前用户自己上传的 —— 只有本人可见、只有本人能删
+   * 后端由 `user_id` 是否为 NULL 推出，不下发 raw userId。
+   */
+  visibility?: 'public' | 'private';
   createdAt: number;
   updatedAt: number;
 }

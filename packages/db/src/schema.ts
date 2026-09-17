@@ -545,7 +545,7 @@ export const factConflicts = sqliteTable('fact_conflicts', {
 }));
 
 // ============================================================
-// 集中式 Skills 库（主库，全局）
+// 集中式 Skills 库
 //
 // 口径（docs/architecture/skills-library.md）：
 //   · 一处集中存放**所有**技能，智能体与各 agent 都从这里取自己那一类；
@@ -553,6 +553,15 @@ export const factConflicts = sqliteTable('fact_conflicts', {
 //     就地改会让库与技能来源脱节；
 //   · 内部按两类分开存放：`category='assistant'`（智能体 skills）与
 //     `category='agent'`（agent skills，带 owner_agent 指明归属哪个 agent）。
+//
+// ★ 2026-09-17 归属口径修订（作者）：**公共的才是全局，用户自己上传的是私有的**
+//   · `user_id IS NULL` → 公共技能（内置 / 插件带），所有用户可见、可装可删
+//   · `user_id = <uid>` → 该用户自己上传的，**只有本人可见**、只有本人能删
+//
+//   为什么 id 要带命名空间：`id` 是主键，两个用户各传一个同名技能会直接撞主键。
+//   所以私有技能的 id 存成 `${userId}:${rawId}`（公共的保持原样）。
+//   这个做法与 `agent_skill_toggles.id` 一致 —— 那份代码的注释写了理由：
+//   「直接当主键，避免依赖复合唯一索引的实现差异」。
 // ============================================================
 
 export const skillLibrary = sqliteTable('skill_library', {
@@ -577,10 +586,19 @@ export const skillLibrary = sqliteTable('skill_library', {
   contextKeys: text('context_keys').notNull().default('[]'),
   /** 'builtin'（随产品带）/ 'installed'（用户装进来的） */
   source: text('source').notNull().default('installed'),
+  /**
+   * 归属用户。★ 2026-09-17 加：
+   *   NULL  = 公共技能（内置 / 插件带），所有用户可见
+   *   非空  = 该用户自己上传的私有技能，只有本人可见
+   * 私有技能的 `id` 同时带 `${userId}:` 前缀，避免不同用户同名撞主键。
+   */
+  userId: text('user_id'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 }, (table) => ({
   byCategory: index('idx_skill_library_category').on(table.category, table.ownerAgent),
+  /** 按归属过滤（`user_id IS NULL OR user_id = ?`）是每次读取的必经之路 */
+  byUser: index('idx_skill_library_user').on(table.userId),
 }));
 
 /**

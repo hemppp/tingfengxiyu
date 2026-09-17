@@ -13,7 +13,7 @@
 //   本库的初始内容**来自**注册表（首次访问时按 builtin 种进去），之后库就是真相。
 // ============================================================
 
-import { getDb, schema, and, eq, saveToDisk } from '@novel/db';
+import { getDb, schema, and, or, eq, isNull, saveToDisk } from '@novel/db';
 import { getAllSkills } from '../ai/agents/skills.js';
 import { getSkillTarget, listSkillTargets } from '../ai/agents/skill-targets.js';
 
@@ -32,6 +32,13 @@ export interface LibrarySkill {
   systemPrompt: string;
   contextKeys: string[];
   source: 'builtin' | 'installed';
+  /**
+   * 归属可见性：
+   *   'public'  = 内置 / 插件带 —— 所有用户可见，谁都能删（影响所有人）
+   *   'private' = 当前用户自己上传的 —— 只有本人可见、只有本人能删
+   * 由 `user_id` 是否为 NULL 推出，不下发 raw userId。
+   */
+  visibility: 'public' | 'private';
   createdAt: number;
   updatedAt: number;
 }
@@ -94,6 +101,9 @@ function rowToSkill(r: Record<string, unknown>): LibrarySkill {
     systemPrompt: String(r.systemPrompt ?? ''),
     contextKeys: parseContextKeys(r.contextKeys),
     source: (String(r.source) === 'builtin' ? 'builtin' : 'installed'),
+    // ★ 2026-09-17：公共（内置/插件带，谁都能删）还是私有（我上传的，只有我能删）。
+    //   前端据此决定删除按钮是否可点 —— 不用把 raw userId 下发出去。
+    visibility: r.userId ? 'private' : 'public',
     createdAt: toSeconds(r.createdAt),
     updatedAt: toSeconds(r.updatedAt),
   };
@@ -147,11 +157,23 @@ export async function ensureSeeded(): Promise<number> {
 
 // ---- 读 ----
 
-export async function listLibrary(): Promise<LibrarySkill[]> {
+/**
+ * 可见的技能 = **公共的**（`user_id IS NULL`，内置 / 插件带）+ **自己的**（`user_id = 我`）。
+ *
+ * ★ 2026-09-17：原来是无条件全表读（库是全局的）。作者口径修订后，
+ *   用户自己上传的技能是私有财产 —— 别人既看不到、也删不掉。
+ *   不传 userId 时只返回公共技能（内部调用/种子检查用）。
+ */
+export async function listLibrary(userId?: string): Promise<LibrarySkill[]> {
   await ensureSeeded();
   const db = getDb();
   if (!db) return [];
-  const rows = await db.select().from(schema.skillLibrary).orderBy(schema.skillLibrary.name);
+  const visible = userId
+    ? or(isNull(schema.skillLibrary.userId), eq(schema.skillLibrary.userId, userId))
+    : isNull(schema.skillLibrary.userId);
+  const rows = await db.select().from(schema.skillLibrary)
+    .where(visible)
+    .orderBy(schema.skillLibrary.name);
   return rows.map((r) => rowToSkill(r as unknown as Record<string, unknown>));
 }
 
@@ -183,7 +205,7 @@ async function toggleMap(userId: string, agentId: string): Promise<Map<string, b
 }
 
 export async function listTargets(userId: string): Promise<SkillTargetView[]> {
-  const all = await listLibrary();
+  const all = await listLibrary(userId);
   const targets = listSkillTargets();
   const out: SkillTargetView[] = [];
   for (const t of targets) {
@@ -201,7 +223,7 @@ export async function listTargets(userId: string): Promise<SkillTargetView[]> {
 export async function getTargetSkills(agentId: string, userId: string): Promise<TargetSkillsView | null> {
   const target = listSkillTargets().find((t) => t.id === agentId);
   if (!target) return null;
-  const all = await listLibrary();
+  const all = await listLibrary(userId);
   const mine = all.filter((s) => belongsToAgent(s, agentId));
   const toggles = await toggleMap(userId, agentId);
   const skills = mine.map((s) => ({
@@ -224,8 +246,8 @@ export async function getTargetSkills(agentId: string, userId: string): Promise<
  * 没有这个检查，作者装了技能、界面却永远不显示，而且**完全不知道为什么** ——
  * 这类"配了但看不见"最难查，所以直接摆在接口里。
  */
-export async function listOrphanOwners(): Promise<OrphanOwner[]> {
-  const all = await listLibrary();
+export async function listOrphanOwners(userId?: string): Promise<OrphanOwner[]> {
+  const all = await listLibrary(userId);
   const known = new Set(listSkillTargets().map((t) => t.id));
   const acc = new Map<string, string[]>();
   for (const s of all) {
@@ -252,12 +274,12 @@ export interface InstallSkillInput {
 }
 
 /** 安装（已存在则覆盖 —— 这是"重装"，仍不提供就地编辑正文的接口） */
-export async function installSkill(input: InstallSkillInput): Promise<LibrarySkill> {
+export async function installSkill(input: InstallSkillInput, userId?: string): Promise<LibrarySkill> {
   const db = getDb();
   if (!db) throw new Error('数据库不可用');
-  const id = input.id.trim();
-  if (!id) throw new Error('技能 id 不能为空');
-  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(id)) {
+  const rawId = input.id.trim();
+  if (!rawId) throw new Error('技能 id 不能为空');
+  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(rawId)) {
     throw new Error('技能 id 只能用字母、数字、点、下划线、连字符');
   }
   if (input.category === 'agent' && !input.ownerAgent) {
@@ -266,10 +288,15 @@ export async function installSkill(input: InstallSkillInput): Promise<LibrarySki
   if (input.ownerAgent && !getSkillTarget(input.ownerAgent)) {
     throw new Error(`未知智能体 ${input.ownerAgent}（清单里没有它，装了也看不见）`);
   }
+  // ★ 2026-09-17：带 userId = 用户私有（id 加命名空间避开主键冲突）；
+  //   不带 = 公共（种子/内置路径），id 保持原样。
+  //   为什么用前缀而不是复合主键：与 agent_skill_toggles.id 同款理由 ——
+  //   「直接当主键，避免依赖复合唯一索引的实现差异」。
+  const id = userId ? `${userId}:${rawId}` : rawId;
   const now = new Date();
   const values = {
     id,
-    name: input.name.trim() || id,
+    name: input.name.trim() || rawId,
     description: input.description?.trim() ?? '',
     color: input.color?.trim() || '#94a3b8',
     iconKey: input.iconKey?.trim() || 'sparkles',
@@ -278,6 +305,7 @@ export async function installSkill(input: InstallSkillInput): Promise<LibrarySki
     systemPrompt: input.systemPrompt ?? '',
     contextKeys: JSON.stringify(input.contextKeys ?? []),
     source: 'installed' as const,
+    userId: userId ?? null,
     createdAt: now,
     updatedAt: now,
   };
@@ -306,12 +334,17 @@ export async function installSkill(input: InstallSkillInput): Promise<LibrarySki
  * ★ 同时删掉所有用户对它的开关记录 —— 留着就是垃圾行，
  *   而且技能重装回来后会被旧开关的残留状态影响（那种"明明重装了却是关的"最难查）。
  */
-export async function removeSkill(id: string): Promise<boolean> {
+export async function removeSkill(id: string, userId?: string): Promise<boolean> {
   const db = getDb();
   if (!db) return false;
-  const rows = await db.select({ id: schema.skillLibrary.id }).from(schema.skillLibrary)
+  const rows = await db.select({ id: schema.skillLibrary.id, userId: schema.skillLibrary.userId })
+    .from(schema.skillLibrary)
     .where(eq(schema.skillLibrary.id, id)).limit(1);
-  if (rows.length === 0) return false;
+  const row = rows[0];
+  if (!row) return false;
+  // ★ 2026-09-17：私有技能只有主人能删。
+  //   公共技能（userId=null）保持原口径 —— 谁都能删、影响所有人（见 skills-library.md 第 56 行）。
+  if (row.userId && row.userId !== userId) return false;
   await db.delete(schema.agentSkillToggles).where(eq(schema.agentSkillToggles.skillId, id));
   await db.delete(schema.skillLibrary).where(eq(schema.skillLibrary.id, id));
   await saveToDisk(true);
@@ -372,7 +405,8 @@ export async function listEnabledSkills(agentId: string, userId?: string): Promi
   const db = getDb();
   if (!db || !userId) return [];          // 没有用户身份就无从查开关（开关是按用户存的）
   if (!getSkillTarget(agentId)) return []; // 未声明的智能体：不必查库
-  const rows = await db.select().from(schema.skillLibrary);
+  const rows = await db.select().from(schema.skillLibrary)
+    .where(or(isNull(schema.skillLibrary.userId), eq(schema.skillLibrary.userId, userId)));
   const skills = rows.map((r) => rowToSkill(r as unknown as Record<string, unknown>));
   const toggles = await toggleMap(userId, agentId);
   return skills

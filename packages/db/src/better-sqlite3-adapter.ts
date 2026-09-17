@@ -415,10 +415,12 @@ function bootstrapTables(sqlite: any): void {
       system_prompt TEXT DEFAULT '' NOT NULL,
       context_keys TEXT DEFAULT '[]' NOT NULL,
       source TEXT DEFAULT 'installed' NOT NULL,
+      user_id TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     )`,
     `CREATE INDEX IF NOT EXISTS idx_skill_library_category ON skill_library(category, owner_agent)`,
+    `CREATE INDEX IF NOT EXISTS idx_skill_library_user ON skill_library(user_id)`,
     `CREATE TABLE IF NOT EXISTS agent_skill_toggles (
       id TEXT PRIMARY KEY NOT NULL,
       user_id TEXT NOT NULL,
@@ -784,6 +786,20 @@ async function applyCompatPatches(sqlite: any): Promise<void> {
     }
   } catch (e) {
     console.warn('[better-sqlite3] 检查 users.is_admin 失败:', e);
+  }
+
+  // 9. skill_library.user_id（技能归属：NULL=公共，非空=该用户私有）
+  //    ★ 2026-09-17 加。已有的 11 条 builtin 技能保持 NULL（=公共），无需回填 ——
+  //      这正是"只有公共插件才是全局的"这条口径的落地。
+  try {
+    if (hasTable('skill_library') && !hasColumn('skill_library', 'user_id')) {
+      console.log('[better-sqlite3] skill_library 表缺少 user_id 列，正在添加...');
+      sqlite.exec('ALTER TABLE skill_library ADD COLUMN user_id TEXT');
+      sqlite.exec('CREATE INDEX IF NOT EXISTS idx_skill_library_user ON skill_library(user_id)');
+      console.log('[better-sqlite3] skill_library.user_id 已添加（已有技能保持 NULL=公共）。');
+    }
+  } catch (e) {
+    console.warn('[better-sqlite3] 检查 skill_library.user_id 失败:', e);
   }
 }
 
