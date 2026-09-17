@@ -1,4 +1,49 @@
-# ⛔ 未完成：全量写作流程跑不通（推理模型兼容问题）
+# ✅ 已修复 · 全量写作流程跑不通（输出预算被思考打穿）
+
+> ## ✅ 已解决（2026-09-17）—— 以下原文**保留作现场记录**，勿删
+>
+> ### 真因（裸测 + 故障注入双向坐实）
+> `max_tokens` 被服务商**严格遵守**，而推理模型 `glm-5.3-flash` 的**思考 token 也计入该上限**、
+> 且波动极大。同一 system、同一输入、`temperature=0` 的三档裸测：
+>
+> | max_tokens | reasoning | content | finish_reason |
+> |---|---|---|---|
+> | 256 | 254 token（吃光） | **0 字** | `length` |
+> | 8192 | 4787 token | 1110 字 | `stop` |
+> | 16384 | 5529 token | 1288 字 | `stop` |
+>
+> 另抽到过 reasoning 只用 26 token 的样本 —— **波动达两个数量级**，所以「某个值够用」是错觉。
+> 某一轮思考吃满额度时，中转站回 `content: null`，SDK 的 `turnResolution` 便认为
+> 「这一轮没结束」→ `next_step_run_again` → 空转 → `Max turns (N) exceeded` → **整段作废**。
+>
+> ### 修法（两层，已落库）
+> 1. **提预算**（降低触发率）：`STAGE_SPEAK_MAX_TOKENS` 8192 → 16384，
+>    `apps/plugins/local/novel.autowrite/server/pipeline/roles-phase.ts`
+> 2. **加护栏**（消除"整段作废"这个脆弱点，关键）：宿主层识别「轮次耗尽且全程零正文」
+>    → 以 2 倍预算 + 「请直接作答」提示重试一次。
+>    `apps/server/src/plugin/host.ts` 的 `isStarvationFailure` / `retryBudgetOf` / `STARVATION_RETRY_HINT`
+>
+> ⚠️ **判定踩过的坑**（值得记住）：最初写成「零正文 **且** 零工具调用」，结果漏掉了真实的一类现场 ——
+> **带工具的发言人**（设定管家）会先成功查一次库（`tool=true`），之后每轮都拿不到正文。
+> 故障注入实测原文就是 `设定管家 → Max turns (6) exceeded`，当时代码把它当"工具循环"放行了。
+> **判据只看「全程零正文」**：正常的工具流程最后一定会产出正文，不会误触发。
+>
+> ### 验证证据（故障注入：把预算压到 256，人为放大空转）
+> 三次触发自救、**三次全部救回**：
+> 设定管家（6 轮零正文，有工具调用）→ 457 字 ｜ 角色设计师（4 轮）→ 1410 字 ｜
+> 定稿官（4 轮）→ **1711 字《角色与节奏宪章》**；cast 段正常停在 `awaiting_user`。
+> 修复前这类现场是**整段作废**。
+> 单测：`apps/server/src/__tests__/subagent-budget-recovery.test.ts`（17 例，纯函数、零模型成本）。
+>
+> ### 本文以下内容的现状
+> - §3「下一步该做什么」**已全部执行完**，保留作历史对照。
+> - §2.1「死在 cast 第 5 个发言人」属实（已复现），但**探针项目后来已经推进到 plot 全部批准**
+>   （见 `data/projects/8375f0b9-*.db`：brief/cast/bible/plot 均 approved、stages.*.sinked=true），
+>   本文写于 plot 批准之后 —— 这条状态已过期。
+>   （该库 `characters: 0` 不是 bug：它的 brief 是 `111/1111` 占位符，定稿官照实产出"骨架版"，抽不出人名。）
+> - §5.2 的 `turnsFor` 2→4 仍保留（能多产出真实发言），但现在它只是第二道防线，第一道是护栏。
+
+---
 
 > **这份文档是给下一个接手的人（或 AI）的。**
 > 任务本身**没有完成** —— 流水线在第 2 阶段就断，我查到了直接原因并修了两处真 bug，
@@ -8,13 +53,14 @@
 
 ---
 
-## 0. 一句话现状
+## 0. 一句话现状（⚠️ 历史快照 —— 已修复，见顶部横幅）
 
 **写作流水线（`novel.autowrite` 的 pipeline）无法用当前配置的模型跑完。**
 `brief` 阶段能过，`cast` 阶段跑到第 5 个发言人就被 `Max turns (4) exceeded` 打断。
 
 **最可疑的根因**：配置的模型 `glm-5.3-flash` 会返回 **`content: null`**（只出 `reasoning_content`），
 导致 `@openai/agents-core` 认为"没拿到最终输出"而继续循环，直到耗尽轮次预算。
+→ **这个方向是对的，已坐实**（真因是"思考 token 计入 max_tokens 且某轮吃满"）。
 
 ---
 
