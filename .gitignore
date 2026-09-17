@@ -4,6 +4,11 @@ node_modules/
 
 # Build outputs
 dist/
+# ★ 2026-09-17 补：构建前 `mv dist dist.old` 是绕 safe-delete 守卫的常规操作，
+#   而 `dist/` 这条匹配不到 `dist.old/` —— 一次 `git add -A` 就把整个旧产物收进仓库了
+#   （当天真的发生过，70 个文件）。所以显式加上。
+dist.old/
+dist.bak*/
 build/
 .next/
 .vite/

@@ -127,7 +127,13 @@ export function AgentSkillsPanel() {
   }, [loadTargets, loadLibrary, tab]);
 
   const handleDelete = useCallback(async (skill: LibrarySkill) => {
-    if (!window.confirm(`从技能库删除「${skill.name}」？\n\n这会同时清掉所有智能体对它的开关记录。`)) return;
+    // ★ 2026-09-17：公共技能删了**影响所有用户**，私有技能只影响自己 ——
+    //   两者风险差一个量级，确认文案必须分开写，否则等于没提醒。
+    const isPublic = (skill.visibility ?? 'public') === 'public';
+    const warn = isPublic
+      ? `⚠️ 这是**公共技能**（内置 / 插件带）。\n删除后**所有用户**都会失去它，且不会自动恢复。`
+      : `这是你自己的技能，删除后只影响你自己。`;
+    if (!window.confirm(`从技能库删除「${skill.name}」？\n\n${warn}\n\n（同时会清掉所有智能体对它的开关记录）`)) return;
     setPendingDelete(skill.id);
     try {
       await removeSkillFromLibrary(skill.id);
@@ -168,7 +174,15 @@ export function AgentSkillsPanel() {
             <div key={s.id} className="flex items-center gap-2 rounded-xl px-2 py-1.5 border" data-skill={s.id}>
               <Icon size={14} style={{ color: s.color }} className="shrink-0" aria-hidden="true" />
               <div className="min-w-0 flex-1">
-                <div className="text-[12px] font-medium truncate">{s.name}</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[12px] font-medium truncate">{s.name}</span>
+                  {/* ★ 公共 / 私有必须一眼可辨：删公共技能会影响所有用户 */}
+                  {(s.visibility ?? 'public') === 'public' ? (
+                    <span className="shrink-0 text-[10px] px-1 rounded bg-muted text-muted-foreground" title="内置 / 插件带，所有用户可见">公共</span>
+                  ) : (
+                    <span className="shrink-0 text-[10px] px-1 rounded" style={{ background: 'hsl(var(--mountain-cyan) / 0.12)', color: 'hsl(var(--mountain-cyan))' }} title="你自己上传的，只有你能看到">私有</span>
+                  )}
+                </div>
                 <div className="text-[11px] text-muted-foreground truncate">
                   {s.ownerAgentName ? `归属 ${s.ownerAgentName}` : (s.category === 'assistant' ? '归属 对话智能体' : '未归属')}
                   {s.description ? ` · ${s.description}` : ''}
@@ -179,7 +193,7 @@ export function AgentSkillsPanel() {
                 disabled={pendingDelete === s.id}
                 className="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-40"
                 aria-label={`删除技能 ${s.name}`}
-                title="从技能库删除"
+                title={(s.visibility ?? 'public') === 'public' ? '删除（公共技能，影响所有用户）' : '删除（你自己的技能）'}
               >
                 {pendingDelete === s.id
                   ? <Loader2 size={12} className="animate-spin" aria-hidden="true" />

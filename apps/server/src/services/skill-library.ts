@@ -122,7 +122,10 @@ function rowToSkill(r: Record<string, unknown>): LibrarySkill {
 export async function ensureSeeded(): Promise<number> {
   const db = getDb();
   if (!db) return 0;
-  const existing = await db.select({ id: schema.skillLibrary.id }).from(schema.skillLibrary).limit(1);
+  // ★ 判据是「**没有公共技能**」而不是「表为空」——加了私有归属后，
+  //   用户自己装的技能也会占着表行，用 length>0 会把内置技能永久挡在门外。
+  const existing = await db.select({ id: schema.skillLibrary.id }).from(schema.skillLibrary)
+    .where(isNull(schema.skillLibrary.userId)).limit(1);
   if (existing.length > 0) return 0;
 
   const registry = getAllSkills();
@@ -359,7 +362,10 @@ export async function setToggle(o: {
   const db = getDb();
   if (!db) throw new Error('数据库不可用');
   if (!getSkillTarget(o.agentId)) throw new Error(`未知智能体 ${o.agentId}`);
-  const all = await listLibrary();
+  // ★ 必须带 userId：不带时 listLibrary 只返回**公共**技能，
+  //   于是用户自己装的私有技能在这里查不到 → 抛「技能库中没有 xxx」→ **私有技能开不了**。
+  //   （2026-09-17 加归属后漏改这一处，属于功能性回归。）
+  const all = await listLibrary(o.userId);
   const skill = all.find((s) => s.id === o.skillId);
   if (!skill) throw new Error(`技能库中没有 ${o.skillId}`);
   if (!belongsToAgent(skill, o.agentId)) {
