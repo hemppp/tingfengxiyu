@@ -288,11 +288,25 @@ export function FloatingBubbles({ panels, openKeys, onToggle }: FloatingBubblesP
       )
     : Infinity;
   const proseMaxR = Number.isFinite(proseR) ? Math.max(BUBBLE, proseR) : Infinity;
-  // ③ 满足最小弦长所需的半径。
-  //   ★ 半径被 ①② 压到 ③ 以下时气泡必然偏挤 —— 这是**有意取舍**：
-  //     正文可读性优先于轮盘美观，宁可气泡挤一点也不去压字。
+  // ③ 满足最小弦长所需的半径
   const neededR = Math.max(130, Math.ceil(MIN_CHORD / (2 * Math.sin(step / 2))));
-  const radius = Math.max(BUBBLE, Math.min(edgeR, proseMaxR, neededR));
+
+  // ★ 避让正文 与 气泡不重叠 二者不可兼得时，**优先不重叠**（2026-09-16 老大拍板）。
+  //
+  //   为什么会有"不可兼得"：窄屏左侧的空档根本放不下 16 个直径 44px 的气泡 ——
+  //   900px 下可用半径上限只有 125px，而铺满半圆需要 240px（差近一倍；520px 差 7 倍）。
+  //   强行避让的后果是气泡叠成一团（实测间隙 −17.9px），16 个气泡糊在一起根本选不中，
+  //   比"盖住几行字"更糟。
+  //
+  //   为什么可以接受压正文：轮盘是**悬停才展开、移开 280ms 就收**的瞬时菜单 ——
+  //   展开那几百毫秒里用户在挑面板，不是在读正文。
+  //
+  //   宽屏（≥1200px）两者都能满足，仍然完整避让、不碰正文。
+  const canAvoid = proseMaxR >= neededR;
+  const radius = Math.max(
+    BUBBLE,
+    Math.min(edgeR, canAvoid ? proseMaxR : Infinity, neededR),
+  );
 
   const hubClick = (key: string) => {
     onToggle(key);
