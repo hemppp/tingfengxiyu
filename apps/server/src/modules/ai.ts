@@ -17,6 +17,7 @@ import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { getProvider, type AIConfig, configLoaders, applyBuiltinRelayFallback } from '../ai/providers/provider-factory.js';
 import { isBuiltinRelayKey, BUILTIN_RELAY_LABEL } from '../lib/builtin-relay.js';
+import { ensureConfigMiddleware } from '../ai/user-config-loader.js';
 import { getDb, schema, eq, saveToDisk } from '@novel/db';
 import { getActiveProxy } from '../lib/proxy-agent.js';
 import {
@@ -306,50 +307,10 @@ async function getChatStream(userId?: string) {
   return provider.chatStream.bind(provider);
 }
 
-/**
- * 确保用户的 AI 配置 loader 已注册。
- * 解决问题：POST /config 设置的 loader 只存在内存中，server 重启或首次访问时
- * configLoaders.get(user.id) 为 undefined，导致 /gateway /chat 等路由回退到
- * 环境变量（apiKey 为空），AI 请求必然失败。
- * 此中间件在 loader 不存在时从数据库读取用户配置并注册 loader。
- */
-async function ensureUserConfigLoader(userId: string): Promise<void> {
-  if (configLoaders.has(userId)) return;
-  const db = getDb();
-  if (!db) return;
-  try {
-    const rows = db.select({ aiProviderConfig: schema.userSettings.aiProviderConfig })
-      .from(schema.userSettings)
-      .where(eq(schema.userSettings.userId, userId))
-      .all();
-    const cfg = rows.length > 0 && rows[0]?.aiProviderConfig
-      ? rows[0].aiProviderConfig as { baseUrl?: string; apiKey?: string; model?: string; provider?: string }
-      : {};
-    // 注册 loader（即使 cfg 为空，loader 也会回退到环境变量）
-    setConfigLoader(userId, async () => applyBuiltinRelayFallback({
-      baseUrl: cfg.baseUrl || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
-      apiKey: cfg.apiKey || process.env.OPENAI_API_KEY || '',
-      model: cfg.model || process.env.OPENAI_MODEL || 'gpt-4-turbo',
-      provider: (cfg.provider as 'openai' | 'ollama' | 'custom') || 'openai',
-    }));
-    // 诊断日志：打印配置概要（隐藏 apiKey 中间部分）
-    const maskedKey = cfg.apiKey
-      ? `${cfg.apiKey.slice(0, 6)}...${cfg.apiKey.slice(-4)}`
-      : '(空)';
-    console.log(`[AI Config] 用户 ${userId} 配置: baseUrl=${cfg.baseUrl || '(默认)'}, model=${cfg.model || '(默认)'}, provider=${cfg.provider || 'openai'}, apiKey=${maskedKey}`);
-  } catch (e) {
-    console.warn(`[AI Config] 初始化用户 ${userId} 配置 loader 失败:`, e);
-  }
-}
-
-/** 中间件：在 AI 路由前确保用户配置 loader 已注册（必须在 requireAuth 之后挂载） */
-const ensureConfigMiddleware = async (c: Context, next: Next) => {
-  const user = c.get('user');
-  if (user?.id) {
-    await ensureUserConfigLoader(user.id);
-  }
-  await next();
-};
+// ★ `ensureUserConfigLoader` / `ensureConfigMiddleware` 已抽到
+//   `../ai/user-config-loader.js` —— 因为**插件路由也要用**（见该文件头的踩坑记录：
+//   讨论走 /api/plugins/*，以前不过这个中间件，配置静默回退到内置站模型，
+//   结果思维链永远是空的）。此处改为 import，别再在本地重新定义一份。
 
 type AuthorizedProject =
   | { ok: true; projectId: string }

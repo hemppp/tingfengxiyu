@@ -39,6 +39,7 @@ import { declareSkillTarget, undeclareSkillTarget, listSkillTargets } from '../a
 import { listEnabledSkills } from '../services/skill-library.js';
 import { Agent, Runner } from '@openai/agents';
 import { getAIConfig } from '../ai/providers/provider-factory.js';
+import { ensureConfigMiddleware } from '../ai/user-config-loader.js';
 import { getSdkProvider, runWithThinkingSink } from '../ai/agents/sdk/provider.js';
 import { getAllSdkTools, type NovelAgentContext } from '../ai/agents/sdk/tools.js';
 import { createSqliteKvService } from './kv-service.js';
@@ -199,6 +200,12 @@ export function createServerPluginHost(options: ServerPluginHostOptions = {}): S
         if (prefix.startsWith('/api/plugins/')) {
           const guarded = new Hono();
           guarded.use('*', requireAuth as never);
+          // ★ 插件路由也必须先注册用户的 AI 配置 loader（2026-09-17 加）。
+          //   插件里大量路由会调 AI（如 autowrite 的讨论 / 连写），而
+          //   `ensureConfigMiddleware` 原先只挂在 /api/ai/* 上 —— 用户不进设置页时
+          //   loader 就没注册，`getAIConfig(userId)` 静默回退到内置公益中转站。
+          //   表现：讨论照跑、但模型被悄悄换掉（思维链因此永远是空的）。
+          guarded.use('*', ensureConfigMiddleware as never);
           guarded.use('*', async (c, next) => {
             const projectId = c.req.header('X-Project-Id');
             if (projectId) {
