@@ -1,7 +1,6 @@
 <!--
 NovelMuse PR 模板
-配套：docs/code-review/STANDARD.md（检查清单）与 PROCESS.md（流程）
-提交前请完成 Definition of Ready 自检；reviewer 将按 STANDARD 逐项审查。
+提交前请完成 Author 自检（Definition of Ready）与安全自查；reviewer 按本模板逐项审查。
 -->
 
 ## 改动摘要（必填）
@@ -29,7 +28,7 @@ NovelMuse PR 模板
 - [ ] 相关测试 `pnpm --filter @novel/web test` 通过（server/agents 如有测试也需过）
 - [ ] 接口变更已同步 `@novel/shared` 类型与前端调用
 - [ ] Drizzle schema 变更已生成迁移
-- [ ] 已对照 STANDARD.md 自查，已知 🟡 已登记 follow-up issue
+- [ ] 已知问题（🟡）已登记 follow-up issue
 
 ## 安全自查（🔴 重点，漏审会阻塞合并）
 - [ ] 所有访问他人数据的接口都走了 `verifyProjectOwnership`
