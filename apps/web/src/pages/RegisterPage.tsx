@@ -225,7 +225,7 @@ export function RegisterPage() {
             className="nm-hero-title mb-2 select-none cursor-pointer"
             onClick={() => navigate('/')}
           >
-            NovelMuse
+            听风细雨
           </h1>
           <p className="nm-hero-quote">以笔为舟 · 思绪如雨</p>
         </div>

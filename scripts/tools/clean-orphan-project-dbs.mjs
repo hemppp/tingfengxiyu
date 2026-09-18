@@ -17,6 +17,12 @@
 //   `proj-mig-exists-<runId>.db` / `proj-mig-future-<runId>.db` —— 不是 UUID，
 //   被整批跳过，脚本还会理直气壮地报「没有孤儿项目库 ✓」。
 //   现在分三类处理（见下方 THREE KINDS），**非 UUID 的也不会再静默消失**。
+//
+// ★ 2026-09-17 再修一个（同一天、同一类「静默跳过」的毛病）：原主循环
+//   `if (!entry.endsWith('.db')) continue;` **只遍历 `*.db`**，于是「.db 已经不在了、
+//   只剩 -wal / -shm / -journal」的残留，在 `--list` 和执行里**都**看不见，
+//   脚本还会报「没有待清理的库文件 ✓」。而这种"只剩散件"恰恰是 server 运行中删库失败、
+//   或进程中途被杀留下的典型形态。现在按基名聚合成组（见 groups），散件与 .db 同进同出。
 // ============================================================
 
 import Database from 'better-sqlite3';
@@ -42,8 +48,8 @@ const dryRun = process.argv.includes('--list');
  */
 const TEST_PREFIXES = ['entity-sink-test-', 'memory-test-', 'proj-mig-exists-', 'proj-mig-future-'];
 
-/** 库文件的三件套后缀 */
-const SUFFIXES = ['', '-shm', '-wal'];
+/** 库文件的后缀（三件套 + SQLite 回滚日志） */
+const SUFFIXES = ['', '-shm', '-wal', '-journal'];
 
 const db = new Database(MAIN_DB, { readonly: true });
 const alive = new Set(db.prepare('select id from projects').all().map((r) => r.id));
@@ -63,25 +69,40 @@ function chapterCount(basePath) {
 }
 
 // ---- 分三类 ----
+// ★ 2026-09-17 补盲区（第二个）：原实现 `if (!entry.endsWith('.db')) continue;` **只遍历 .db**，
+//   于是「.db 已经被删掉、只剩 -wal / -shm / -journal」的残留永远清不到 ——
+//   而 server 运行中删库失败、或进程中途被杀，产出的恰恰就是这种"只剩散件"的状态。
+//   实测撞到两组（13d8b52b / af541394 只有 -shm+-wal）与一个 -journal，脚本却报「没有待清理 ✓」。
+//   现在按**基名**聚合：`X.db` / `X.db-shm` / `X.db-wal` / `X.db-journal` 视为同一组，
+//   组内只要没有活着的项目就一起进清理清单。
+/** 一个库文件组：基名 + .db 路径 + 散件（-shm/-wal/-journal） */
 const orphans = [];        // ① UUID 命名 + 主库查不到 → 直接清（原行为）
 const testArtifacts = [];  // ② 测试前缀 → 核对 chapters=0 后清
 const unknown = [];        // ③ 其他非 UUID → **只列出让人确认，绝不自动删**
 
+/** base → { base, full, sidecars } */
+const groups = new Map();
 for (const entry of fs.readdirSync(PROJECT_DIR)) {
-  if (!entry.endsWith('.db')) continue;
-  const base = entry.slice(0, -3);
-  const full = path.join(PROJECT_DIR, entry);
+  const m = /^(.*)\.db(-shm|-wal|-journal)?$/.exec(entry);
+  if (!m) continue;
+  const base = m[1];
+  const g = groups.get(base) ?? { base, full: path.join(PROJECT_DIR, `${base}.db`), sidecars: [] };
+  if (m[2]) g.sidecars.push(path.join(PROJECT_DIR, entry));
+  groups.set(base, g);
+}
 
-  if (/^[0-9a-f-]{36}$/i.test(base)) {
-    if (!alive.has(base)) orphans.push(full);
+for (const g of groups.values()) {
+  if (g.base.startsWith('.')) continue; // 隐藏文件跳过
+  if (/^[0-9a-f-]{36}$/i.test(g.base)) {
+    // 主库查得到 = 在用的书 → **连它的散件一起保护**（不动）
+    if (!alive.has(g.base)) orphans.push(g);
     continue;
   }
-  if (TEST_PREFIXES.some((p) => base.startsWith(p))) {
-    testArtifacts.push({ base, full });
+  if (TEST_PREFIXES.some((p) => g.base.startsWith(p))) {
+    testArtifacts.push(g);
     continue;
   }
-  if (base.startsWith('.')) continue; // 隐藏文件跳过
-  unknown.push(full);
+  unknown.push(g);
 }
 
 // ② 逐个核对章节数：非 0 的**不删**，转人工确认
@@ -95,7 +116,8 @@ for (const t of testArtifacts) {
 
 // 展开成三件套
 const targets = [
-  ...orphans,
+  // 孤儿：.db 可能早就不在了（只剩散件），所以 .db 与散件一起展开
+  ...orphans.flatMap((g) => [g.full, ...g.sidecars]),
   ...safeTestArtifacts.flatMap((t) => SUFFIXES.map((s) => `${t.full}${s}`)),
 ].filter((f) => fs.existsSync(f));
 
@@ -105,8 +127,11 @@ if (targets.length === 0 && unknown.length === 0 && suspicious.length === 0) {
 }
 
 if (orphans.length) {
-  console.log(`===== ① 孤儿项目库（主库已无对应项目，${orphans.length} 个）=====`);
-  for (const f of orphans) console.log(`  ${f}`);
+  console.log(`===== ① 孤儿项目库（主库已无对应项目，${orphans.length} 组）=====`);
+  for (const g of orphans) {
+    const files = [g.full, ...g.sidecars].filter((f) => fs.existsSync(f)).map((f) => path.basename(f));
+    console.log(`  ${g.base}  →  ${files.join(' , ')}`);
+  }
 }
 if (safeTestArtifacts.length) {
   console.log(`\n===== ② 单测产物（chapters=0 已核对，${safeTestArtifacts.length} 个）=====`);
@@ -117,8 +142,11 @@ if (suspicious.length) {
   for (const f of suspicious) console.log(`  ${f}`);
 }
 if (unknown.length) {
-  console.log(`\n===== ⚠️ 非 UUID 也非已知测试前缀，未删，请人工确认（${unknown.length} 个）=====`);
-  for (const f of unknown) console.log(`  ${f}`);
+  console.log(`\n===== ⚠️ 非 UUID 也非已知测试前缀，未删，请人工确认（${unknown.length} 组）=====`);
+  for (const g of unknown) {
+    const files = [g.full, ...g.sidecars].filter((f) => fs.existsSync(f)).map((f) => path.basename(f));
+    console.log(`  ${g.base}  →  ${files.join(' , ')}`);
+  }
 }
 console.log(`\n在用项目（会保留）: ${[...alive].length} 个`);
 

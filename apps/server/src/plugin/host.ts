@@ -37,7 +37,7 @@ import { registerTool, unregisterTool, getAllToolDefinitions, markPluginTool } f
 import { registerSkill, unregisterSkill, SKILLS } from '../ai/agents/skills.js';
 import { declareSkillTarget, undeclareSkillTarget, listSkillTargets } from '../ai/agents/skill-targets.js';
 import { listEnabledSkills } from '../services/skill-library.js';
-import { Agent, Runner } from '@openai/agents';
+import { Agent, Runner, MaxTurnsExceededError } from '@openai/agents';
 import { getAIConfig } from '../ai/providers/provider-factory.js';
 import { ensureConfigMiddleware } from '../ai/user-config-loader.js';
 import { getSdkProvider, runWithThinkingSink } from '../ai/agents/sdk/provider.js';
@@ -124,6 +124,69 @@ export function builtinEntry(
 // ============================================================
 // 宿主装配
 // ============================================================
+
+// ============================================================
+// 子代理「输出预算被打穿」的取证与补救（2026-09-17）
+//
+// 为什么抽到模块顶层：这三样分别决定「要不要重试」与「重试给多少预算」——
+// 判错一边的代价都是实打实的（重试盖住真错误，或整段白跑），必须能被单测钉住；
+// 埋在 createServerPluginHost 的闭包里就测不到了。
+// 与 sdk/provider.ts 把 reasoningDeltaOf 抽出来的理由完全一致。
+// ============================================================
+
+/**
+ * 空转取证：从 SDK 的**公开流事件**判断这次 run 有没有产出过正文 / 发起过工具调用。
+ *
+ * 为什么需要它：推理模型的思考 token 也计入 max_tokens。某一轮思考一旦吃满额度，
+ * 中转站会回 `content: null` + `finish_reason: length`，SDK 的 turnResolution 便认为
+ * 「这一轮没结束」→ `next_step_run_again` → 再跑一轮 → …… 直到 `Max turns (N) exceeded`，
+ * **整次调用作废**。2026-09-17 实测：cast 段前 4 个发言人全部正常，第 5 个「定稿官」
+ * （要吞下整段 transcript，输入最长）就死在这里。
+ * 用事件名（events.d.ts 的 RunItemStreamEventName）判断而**不读 SDK 私有字段** ——
+ * 将来升级 SDK 最坏退化成「判不出来 = 不重试」，不会误判。
+ */
+export function noteStreamEvidence(ev: unknown, saw: { text: boolean; tool: boolean }): void {
+  const e = ev as { type?: string; name?: string };
+  if (e?.type !== 'run_item_stream_event') return;
+  if (e.name === 'message_output_created') saw.text = true;
+  else if (e.name === 'tool_called' || e.name === 'tool_search_called') saw.tool = true;
+}
+
+/**
+ * 补救轮的 system 追加语。
+ *
+ * 为什么这句话有用：推理模型额度告急时，「先出答案、别展开」这类指令能明显压缩 reasoning
+ * —— 同一个模型、同一个任务、同一个 temperature，reasoning 实测能在 4787 token 与 26 token
+ * 之间波动，说明它**是可被指令影响的**。补救轮只许成功，宁可牺牲一点思考深度也要先拿到正文。
+ */
+export const STARVATION_RETRY_HINT = [
+  '【输出预算告急 · 本次请直接作答】',
+  '你上一轮的推理占满了全部输出额度，最终一个字都没有产出。',
+  '这一次请**先写出最终答案**，把推理压到最短：不要复述任务、不要罗列思路、不要自我检查。',
+].join('\n');
+
+/**
+ * 这次失败是否属于「轮次耗尽、但全程一个字正文都没产出」——也就是需要补救的那一类。
+ *
+ * ★ 为什么判定**只看 `saw.text`，不看 `saw.tool`**（2026-09-17 故障注入实测修正）：
+ *   最初写成「零正文 **且** 零工具调用」，结果漏掉了真实的一类现场 ——
+ *   **带工具的发言人**（如设定管家）预算被打穿时会先成功调一次查库工具
+ *   （于是 `saw.tool=true`），之后每轮都拿不到正文，直到轮次耗尽。
+ *   注入实测原文：`设定管家 → Max turns (6) exceeded`，而当时代码把它当"工具循环"放行了。
+ *   反过来，**正常的工具流程最后一定会产出正文**（模型拿到工具结果后作答）⇒ `saw.text=true`
+ *   ⇒ 不会误触发补救。所以「全程零正文」本身就是充分且必要的判据。
+ *
+ * 其余错误（网络 / 鉴权 / 工具本身抛错 / 结构化输出校验失败）一律不得重试 ——
+ * 拿重试盖住真错误比失败本身更糟（2026-09-12「静默跳过比报错更危险」的教训）。
+ */
+export function isStarvationFailure(err: unknown, saw: { text: boolean; tool: boolean }): boolean {
+  return err instanceof MaxTurnsExceededError && !saw.text;
+}
+
+/** 补救轮预算：不低于首次的 2 倍、至少 16384，上限 65536（防个别中转站拒收超大值） */
+export function retryBudgetOf(first?: number): number {
+  return Math.min(Math.max((first ?? 8192) * 2, 16384), 65536);
+}
 
 export function createServerPluginHost(options: ServerPluginHostOptions = {}): ServerPluginHost {
   const kv = options.kv ?? createSqliteKvService();
@@ -261,11 +324,18 @@ export function createServerPluginHost(options: ServerPluginHostOptions = {}): S
   const agentRegistry = new Map<string, unknown>();
   const providerRegistry = new Map<string, unknown>();
 
+  // ★ 「输出预算被打穿」的取证与补救三件套（noteStreamEvidence / STARVATION_RETRY_HINT /
+  //   retryBudgetOf）已抽到**模块顶层**并 export —— 它们决定"要不要重试"，必须能被单测钉住。
+
   /**
    * 子代理运行器（ctx.ai.agents.run / ctx.ai.complete 的实现底座）。
    * SDK 装配与 runNovelAgentStream 同款：getSdkProvider + Runner（Chat Completions 强制）。
    * tools 白名单缺省 = 纯生成；allowWriteChapter 只影响 write_chapter 是否进入候选集，
    * 且 SDK 工具 handler 内还有二次拒绝兜底（tools.ts）。
+   *
+   * ★ 2026-09-17：「预算被打穿」的自救 —— 见下面 catch 里的说明。
+   *   这一层是通用的：pipeline 各段发言、讨论链路、实体沉淀（ctx.ai.complete 的 maxTurns 只有 1，
+   *   比谁都脆弱）都走这里，所以修在这一层而不是某个调用方里。
    */
   async function runSubagent(o: {
     system: string;
@@ -284,62 +354,114 @@ export function createServerPluginHost(options: ServerPluginHostOptions = {}): S
     const config = await getAIConfig(o.userId);
     const provider = await getSdkProvider(o.userId);
     const model = o.model ?? config.model;
-    const allowed = o.tools ? new Set(o.tools) : undefined;
-    const sdkTools = allowed
-      ? getAllSdkTools({ allowWriteChapter: o.allowWriteChapter === true })
-          .filter((t) => allowed.has((t as { name: string }).name))
-      : [];
-    // ★ maxTokens 必须显式透传：不传时 SDK 不发送 max_tokens，由服务商默认值兜底；
-    //   推理模型（如 glm-5.3-flash）的思考 token 也计入该上限，默认值偏小时
-    //   模型会自行收短输出 —— 长文写作上表现为「总是写不到约定字数」。
-    const modelSettings = (o.temperature != null || o.maxTokens != null)
-      ? {
-          ...(o.temperature != null ? { temperature: o.temperature } : {}),
-          ...(o.maxTokens != null ? { maxTokens: o.maxTokens } : {}),
+
+    // 这两项由 attempt 每次重置/填充，catch 里要用它们判定「是不是被打穿后的空转」
+    const saw = { text: false, tool: false };
+    let thinking = '';
+
+    /** 单次尝试：跑完整个 run 并返回 finalOutput */
+    const attempt = async (a: {
+      maxTokens?: number;
+      maxTurns: number;
+      extraSystem?: string;
+    }): Promise<string> => {
+      saw.text = false;
+      saw.tool = false;
+      thinking = '';
+      const allowed = o.tools ? new Set(o.tools) : undefined;
+      const sdkTools = allowed
+        ? getAllSdkTools({ allowWriteChapter: o.allowWriteChapter === true })
+            .filter((t) => allowed.has((t as { name: string }).name))
+        : [];
+      // ★ maxTokens 必须显式透传：不传时 SDK 不发送 max_tokens，由服务商默认值兜底；
+      //   推理模型（如 glm-5.3-flash）的思考 token 也计入该上限，默认值偏小时
+      //   模型会自行收短输出 —— 长文写作上表现为「总是写不到约定字数」。
+      const modelSettings = (o.temperature != null || a.maxTokens != null)
+        ? {
+            ...(o.temperature != null ? { temperature: o.temperature } : {}),
+            ...(a.maxTokens != null ? { maxTokens: a.maxTokens } : {}),
+          }
+        : undefined;
+      const agent = new Agent({
+        name: 'novel-subagent',
+        instructions: a.extraSystem ? `${o.system}\n\n${a.extraSystem}` : o.system,
+        tools: sdkTools,
+        model,
+        ...(modelSettings ? { modelSettings } : {}),
+      });
+      const runner = new Runner({ modelProvider: provider, tracingDisabled: true });
+      const context: NovelAgentContext = {
+        projectId: o.projectId ?? '',
+        userId: o.userId ?? '',
+        allowWriteChapter: o.allowWriteChapter === true,
+      };
+
+      // ★ 思维链旁路：SDK 的 Chat Completions 通道不解析 reasoning_content（见 sdk/provider.ts 文件头），
+      //   所以这里把 sink 放进 ALS，由 provider 的 fetch 旁路推回来。
+      //   不传 onThinking 时完全不注册 sink —— 不白花解流的开销。
+      const sink = o.onThinking
+        ? (d: string) => { thinking += d; o.onThinking?.(d); }
+        : undefined;
+
+      // ★★ 必须走 `stream: true`：旁路只挂在 SSE 响应上。
+      //   非流式时中转站返回的是 `application/json`（实测 content-type 就是它），
+      //   reasoning_content 在那一整个 JSON body 里，旁路**一次都不会触发** ——
+      //   表现就是「思维链一条都没有」，而且不报任何错。
+      //   流式结果的 `finalOutput` 与之前一样可用（已实测：正文一致，工具轮次不会污染它），
+      //   所以正文口径没变。整个 run（含流消费）都在 sink 作用域内，保证旁路拿得到接收器。
+      const result = await runWithThinkingSink(sink, async () => {
+        const streamed = await runner.run(agent, o.input as any, {
+          stream: true,
+          context,
+          maxTurns: a.maxTurns,
+        } as any);
+        // 流式结果必须被**消费**才会真正跑完（模型调用就发生在这一步）
+        for await (const ev of streamed as unknown as AsyncIterable<unknown>) {
+          /* 只为驱动流；正文取 finalOutput，不逐字推送（子代理没有逐字展示的需求）。
+             顺带取证：这一轮到底有没有产出文本 / 发起工具调用。 */
+          noteStreamEvidence(ev, saw);
         }
-      : undefined;
-    const agent = new Agent({
-      name: 'novel-subagent',
-      instructions: o.system,
-      tools: sdkTools,
-      model,
-      ...(modelSettings ? { modelSettings } : {}),
-    });
-    const runner = new Runner({ modelProvider: provider, tracingDisabled: true });
-    const context: NovelAgentContext = {
-      projectId: o.projectId ?? '',
-      userId: o.userId ?? '',
-      allowWriteChapter: o.allowWriteChapter === true,
+        return streamed;
+      });
+      return String(result.finalOutput ?? '');
     };
 
-    // ★ 思维链旁路：SDK 的 Chat Completions 通道不解析 reasoning_content（见 sdk/provider.ts 文件头），
-    //   所以这里把 sink 放进 ALS，由 provider 的 fetch 旁路推回来。
-    //   不传 onThinking 时完全不注册 sink —— 不白花解流的开销。
-    let thinking = '';
-    const sink = o.onThinking
-      ? (d: string) => { thinking += d; o.onThinking?.(d); }
-      : undefined;
+    try {
+      const text = await attempt({ maxTokens: o.maxTokens, maxTurns: o.maxTurns ?? 8 });
+      return thinking ? { text, model, thinking } : { text, model };
+    } catch (e) {
+      // ★ 只捞「轮次耗尽但全程零正文」这一种失败（判据见 isStarvationFailure 的注释）。
+      //   其余错误必须原样抛 —— 拿重试盖住真错误比失败本身更糟。
+      if (!isStarvationFailure(e, saw)) throw e;
 
-    // ★★ 必须走 `stream: true`：旁路只挂在 SSE 响应上。
-    //   非流式时中转站返回的是 `application/json`（实测 content-type 就是它），
-    //   reasoning_content 在那一整个 JSON body 里，旁路**一次都不会触发** ——
-    //   表现就是「思维链一条都没有」，而且不报任何错。
-    //   流式结果的 `finalOutput` 与之前一样可用（已实测：正文一致，工具轮次不会污染它），
-    //   所以正文口径没变。整个 run（含流消费）都在 sink 作用域内，保证旁路拿得到接收器。
-    const result = await runWithThinkingSink(sink, async () => {
-      const streamed = await runner.run(agent, o.input as any, {
-        stream: true,
-        context,
-        maxTurns: o.maxTurns ?? 8,
-      } as any);
-      // 流式结果必须被**消费**才会真正跑完（模型调用就发生在这一步）
-      for await (const _ev of streamed as unknown as AsyncIterable<unknown>) {
-        /* 只为驱动流；正文取 finalOutput，不逐字推送（子代理没有逐字展示的需求） */
+      const retryTokens = retryBudgetOf(o.maxTokens);
+      // 补救轮不需要那么多轮次：判据已确认"全程没产出"，所以只需要「给出正文」的机会。
+      // 留 4 轮是给带工具的发言人（查库 → 作答）留一个来回，同时比原始的 6/8 轮省。
+      const retryTurns = Math.min(o.maxTurns ?? 8, 4);
+      console.warn(
+        `[subagent] 轮次耗尽但全程零正文：${model} 跑了 ${o.maxTurns ?? 8} 轮没有产出`
+        + `（${saw.tool ? '有' : '无'}工具调用${thinking ? `，思考累计 ${thinking.length} 字` : ''}）。`
+        + `改用 maxTokens=${retryTokens} / maxTurns=${retryTurns} 重试一次。`,
+      );
+      try {
+        const text = await attempt({
+          maxTokens: retryTokens,
+          maxTurns: retryTurns,
+          extraSystem: STARVATION_RETRY_HINT,
+        });
+        if (text.trim()) return thinking ? { text, model, thinking } : { text, model };
+        throw new Error('重试后依然没有产出正文');
+      } catch (e2) {
+        const msg = e2 instanceof Error ? e2.message : String(e2);
+        // 注：`e` 在 isStarvationFailure 里才被收窄，这里仍是 unknown，故显式取 message
+        const first = e instanceof Error ? e.message : String(e);
+        throw new Error(
+          `模型（${model}）跑满 ${o.maxTurns ?? 8} 轮仍未产出正文：`
+          + `首次失败（${first}），以 maxTokens=${retryTokens} 重试一次仍失败（${msg}）。`
+          + '建议调大该次调用的 maxTokens，或在设置里改用非推理模型。',
+        );
       }
-      return streamed;
-    });
-    const text = String(result.finalOutput ?? '');
-    return thinking ? { text, model, thinking } : { text, model };
+    }
   }
 
   const aiService = {

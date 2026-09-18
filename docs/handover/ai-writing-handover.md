@@ -1,9 +1,12 @@
 # AI 写作模块 · 接手必读
 
-> ⛔ **先看这个**：`docs/handover/UNFINISHED-pipeline-blocked.md`（2026-09-17）
-> —— **全量写作流水线当前跑不通**（cast 阶段 `Max turns exceeded`，怀疑是推理模型
-> `glm-5.3-flash` 返回 `content: null` 导致框架空转）。那份文档写了复现步骤、
-> 已确认的事实、和下一步该做什么。**别重复劳动。**
+> ✅ **先看这个**（2026-09-17 更新）：`docs/handover/UNFINISHED-pipeline-blocked.md`
+> —— 全量流水线曾卡在 cast 的 `Max turns exceeded`，**现已修复并真机验证**。
+> **真因**：推理模型（`glm-5.3-flash`）的**思考 token 也计入 `max_tokens`**，某一轮思考吃满 →
+> 中转站回 `content: null` → SDK 认为「这轮没产出」→ 空转到轮次耗尽 → **整段作废**。
+> **修法**：① 单次发言预算 8192 → 16384；② 宿主层护栏「轮次耗尽且全程零正文 → 加倍预算重试一次」
+> （`apps/server/src/plugin/host.ts`）。故障注入实测三次触发、三次救回。
+> 那份文档保留了完整现场（含一个判定踩坑：**带工具的发言人也算**），值得一读，但**问题已解决**。
 
 > 给接手这块的人。读完这一份就能知道：**现在什么能用、什么不能用、坑在哪、从哪下手。**
 > 最后更新：2026-09-12。文末有「文档地图」——那些是**设计意图与历史**，这一份是**现状**。两者不一致时以本文为准。
@@ -16,7 +19,7 @@
 pnpm install          # 首次
 pnpm dev:all          # web 5173 + server 3774
 pnpm type-check       # 8 个包，必须全绿
-pnpm --filter @novel/server exec vitest run   # 当前基线：7 文件 / 75 用例全过
+pnpm --filter @novel/server exec vitest run   # 当前基线：16 文件 / 213 用例全过（2026-09-17 实测）
 ```
 
 三件必须先知道的事：
@@ -135,10 +138,12 @@ node scripts/verify-autowrite-cleanup.mjs <username> <projectId>  # 参数由上
 - 验证：`scripts/verify-brief-api.mjs`（**Node 24**，用 `node:sqlite` 只读核对主库）；
   `apps/web/src/components/ui/__tests__/AddBookModal.test.tsx` 8 例守 UI（含「手写分支字段不变」与多女主动态增删）。
 
-**多智能体协作流水线（M1，2026-09-13 新增并真机验证）**
+**多智能体协作流水线（M1 + M2，2026-09-13 起）**
 
 - 设计见 `docs/architecture/ai-writing-multiagent-pipeline.md`（7 段 + 4 道闸门 + 施工拆分 + 未决项），
   **M1 已落地**：`brief → cast → bible → plot` 四段可跑，前三段有用户闸门，批准后落库。
+  **M2 已落地**：`drift`（偏离核查，无闸门）与 `pilot`（前三章试写，有闸门）—— 合计六段，
+  只剩 `production` 未实现（见 §4 末尾）。
 - 代码在 `server/pipeline/`（types / store / roles-phase / orchestrator / sink / store.test），
   路由挂在同一个插件下：`GET /pipeline`、`POST /pipeline/{start,advance,decision}`、`GET /pipeline/ledger`。
   前端：`services/ai/pipelineSession.ts` + `components/layout/PipelinePanel.tsx`（工作台中栏）。
@@ -152,7 +157,11 @@ node scripts/verify-autowrite-cleanup.mjs <username> <projectId>  # 参数由上
 - **running 锁与僵死兜底**：跑之前 `store.beginStage()` 落盘 `running`（防两个标签页重复跑同一段）；
   进程被杀留下的僵死 `running` 由 `store.load()` 自动收敛成「中断了，可重试」（阈值 20 分钟）。
   验证脚本 `scripts/verify-pipeline-stage-lock.mjs`（★ 会调模型，约 5 次调用）。
-- **未做**：drift 核查 / 前三章试写 / 写作监工 / 每三章轨迹确认 / 断点续跑 / 台账回放（advance 到它们返回 501）。
+- **已做（M2）**：drift 偏离核查 / pilot 前三章试写 —— 代码里的单点真相
+  `pipeline/types.ts` 的 `IMPLEMENTED_STAGES` 已是**六段**（brief/cast/bible/plot/drift/pilot），
+  **只剩 `production` 未实现**（advance 到它返回 501）。验证脚本已就位：
+  `scripts/verify/verify-pipeline-drift.mjs` / `verify-pipeline-pilot.mjs`（真机，会调模型）。
+- **仍未做**：写作监工 / 每三章轨迹确认 / 断点续跑 / 台账回放。
 
 **治理/基础设施**
 
@@ -204,6 +213,17 @@ node scripts/verify-autowrite-cleanup.mjs <username> <projectId>  # 参数由上
 **模型调用**
 
 5. **`maxTokens` 不传的时候，SDK 根本不发 `max_tokens`**，由服务商默认值兜底；而**推理模型（如 `glm-5.3-flash`）的思考 token 也计入该上限**，预算偏小时模型会**主动写短**（表现为「总是写不到约定字数」）。长文写作必须显式给足 —— 见 `autowrite/helpers.ts` 的 `WRITER_MAX_TOKENS = 16384`（与 `ai/agents/chat-agent.ts` 里推理模型的量级一致）。`AgentRunOptions.maxTokens` 是 2026-09-12 才补上的字段。
+   ⚠️ **2026-09-17 补充（这条值得单独记住）**：`max_tokens` 是被**严格遵守**的（裸测 256 → 思考吃掉 254/256、
+   `content` 0 字、`finish_reason=length`），而思考量**波动达两个数量级**（实测 26 ~ 5529 token）。
+   于是失败模式是：某轮思考吃满 → 中转站回 `content: null` → SDK 的 `turnResolution` 认为「这轮没产出」
+   → `next_step_run_again` → 空转 → `Max turns (N) exceeded` → **整段作废**。
+   **这不能只靠「把预算给大」兜住**（那只是降低概率，思考量不可预测）—— 必须由宿主层护栏兜：
+   轮次耗尽且全程零正文 → 加倍预算 + 「请直接作答」重试一次。
+   判据**只看「全程零正文」**：带工具的发言人会先成功调一次工具（`tool=true`）再空转，别把"有工具调用"当排除条件。
+   另：**中转站 5xx 抖动会让整段作废**（2026-09-17 实测一次 `模型服务暂时不可用，请稍后重试` 直接打断 cast）。
+   SDK 自带重试（`@openai/agents-core` 的 `runner/modelRetry.js`：指数退避 + jitter + 尊重 `Retry-After`），
+   但窗口有限、抖得久就救不回来。这类失败**不在护栏的补救范围内**（判据只看"轮次耗尽"），
+   别把它和"预算打穿"混为一谈 —— 混了就会变成"对网络错误乱重试"，把真错误盖住。
 6. **篇幅契约必须同源**：`discuss/roles.ts` 的 `WRITER_TARGET_CHARS` / `WRITER_MIN_CHARS` 同时被提示词（插值）与运行时字数自检使用，并有单测锁死。此前正是「提示词写 2500–4000、代码里没有任何检查」才导致三次交付全部低于下限。
 7. **给区间模型就朝下限写**：写「2500–4000 字」会稳定产出 2100 字左右，要写单一目标值。
 

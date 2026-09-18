@@ -23,8 +23,26 @@ import {
 } from '../discuss/roles.js';
 import type { StageKey } from './types.js';
 
-/** 单阶段发言的 token 上限：契约与抽取都可能很长，给不足会被截断（截断=静默出错） */
-export const STAGE_SPEAK_MAX_TOKENS = 8192;
+/**
+ * 单阶段发言的 token 上限：契约与抽取都可能很长，给不足会被截断（截断=静默出错）。
+ *
+ * ★ 2026-09-17 由 8192 提到 16384 —— 推理模型（glm-5.3-flash）的**思考 token 也计入这个上限**，
+ *   且思考量极不稳定。三档裸测（同一 system、同一输入、temperature=0，直打中转站）：
+ *     · max_tokens=256   → reasoning 254 token 吃光额度，**content 0 字**，finish_reason=length
+ *     · max_tokens=8192  → reasoning 4787 token，content 1110 字，finish_reason=stop
+ *     · max_tokens=16384 → reasoning 5529 token，content 1288 字，finish_reason=stop
+ *   （另有同一任务 reasoning 只用 26 token 的样本 —— 波动可达两个数量级。
+ *     所以这里的结论不是"某个值够用"，而是"越小越容易被打穿"。）
+ *
+ *   被打穿之后的连锁是：`content: null` → SDK 的 turnResolution 认为「这轮没产出」
+ *   → `next_step_run_again` → 再跑一轮 → …… 直到 `Max turns (N) exceeded`，**整段作废**。
+ *   cast 段最容易撞上：定稿官要吞下整段 transcript，是全线输入最长、思考最容易爆的一次调用。
+ *
+ *   ⚠️ 提预算只能**降低**触发概率，不能消除（思考量不可预测）。真正的兜底在宿主层：
+ *   见 `apps/server/src/plugin/host.ts` 的 `isStarvationFailure` —— 轮次耗尽且全程零正文时
+ *   自动以 2 倍预算 + 「请直接作答」重试一次（2026-09-17 故障注入实测：三次触发、三次救回）。
+ */
+export const STAGE_SPEAK_MAX_TOKENS = 16384;
 
 // ---- 新增角色：策划官（世界观 / 人物 / 势力）----
 
