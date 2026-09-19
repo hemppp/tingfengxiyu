@@ -124,10 +124,10 @@ export function TimelineFlowChart({ selectedChapter = 'all' }: TimelineFlowChart
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-center max-w-sm px-6">
-          <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-            <CalendarClock size={28} className="text-gray-400" />
+          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+            <CalendarClock size={28} className="text-muted-foreground" />
           </div>
-          <p className="text-sm text-gray-700 font-medium mb-1">暂无时间线事件</p>
+          <p className="text-sm text-foreground/85 font-medium mb-1">暂无时间线事件</p>
           <p className="text-xs text-muted-foreground">AI 识别或手动添加的事件将按章节分栏显示</p>
         </div>
       </div>
@@ -187,10 +187,14 @@ export function TimelineFlowChart({ selectedChapter = 'all' }: TimelineFlowChart
                 <button
                   type="button"
                   onClick={() => handleJumpToChapter(group.chapter, group.chapterTitle || undefined, undefined)}
-                  className="rounded-xl p-3 mb-3 text-left transition-all duration-200 hover:scale-[1.02] hover:shadow-lg cursor-pointer shrink-0 w-full"
+                  className="nm-nav-item rounded-xl p-3 mb-3 text-left transition-all duration-200 hover:scale-[1.02] hover:shadow-lg cursor-pointer shrink-0 w-full"
                   style={{
                     background: `linear-gradient(135deg, ${accent}25, ${accent}10)`,
-                    border: `1px solid ${accent}40`,
+                    // ★ 拆长写：这是「点击跳章」的导航卡片，不是动作按钮 →
+                    //   豁免由 nm-nav-item 显式承担，不依赖简写重置 border-image 的副作用
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    borderColor: `${accent}40`,
                     boxShadow: `0 2px 12px ${accent}15`,
                   }}
                 >

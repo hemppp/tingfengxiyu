@@ -91,10 +91,13 @@ export function WorkspacePane({
     <section
       aria-label="辅助分页区"
       data-pane-mode={mode}
-      className={horizontal ? 'shrink-0 flex flex-col overflow-hidden' : 'shrink-0 flex flex-col overflow-hidden'}
+      /* 勾线从内联 style 提到工具类：原来写 `0.5px solid hsl(var(--border)/0.6)`，
+         0.5px 在非 retina 屏上要么被舍成 1px、要么整条消失，本就不稳。
+         改用 1px 墨线，与全站 --shadow-hairline 的勾线粗细一致。 */
+      className={`flex shrink-0 flex-col overflow-hidden ${horizontal ? 'border-l' : 'border-t'} border-paper-line`}
       style={horizontal
-        ? { position: 'relative', width: size, borderLeft: '0.5px solid hsl(var(--border) / 0.6)', background: EDITOR_BG }
-        : { position: 'relative', height: size, borderTop: '0.5px solid hsl(var(--border) / 0.6)', background: EDITOR_BG }}
+        ? { position: 'relative', width: size, background: EDITOR_BG }
+        : { position: 'relative', height: size, background: EDITOR_BG }}
     >
       {/* 分隔条：横向档在上缘、竖向档在左缘。
           ★ 2026-09-15 改为**绝对定位**（原来是 flex 流里的实体 5px 条）。
@@ -109,15 +112,11 @@ export function WorkspacePane({
         onPointerMove={onMove}
         onPointerUp={onUp}
         onPointerCancel={onUp}
+        className={`absolute z-[5] bg-transparent ${horizontal ? 'border-l' : 'border-t'} border-paper-line`}
         style={{
-          position: 'absolute',
-          zIndex: 5,
           cursor: horizontal ? 'col-resize' : 'row-resize',
           touchAction: 'none',
-          background: 'transparent',
-          ...(horizontal
-            ? { top: 0, bottom: 0, left: -3, width: 5, borderLeft: '0.5px solid hsl(var(--border) / 0.5)' }
-            : { left: 0, right: 0, top: -3, height: 5, borderTop: '0.5px solid hsl(var(--border) / 0.5)' }),
+          ...(horizontal ? { top: 0, bottom: 0, left: -3, width: 5 } : { left: 0, right: 0, top: -3, height: 5 }),
         }}
       />
 
@@ -140,7 +139,10 @@ export function WorkspacePane({
         {PanelComponent ? (
           <ErrorBoundary
             fallback={(
-              <div className="p-4 text-[12px]" style={{ color: 'hsl(var(--destructive))' }}>
+              /* 错误文案用 sig-stop —— 这是本体系里"失败"的指定色。
+                 原来用 --destructive，而按水墨迁移的注释，--destructive 在亮色下
+                 就是 16% 明度的深墨，跟正文几乎同色，读不出"这是错误"。 */
+              <div className="p-4 text-[12px] text-sig-stop">
                 「{activePanel?.label}」面板出错了 —— 正文与其它标签不受影响，可关闭此标签后重开。
               </div>
             )}
@@ -148,7 +150,7 @@ export function WorkspacePane({
             <PanelComponent {...(panelProps ?? {})} />
           </ErrorBoundary>
         ) : (
-          <div className="p-6 text-center text-[12px]" style={{ color: 'hsl(var(--muted-foreground))' }}>
+          <div className="p-6 text-center text-[12px] text-tone-2">
             没有打开的看板 —— 点左侧气泡即可打开。
           </div>
         )}

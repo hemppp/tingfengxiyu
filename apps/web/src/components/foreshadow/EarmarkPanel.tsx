@@ -15,7 +15,7 @@ const statusConfig: Record<string, { label: string; icon: string; color: string 
   planted: { label: '已播种', icon: '🌱', color: 'text-green-500' },
   hinted: { label: '已暗示', icon: '💡', color: 'text-amber-500' },
   payed_off: { label: '已回收', icon: '✨', color: 'text-blue-500' },
-  abandoned: { label: '已废弃', icon: '❌', color: 'text-gray-500' },
+  abandoned: { label: '已废弃', icon: '❌', color: 'text-muted-foreground' },
 };
 
 const typeConfig: Record<ForeshadowType, { label: string; icon: string }> = {

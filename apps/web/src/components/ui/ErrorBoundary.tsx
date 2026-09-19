@@ -68,7 +68,7 @@ function ErrorFallback({ error, retryCount, onRetry, onGoHome }: ErrorFallbackPr
           <div
             className="w-20 h-20 flex items-center justify-center relative"
             style={{
-              borderRadius: '20px',
+              borderRadius: 'var(--r-lg)',
               background: isFatal
                 ? 'hsl(var(--destructive) / 0.12)'
                 : 'hsl(0 0% 45% / 0.12)',
@@ -111,7 +111,7 @@ function ErrorFallback({ error, retryCount, onRetry, onGoHome }: ErrorFallbackPr
         <div
           className="mb-4 p-5 text-left"
           style={{
-            borderRadius: '24px',
+            borderRadius: 'var(--r-lg)',
             background: 'rgb(var(--glass-tint) / 0.7)',
             backdropFilter: 'blur(24px) saturate(180%)',
             WebkitBackdropFilter: 'blur(24px) saturate(180%)',
@@ -151,7 +151,7 @@ function ErrorFallback({ error, retryCount, onRetry, onGoHome }: ErrorFallbackPr
                   className="mt-3 p-3 overflow-x-auto whitespace-pre-wrap"
                   style={{
                     background: 'hsl(var(--foreground) / 0.06)',
-                    borderRadius: '12px',
+                    borderRadius: 'var(--r-sm)',
                     fontSize: '11px',
                     lineHeight: '1.6',
                     maxHeight: '200px',
@@ -206,10 +206,12 @@ function ErrorFallback({ error, retryCount, onRetry, onGoHome }: ErrorFallbackPr
               className="px-6 py-3 text-sm transition-all hover:opacity-90 active:scale-[0.98]"
               style={{
                 fontFamily: "'Noto Serif SC', serif",
-                borderRadius: '12px',
+                borderRadius: 'var(--r-sm)',
                 background: 'hsl(var(--primary))',
                 color: 'hsl(var(--primary-foreground))',
-                border: '1px solid hsl(var(--primary) / 0.5)',
+                borderWidth: '1px',
+                borderStyle: 'solid',
+                borderColor: 'hsl(var(--primary) / 0.5)',
                 boxShadow: '0 4px 12px -4px hsl(var(--primary) / 0.4)',
                 fontWeight: 500,
               }}
@@ -224,12 +226,14 @@ function ErrorFallback({ error, retryCount, onRetry, onGoHome }: ErrorFallbackPr
             className="px-6 py-3 text-sm transition-all hover:opacity-90 active:scale-[0.98]"
             style={{
               fontFamily: "'Noto Serif SC', serif",
-              borderRadius: '12px',
+              borderRadius: 'var(--r-sm)',
               background: 'rgb(var(--glass-tint) / 0.6)',
               backdropFilter: 'blur(20px) saturate(180%)',
               WebkitBackdropFilter: 'blur(20px) saturate(180%)',
               color: 'hsl(var(--foreground))',
-              border: '1px solid hsl(var(--border) / 0.4)',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderColor: 'hsl(var(--border) / 0.4)',
               boxShadow: `
                 0 1px 0 0 hsl(var(--glass-highlight) / 0.4) inset,
                 0 4px 12px -4px hsl(var(--glass-shadow) / 0.12)
@@ -246,12 +250,14 @@ function ErrorFallback({ error, retryCount, onRetry, onGoHome }: ErrorFallbackPr
             className="px-4 py-3 text-xs transition-all hover:opacity-90 active:scale-[0.98]"
             style={{
               fontFamily: "'Noto Serif SC', serif",
-              borderRadius: '12px',
+              borderRadius: 'var(--r-sm)',
               background: 'rgb(var(--glass-tint) / 0.4)',
               backdropFilter: 'blur(20px) saturate(180%)',
               WebkitBackdropFilter: 'blur(20px) saturate(180%)',
               color: 'hsl(var(--muted-foreground))',
-              border: '1px solid hsl(var(--border) / 0.3)',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderColor: 'hsl(var(--border) / 0.3)',
               fontWeight: 500,
             }}
             aria-label="刷新页面"

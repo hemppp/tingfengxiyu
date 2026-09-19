@@ -26,7 +26,7 @@ const statusConfig: Record<Foreshadow['status'], {
   },
   abandoned: {
     label: '已废弃', Icon: CircleOff, groupIconClass: 'text-muted-foreground',
-    activeClass: 'bg-gray-100 text-gray-500 border-gray-300',
+    activeClass: 'bg-muted text-muted-foreground border-border',
   },
 };
 
@@ -108,7 +108,7 @@ export function ForeshadowManager() {
       <div key={status} className="mb-5">
         <div className="flex items-center gap-1.5 mb-2">
           <config.Icon size={14} aria-hidden="true" className={config.groupIconClass} />
-          <h3 className="text-xs font-semibold text-gray-600">{config.label}</h3>
+          <h3 className="text-xs font-semibold text-muted-foreground">{config.label}</h3>
           <span className="text-[11px] text-muted-foreground bg-muted/60 rounded-full px-1.5 leading-4">
             {items.length}
           </span>
@@ -119,7 +119,7 @@ export function ForeshadowManager() {
             <div
               key={fs.id}
               className={`rounded-2xl border mb-1.5 bg-card transition-colors ${
-                expanded ? 'border-gray-300 shadow-sm' : 'border-border hover:border-gray-300'
+                expanded ? 'border-border shadow-sm' : 'border-border hover:border-ring'
               }`}
             >
               <div

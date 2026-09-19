@@ -12,7 +12,7 @@ import { apiClient, getToken } from '@/services/api/apiClient';
 import { OutlineCheckModal } from './OutlineCheckModal';
 import { ContinueWriteModal } from './ContinueWriteModal';
 import { validateUserInput } from '@/services/security/securityService';
-import { Send, Bot, User, Loader2, AlertCircle, RefreshCw, Snowflake, ChevronDown, ChevronRight, Sparkles, Copy, Check, Trash2, PenLine, CornerDownLeft, Replace, FileText, MapPin, Wand2, Zap, X, Square, Settings, BookOpen, Wrench, BookMarked } from 'lucide-react';
+import { Send, Bot, User, AlertCircle, RefreshCw, Snowflake, ChevronDown, ChevronRight, Sparkles, Check, Trash2, PenLine, CornerDownLeft, Replace, FileText, MapPin, Wand2, Zap, X, Square, Settings, BookOpen, BookMarked } from 'lucide-react';
 import { format } from 'date-fns';
 import type { Editor } from '@tiptap/core';
 import { useNavigate } from 'react-router-dom';
@@ -20,6 +20,8 @@ import { PATHS } from '@/routes/paths';
 import { useSkillRegistry, getSkillMeta, getSkillHistorySuffix } from './skillsConfig';
 import { buildSkillContext } from './skillContextBuilder';
 import { OutlineFillDialog } from './OutlineFillDialog';
+// AI 交互原语（思考轨迹 / 工具标签 / 状态指示 / 布局档位）—— 见 primitives/index.ts
+import { LoadingPixels, ThinkingTrace, ToolChip } from './primitives';
 import { refreshEntityStore } from '@/services/ai/entityRefresh';
 import { useReferenceStore } from '@/stores/referenceStore';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -139,71 +141,15 @@ const MarkdownContent = memo(function MarkdownContent({ content }: { content: st
   );
 });
 
-/** 思考内容归档栏组件 */
+/**
+ * 思考归档栏 —— 薄适配层。
+ *
+ * 实现已迁到 `ai/primitives` 的 ThinkingTrace（竖轨 + grid 展开动画 + 计时 + 复制）。
+ * 这里保留原组件名与入参签名，只为不动本文件里那两处调用点；
+ * **新代码请直接用 ThinkingTrace**，不要再往这层加逻辑。
+ */
 function ThinkingBar({ thinking, isStreaming }: { thinking: string; isStreaming?: boolean }) {
-  const [expanded, setExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
-  // ★ 保存 setTimeout 句柄，组件卸载时清理，避免 setState after unmount
-  const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (copyResetTimerRef.current) {
-        clearTimeout(copyResetTimerRef.current);
-        copyResetTimerRef.current = null;
-      }
-    };
-  }, []);
-
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(thinking);
-      setCopied(true);
-      if (copyResetTimerRef.current) clearTimeout(copyResetTimerRef.current);
-      copyResetTimerRef.current = setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // 降级方案
-      const textarea = document.createElement('textarea');
-      textarea.value = thinking;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-      setCopied(true);
-      if (copyResetTimerRef.current) clearTimeout(copyResetTimerRef.current);
-      copyResetTimerRef.current = setTimeout(() => setCopied(false), 1500);
-    }
-  }, [thinking]);
-
-  return (
-    <div className="mb-2">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground/70 hover:text-muted-foreground hover:bg-muted/40 rounded-xl transition-colors group px-1.5 py-1"
-        aria-expanded={expanded}
-      >
-        {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        <Sparkles size={11} className="text-amber-500/70" aria-hidden="true" />
-        <span className="opacity-70">{isStreaming ? '思考中...' : '已深度思考'}</span>
-        {isStreaming && <span className="inline-block w-1 h-3 bg-amber-500/50 animate-pulse rounded-full" />}
-      </button>
-      {expanded && (
-        <div className="relative mt-1.5">
-          <div className="px-3 py-2.5 text-xs text-muted-foreground/60 bg-muted/30 rounded-2xl border border-muted-foreground/10 whitespace-pre-wrap break-words leading-relaxed select-text">
-            {thinking}
-          </div>
-          <button
-            onClick={handleCopy}
-            className="absolute top-1.5 right-1.5 p-1 rounded-xl opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity bg-background/80 hover:bg-background"
-            title="复制思考内容"
-            aria-label="复制思考内容"
-          >
-            {copied ? <Check size={11} className="text-green-500" /> : <Copy size={11} className="text-muted-foreground" />}
-          </button>
-        </div>
-      )}
-    </div>
-  );
+  return <ThinkingTrace text={thinking} isStreaming={isStreaming} />;
 }
 
 // ============================================================
@@ -490,6 +436,14 @@ const TOOL_LABELS: Record<string, string> = {
   autowrite_audit: '查审计台账',
 };
 
+/**
+ * 工具调用 —— 薄适配层，实现已迁到 `ai/primitives` 的 ToolChip。
+ *
+ * 为什么改：原实现给**每一次**工具调用都开一个带头像的独立气泡框。
+ * 一次 Agent 回合常有 5–15 次调用（见 2026-09-16 审计第六节：
+ * 打开一章会自动触发 3+ 次模型调用），气泡会把对话流碎成一地方块。
+ * ToolChip 把它压成一行「图标 + 动词 + 对象名」，只在失败时自动展开详情。
+ */
 function ToolCallBubble({ event }: {
   event: {
     id: string;
@@ -499,39 +453,7 @@ function ToolCallBubble({ event }: {
     entity?: { type: string; action: string; name?: string };
   };
 }) {
-  const label = TOOL_LABELS[event.name] ?? event.name;
-  return (
-    <div className="flex gap-2.5">
-      <div className="w-7 h-7 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0" aria-hidden="true">
-        <Wrench size={13} className="text-amber-500/80" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="inline-block max-w-full rounded-2xl text-xs px-3 py-2 mc-card border-2 bg-amber-500/5">
-          {event.status === 'calling' && (
-            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-              <Loader2 size={11} className="animate-spin" aria-hidden="true" />
-              <span>正在{label}…</span>
-            </span>
-          )}
-          {event.status === 'success' && (
-            <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-              <Check size={11} aria-hidden="true" />
-              <span>
-                {label}成功
-                {event.entity?.name ? `：${event.entity.name}` : ''}
-              </span>
-            </span>
-          )}
-          {event.status === 'error' && (
-            <span className="inline-flex items-center gap-1.5 text-destructive">
-              <AlertCircle size={11} aria-hidden="true" />
-              <span>{label}失败：{event.result || '未知错误'}</span>
-            </span>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  return <ToolChip event={event} label={TOOL_LABELS[event.name] ?? event.name} />;
 }
 
 /**
@@ -981,7 +903,9 @@ export function SkillsBar({
 
         <button
           onClick={() => navigate(PATHS.settings)}
-          className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-medium transition-all hover:scale-[1.02] active:scale-95"
+          // ★ nm-no-brush：这个按钮用 dashed 表达「还没启用」，边框是装饰性的，
+          //   刻意不穿 shuimo 笔触。显式加类，别依赖「inline border 简写重置 border-image」的副作用。
+          className="nm-no-brush w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-medium transition-all hover:scale-[1.02] active:scale-95"
           style={{
             background: 'rgb(var(--glass-tint) / 0.4)',
             backdropFilter: 'blur(20px) saturate(180%)',
@@ -1085,7 +1009,8 @@ export function SkillsBar({
 
           <button
             onClick={() => { navigate(PATHS.settings); setExpanded(false); }}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-medium transition-all hover:scale-[1.02] active:scale-95"
+            // ★ nm-no-brush：同上，dashed 引导按钮刻意不穿笔触（显式标记，不靠副作用）
+            className="nm-no-brush w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-medium transition-all hover:scale-[1.02] active:scale-95"
             style={{
               background: 'rgb(var(--glass-tint) / 0.4)',
               backdropFilter: 'blur(20px) saturate(180%)',
@@ -1859,6 +1784,10 @@ export function ChatPanel(props: { controls?: ChatPanelControlProps } & Partial<
 
   // ★ 输入框回车发送
   const handleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    // ★ 输入法合成中一律不处理回车。中文用拼音输入时，候选框上按回车是「确认候选」，
+    //   此时若当发送处理，会把半截拼音直接发出去 —— 中文写作工具的必踩坑，
+    //   本文件此前没有这道判断（同样是 React.KeyboardEvent，改用 e.nativeEvent.isComposing）。
+    if (e.nativeEvent.isComposing) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -1892,24 +1821,32 @@ export function ChatPanel(props: { controls?: ChatPanelControlProps } & Partial<
         </div>
       )}
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-4 mc-scrollbar" role="log" aria-label="聊天消息" aria-live="polite">
+      <div ref={scrollRef} className="mc-scroll flex-1 overflow-y-auto p-3.5 space-y-5 mc-scrollbar" role="log" aria-label="聊天消息" aria-live="polite">
         {messages.length === 0 && !error ? (
-          <div className="text-center text-muted-foreground p-6">
-            <div className="mx-auto mb-2 opacity-30 mc-slot" aria-hidden="true">
-              <Bot size={32} />
-            </div>
-            <p className="text-sm mc-title-sm">写作助手已就绪</p>
-            <p className="text-xs mt-1">基于你的知识库和当前章节回答问题</p>
+          /* 空态：不用大图标压场，改成"眉标 + 两行说明"——
+             图标在单色体系里没有信息量，反而抢位置 */
+          <div className="px-2 py-10 text-center">
+            <div className="mc-eyebrow mb-2">写作助手已就绪</div>
+            <p className="text-[12.5px] leading-relaxed text-tone-2">基于你的知识库和当前章节回答问题</p>
+            <p className="mt-1 text-2xs text-tone-3">Ctrl/Cmd + Enter 快捷唤起 · 上下方向键翻历史</p>
           </div>
         ) : (
           messages.map((msg, idx) => (
             <div key={`${msg.timestamp}-${idx}`} className={`flex gap-2.5 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
-                msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-accent'
-              }`} aria-hidden="true">
-                {msg.role === 'user' ? <User size={14} /> : <Bot size={14} />}
+              {/* 墨圈头像：助手侧改用「纸面 + 勾线」，不再用实心色块 ——
+                  实心块在长对话里会变成一排抢眼的点，把正文压下去 */}
+              <div
+                className={`flex size-6 shrink-0 items-center justify-center rounded-full ${
+                  msg.role === 'user'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-paper text-tone-2 shadow-hairline'
+                }`}
+                aria-hidden="true"
+              >
+                {msg.role === 'user' ? <User size={12} /> : <Bot size={12} />}
               </div>
-              <div className={`flex-1 min-w-0 ${msg.role === 'user' ? 'text-right' : ''}`}>
+
+              <div className={`min-w-0 flex-1 ${msg.role === 'user' ? 'flex flex-col items-end text-right' : ''}`}>
                 {/* 思考归档栏 — 已完成 */}
                 {msg.role === 'assistant' && msg.thinking && (
                   <ThinkingBar thinking={msg.thinking} />
@@ -1918,32 +1855,29 @@ export function ChatPanel(props: { controls?: ChatPanelControlProps } & Partial<
                 {msg.role === 'assistant' && thinkingContent && !msg.thinking && loading && idx === messages.length - 1 && (
                   <ThinkingBar thinking={thinkingContent} isStreaming />
                 )}
-                {/* 消息内容 */}
-                <div className={`inline-block max-w-full rounded-2xl text-sm mc-card border-2 ${
-                  msg.role === 'user'
-                    ? 'bg-primary text-primary-foreground px-3 py-2'
-                    : 'bg-accent px-3 py-2'
-                }`}>
-                  {msg.role === 'user' ? (
+
+                {msg.role === 'user' ? (
+                  /* 用户侧：保留实心气泡 —— 它是「我」的锚点，需要压得住 */
+                  <div className="inline-block max-w-full rounded-card bg-primary px-3 py-2 text-[12.5px] leading-relaxed text-primary-foreground shadow-hairline">
                     <span className="whitespace-pre-wrap break-words">{msg.content}</span>
-                  ) : (
-                    <>
-                      {msg.content ? (
-                        <MarkdownContent content={msg.content} />
-                      ) : (
-                        msg.role === 'assistant' && loading && idx === messages.length - 1 && !thinkingContent && (
-                          <span className="inline-flex items-center gap-1.5 text-muted-foreground text-xs">
-                            <Loader2 size={12} className="animate-spin" aria-hidden="true" />
-                            <span>AI 正在回复...</span>
-                          </span>
-                        )
-                      )}
-                      {msg.role === 'assistant' && loading && idx === messages.length - 1 && msg.content && (
-                        <span className="inline-block w-1 h-4 bg-current animate-pulse ml-0.5 align-middle" />
-                      )}
-                    </>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  /* 助手侧：**不给气泡**，正文直接落在纸面上。
+                     长回复套气泡会又挤又灰（原来 rounded-2xl + border-2 + mc-card 三层叠加）；
+                     直接排版能读、能选、能复制，也是该库 Chat 的做法。 */
+                  <div
+                    className={`text-[12.5px] leading-relaxed text-tone ${
+                      loading && idx === messages.length - 1 && msg.content ? 'mc-caret-tail' : ''
+                    }`}
+                  >
+                    {msg.content ? (
+                      <MarkdownContent content={msg.content} />
+                    ) : loading && idx === messages.length - 1 && !thinkingContent ? (
+                      <LoadingPixels label="AI 正在回复" />
+                    ) : null}
+                  </div>
+                )}
+
                 {msg.role === 'assistant' && msg.content && !(loading && idx === messages.length - 1) && (
                   activeSkillId === 'outline-architect' ? (
                     <OutlineFillButton
@@ -1954,7 +1888,8 @@ export function ChatPanel(props: { controls?: ChatPanelControlProps } & Partial<
                     <ApplyActions content={msg.content} editor={editor} />
                   )
                 )}
-                <div className="text-[11px] text-muted-foreground/50 mt-1">
+
+                <div className="mc-num mt-1 text-2xs text-tone-3">
                   {format(msg.timestamp, 'HH:mm')}
                 </div>
               </div>
@@ -1962,9 +1897,12 @@ export function ChatPanel(props: { controls?: ChatPanelControlProps } & Partial<
           ))
         )}
 
-        {/* ★ 工具调用气泡：显示 AI 调用实体工具的实时状态 */}
+        {/* ★ 工具调用：显示 AI 调用实体工具的实时状态。
+            原来是「每次调用一个带头像的气泡」，现压成一行一条（见 ToolCallBubble 注释）——
+            一次回合动辄 5–15 次调用，气泡会把对话流碎掉。 */}
         {toolEvents.length > 0 && (
-          <div className="space-y-2" aria-live="polite">
+          <div className="space-y-0.5" aria-live="polite">
+            <div className="mc-eyebrow px-1.5 pb-0.5">工具调用</div>
             {toolEvents.map(event => (
               <ToolCallBubble key={event.id} event={event} />
             ))}
@@ -2056,7 +1994,7 @@ export function ChatPanel(props: { controls?: ChatPanelControlProps } & Partial<
                     ? "与 AI 讨论你的小说（回复将写入正文）..."
                     : "与 AI 讨论你的小说..."
             }
-            className={`flex-1 px-3 py-2 text-sm border rounded-[14px] bg-background mc-input ${
+            className={`flex-1 px-3 py-2 text-[12.5px] border rounded-control bg-background mc-input ${
               !features.chat || !historyKey ? 'opacity-50 cursor-not-allowed' : ''
             } ${syncInsertEnabled ? 'border-primary/50' : ''}`}
             disabled={loading || !features.chat || !historyKey}
@@ -2065,7 +2003,7 @@ export function ChatPanel(props: { controls?: ChatPanelControlProps } & Partial<
             // ★ 停止生成按钮：loading 时显示，点击中断流式 + 回滚同步写入
             <button
               onClick={handleStop}
-              className="shrink-0 w-9 h-9 flex items-center justify-center rounded-xl text-primary-foreground mc-auth-btn-primary"
+              className="mc-press mc-sheen shrink-0 size-9 flex items-center justify-center rounded-control text-primary-foreground mc-auth-btn-primary"
               aria-label="停止生成"
               title="停止生成（已写入的内容将被撤销）"
             >
@@ -2075,7 +2013,7 @@ export function ChatPanel(props: { controls?: ChatPanelControlProps } & Partial<
             <button
               onClick={handleSendClick}
               disabled={!input.trim() || !features.chat || !historyKey}
-              className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-xl text-primary-foreground disabled:opacity-50 mc-auth-btn-primary ${
+              className={`mc-press mc-sheen shrink-0 size-9 flex items-center justify-center rounded-control text-primary-foreground disabled:opacity-50 mc-auth-btn-primary ${
                 !features.chat || !historyKey ? 'cursor-not-allowed' : ''
               }`}
               aria-label={features.chat ? "发送消息" : "AI 对话已暂停"}

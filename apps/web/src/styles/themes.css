@@ -122,4 +122,62 @@ html[data-theme="soot"] {
   --state-running: 0 0% 62%;
   --state-done: 0 0% 90%;
   --state-blocked: 0 0% 97%;
+
+  /* ============================================================
+   * 墨韵工艺层（2026-09-18 补齐）
+   *
+   * ⚠️ 本段正是文件头第 16–18 行警告的那件事：新令牌也是「一套变量」，
+   *    漏掉就会从 :root 继承**亮色**的值 —— 在 5% 明度的松烟底上
+   *    表现为「悬停变白、次级文字比正文还暗、投影发灰」，即"换了一半皮"。
+   *
+   * 注意：--paper / --paper-canvas / --paper-inset / --paper-field
+   *   是**别名**（→ --card / --background / --muted / --input），
+   *   已随上面几行自动反相，**此处不要重列**，否则别名断了。
+   *   这里只列真正写死的档位。
+   * ============================================================ */
+
+  /* 交互态：松烟底上"浮起" = 更亮 */
+  --paper-hover: 0 0% 13%;
+  --paper-hover-2: 0 0% 17%;
+
+  /* 勾线：本主题 --border 是 26%，比默认暗色主题更实 */
+  --paper-line-strong: 0 0% 38%;
+  --paper-line-soft: 0 0% 16%;
+
+  /* 墨阶文字：底色比默认暗色(11%)更暗(9%)，次级文字可略亮一档 */
+  --tone-2: 0 0% 68%;
+  --tone-3: 0 0% 60%;
+
+  /* 圆角档位：本主题取向是"硬边小圆角"（--radius 仅 4px），
+     故这里取比默认主题更小的一档，保持"硬屏不是宣纸"的纸性差异 */
+  --radius-chip: 4px;
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --radius-window: 10px;
+
+  /* 分级投影：暗底上黑影不可见，靠勾线 + 高不透明度黑定位 */
+  --shadow-hairline: 0 0 0 1px hsl(var(--paper-line));
+  --shadow-card:
+    0 0 0 1px hsl(var(--paper-line)),
+    0 1px 2px hsl(0 0% 0% / 0.34);
+  --shadow-raised:
+    0 0 0 1px hsl(var(--paper-line)),
+    0 2px 8px hsl(0 0% 0% / 0.44);
+  --shadow-overlay:
+    0 0 0 1px hsl(var(--paper-line)),
+    0 8px 28px hsl(0 0% 0% / 0.58);
+  --shadow-btn:
+    0 0 0 1px hsl(var(--paper-line-strong)),
+    0 1px 1px hsl(0 0% 0% / 0.26);
+  --shadow-inset-field: inset 0 1px 2px hsl(0 0% 0% / 0.30);
+
+  /* 信号色：同默认暗色主题（底色同为极暗，无需再调） */
+  --sig-run: 210 20% 68%;
+  --sig-done: 152 18% 64%;
+  --sig-warn: 36 34% 70%;
+  --sig-stop: 4 36% 70%;
+  --sig-run-tint: 210 20% 68% / 0.14;
+  --sig-done-tint: 152 18% 64% / 0.14;
+  --sig-warn-tint: 36 34% 70% / 0.14;
+  --sig-stop-tint: 4 36% 70% / 0.14;
 }

@@ -41,15 +41,19 @@ const ChapterListItem = memo(function ChapterListItem({
 }) {
   const [isHovered, setIsHovered] = useState(false);
 
+  // ★ 章节状态点（2026-09-18 墨韵化）：
+  //   原值是硬编码彩色 rgba —— draft 灰、revised **橙(255,180,90)**、final **青绿(90,200,150)**，
+  //   在水墨体系（色相恒 0 饱和度）里是漏网的彩色；且外圈还有 `0 0 6px` 发光。
+  //   改为走 SignalTone 的状态色（体系唯一的彩色出口，极低饱和）：
+  //   草稿→idle 墨阶 / 修订→warn / 定稿→done / 归档→更淡的墨阶。发光去掉。
   const statusDots = {
-    draft: 'rgba(150,150,160,0.9)',
-    revised: 'rgba(255,180,90,0.95)',
-    final: 'rgba(90,200,150,0.95)',
-    archived: 'rgba(120,120,130,0.7)',
+    draft: 'hsl(var(--tone-3))',
+    revised: 'hsl(var(--sig-warn))',
+    final: 'hsl(var(--sig-done))',
+    archived: 'hsl(var(--tone-3) / 0.6)',
   } as const;
 
   const statusDot = statusDots[chapter.status as keyof typeof statusDots] ?? statusDots.draft;
-  const gradientHue = (chapter.order * 37) % 360;
 
   return (
     <div
@@ -64,24 +68,23 @@ const ChapterListItem = memo(function ChapterListItem({
         alignItems: 'center',
         gap: 10,
         padding: '8px 10px',
-        borderRadius: 28,
+        borderRadius: 'var(--r-xs)',
         position: 'relative',
+        // ★ 墨韵化（2026-09-18）：原来 active/hover/常态是三档「青霭玻璃」半透明底 +
+        //   0.5px 勾线 + 玻璃高光内阴影 + backdropFilter 磨砂。
+        //   现在：选中=淡墨底+1px 浓墨线，悬停=paper-hover 实色，常态透明。
+        //   backdropFilter 一并去掉 —— 面板底色本来就是不透明的，磨砂看不见却给每一行
+        //   都开一层合成层（章节多时是实打实的开销）。
         background: isActive
-          ? 'hsl(var(--mountain-cyan) / 0.14)'
+          ? 'hsl(var(--tone) / 0.07)'
           : isHovered
-          ? 'rgb(var(--glass-tint) / 0.55)'
-          : 'rgb(var(--glass-tint) / 0.28)',
+          ? 'hsl(var(--paper-hover))'
+          : 'transparent',
+        // 勾线统一 1px：0.5px 在非 retina 屏会被舍成 0 或 1，粗细不匀
         border: isActive
-          ? '0.5px solid hsl(var(--mountain-cyan) / 0.45)'
-          : '0.5px solid hsl(var(--border) / 0.35)',
-        boxShadow: isActive
-          ? 'inset 0 1px 0 rgb(var(--glass-highlight) / 0.4), 0 4px 14px hsl(var(--glass-shadow) / 0.18)'
-          : isHovered
-          ? 'inset 0 1px 0 rgb(var(--glass-highlight) / 0.3), 0 3px 10px hsl(var(--glass-shadow) / 0.12)'
-          : 'inset 0 1px 0 rgb(var(--glass-highlight) / 0.2)',
-        backdropFilter: 'blur(12px) saturate(150%)',
-        WebkitBackdropFilter: 'blur(12px) saturate(150%)',
-        transition: 'background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease',
+          ? '1px solid hsl(var(--paper-line-strong))'
+          : '1px solid transparent',
+        transition: 'background 0.2s ease, border-color 0.2s ease',
         animation: `slideTop 0.5s cubic-bezier(0.16, 1, 0.3, 1) ${index * 0.04}s both`,
       }}
     >
@@ -99,9 +102,12 @@ const ChapterListItem = memo(function ChapterListItem({
           fontSize: 12,
           fontWeight: 700,
           fontFamily: "'Inter', sans-serif",
-          color: 'hsl(var(--foreground) / 0.95)',
-          background: `linear-gradient(135deg, hsl(${gradientHue} 55% 70% / 0.9), hsl(${(gradientHue + 40) % 360} 50% 60% / 0.9))`,
-          boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.4), inset 0 -1px 2px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.15)',
+          color: 'hsl(var(--tone-2))',
+          // ★ 原为 `hsl(${order*37} 55% 70%)` 的**色相递增彩虹渐变** ——
+          //   整个水墨体系里最后一处「按序号生成彩色 hue」的地方（2026-09-18 走查发现）。
+          //   序号是纯装饰，改回墨阶：淡墨底 + 1px 墨线，靠字重与数字本身区分。
+          background: 'hsl(var(--tone) / 0.06)',
+          border: '1px solid hsl(var(--paper-line))',
           fontVariantNumeric: 'tabular-nums',
           letterSpacing: '-0.02em',
           position: 'relative',
@@ -128,10 +134,10 @@ const ChapterListItem = memo(function ChapterListItem({
               width: '100%',
               padding: '3px 6px',
               fontSize: 13,
-              borderRadius: 14,
+              borderRadius: 'var(--r-2xs)',
               outline: 'none',
-              border: '0.5px solid hsl(var(--mountain-cyan) / 0.5)',
-              background: 'rgb(var(--glass-tint) / 0.6)',
+              border: '1px solid hsl(var(--paper-line-strong))',
+              background: 'hsl(var(--paper-field))',
               color: 'hsl(var(--foreground))',
               fontFamily: "'Noto Serif SC', serif",
             }}
@@ -157,8 +163,11 @@ const ChapterListItem = memo(function ChapterListItem({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                fontSize: 10.5,
-                color: 'hsl(var(--ink-pale))',
+                // ★ 11px 是体系字号地板（原来内联写死 10.5px，是**内联样式**，
+                //   逃过了 `.text-[10.5px]` 那条类名兜底规则 —— 真机探针抓到的就是它）
+                fontSize: 11,
+                // ink-pale(58%) 亮色下只有 3.3:1，字数是用户要读的内容 → tone-2(4.61:1)
+                color: 'hsl(var(--tone-2))',
                 fontVariantNumeric: 'tabular-nums',
               }}
             >
@@ -168,7 +177,6 @@ const ChapterListItem = memo(function ChapterListItem({
                   height: 5,
                   borderRadius: '50%',
                   background: statusDot,
-                  boxShadow: `0 0 6px ${statusDot}80`,
                 }}
               />
               <span>{wordCount > 0 ? `${wordCount.toLocaleString()} 字` : '未开始'}</span>
@@ -195,13 +203,15 @@ const ChapterListItem = memo(function ChapterListItem({
             style={{
               width: 22,
               height: 22,
-              borderRadius: 11,
+              borderRadius: 'var(--r-sm)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: 'rgb(var(--glass-tint) / 0.5)',
-              color: 'hsl(var(--foreground) / 0.8)',
-              border: '0.5px solid hsl(var(--border) / 0.4)',
+              background: 'hsl(var(--paper-hover))',
+              color: 'hsl(var(--tone-2))',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderColor: 'hsl(var(--paper-line))',
               cursor: 'pointer',
             }}
             title="重命名"
@@ -214,13 +224,15 @@ const ChapterListItem = memo(function ChapterListItem({
             style={{
               width: 22,
               height: 22,
-              borderRadius: 11,
+              borderRadius: 'var(--r-sm)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: 'rgb(var(--glass-tint) / 0.5)',
-              color: 'hsl(var(--foreground) / 0.8)',
-              border: '0.5px solid hsl(var(--border) / 0.4)',
+              background: 'hsl(var(--paper-hover))',
+              color: 'hsl(var(--tone-2))',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderColor: 'hsl(var(--paper-line))',
               cursor: 'pointer',
             }}
             title="删除"
@@ -423,8 +435,8 @@ export function LeftSidebar() {
       <div className="flex-1 overflow-y-auto py-3 mc-scrollbar">
         {sortedChapters.length === 0 ? (
           <div className="px-4 py-8 text-center">
-            <FileText size={20} className="mx-auto mb-2" style={{ color: 'hsl(var(--ink-pale))' }} />
-            <p className="text-[12px]" style={{ color: 'hsl(var(--ink-pale))' }}>
+            <FileText size={20} className="mx-auto mb-2 text-tone-3" />
+            <p className="text-[12px] text-tone-2">
               暂无章节 · 在下方创建第一章
             </p>
           </div>
@@ -436,8 +448,7 @@ export function LeftSidebar() {
                   {/* 卷标题 */}
                   {volumeGroups.length > 1 && (
                     <div
-                      className="text-[11px] font-semibold tracking-wide px-1"
-                      style={{ color: 'hsl(var(--ink-pale))' }}
+                      className="text-[11px] font-semibold tracking-wide px-1 text-tone-2"
                     >
                       {volume}
                     </div>
@@ -477,7 +488,7 @@ export function LeftSidebar() {
       </div>
 
       {/* 底部 — 新建章节 + 回收站 */}
-      <div className="px-3 py-2 border-t" style={{ borderColor: 'hsl(var(--border) / 0.5)' }}>
+      <div className="px-3 py-2 border-t" style={{ borderColor: 'hsl(var(--paper-line))' }}>
         {!creating ? (
           <div className="flex items-center gap-1.5">
             <button
@@ -511,7 +522,7 @@ export function LeftSidebar() {
               style={{
                 color: 'hsl(var(--foreground))',
                 background: 'rgb(var(--glass-tint) / 0.45)',
-                border: '0.5px solid hsl(var(--border) / 0.6)',
+                border: '1px solid hsl(var(--paper-line-strong))',
                 backdropFilter: 'blur(10px) saturate(150%)',
                 WebkitBackdropFilter: 'blur(10px) saturate(150%)',
                 boxShadow: 'inset 0 1px 0 rgb(var(--glass-highlight) / 0.35)',
@@ -535,7 +546,7 @@ export function LeftSidebar() {
               style={{
                 color: 'hsl(var(--foreground))',
                 background: 'rgb(var(--glass-tint) / 0.45)',
-                border: '0.5px solid hsl(var(--border) / 0.6)',
+                border: '1px solid hsl(var(--paper-line-strong))',
                 backdropFilter: 'blur(10px) saturate(150%)',
                 WebkitBackdropFilter: 'blur(10px) saturate(150%)',
                 boxShadow: 'inset 0 1px 0 rgb(var(--glass-highlight) / 0.35)',

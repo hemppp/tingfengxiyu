@@ -160,8 +160,15 @@ function TypographyPanel() {
               style={{
                 fontWeight: w.value,
                 padding: '8px 4px',
-                borderRadius: 8,
-                border: '0.5px solid',
+                // ★ 内联样式优先级最高、与特异性无关 —— 主题里的
+                //   `html[data-theme='shuimo'] button { border-radius: 2px }` 压不过它。
+                //   所以走变量引用 + 原值 fallback：默认主题逐像素不变，shuimo 下归 0。
+                borderRadius: 'var(--r-2xs, 8px)',
+                // ★ 必须拆成 longhand！`border: '0.5px solid'` 是**简写**，
+                //   按规范会把 border-image 重置为 none —— 笔触边框就画不出来了。
+                //   （2026-09-18 实测：设置页 5 个粗细按钮全部丢笔触，就是这个原因）
+                borderWidth: '0.5px',
+                borderStyle: 'solid',
                 borderColor: settings.weight === w.value ? 'hsl(var(--primary))' : 'hsl(var(--border) / 0.6)',
                 background: settings.weight === w.value ? 'hsl(var(--primary) / 0.12)' : 'transparent',
                 color: 'hsl(var(--ink))',
@@ -185,10 +192,16 @@ function TypographyPanel() {
               key={c.label}
               title={c.label}
               onClick={() => update({ ...settings, color: c.value })}
+              /* ★ `nm-color-swatch` 是给主题的**显式钩子**：
+                 色板的 border 承载「选中」语义（选中 = primary 环），
+                 所以它刻意**不**穿 shuimo 的笔触边框 —— 笔触会盖掉选中环。
+                 不要依赖 `border` 简写重置 border-image 这个副作用来表达意图，
+                 那是隐式的，改成长写就会静默失效。见 shuimo.css 11.10。 */
+              className="nm-color-swatch"
               style={{
                 width: 30,
                 height: 30,
-                borderRadius: 8,
+                borderRadius: 'var(--r-2xs, 8px)',
                 border: '2px solid',
                 borderColor: settings.color === c.value ? 'hsl(var(--primary))' : 'hsl(var(--border) / 0.6)',
                 background: c.value ?? 'repeating-linear-gradient(45deg, hsl(var(--glass-tint)), hsl(var(--glass-tint)) 4px, transparent 4px, transparent 8px)',
@@ -204,10 +217,11 @@ function TypographyPanel() {
           {/* 自定义色 */}
           <label
             title="自定义颜色"
+            className="nm-color-swatch"
             style={{
               width: 30,
               height: 30,
-              borderRadius: 8,
+              borderRadius: 'var(--r-2xs, 8px)',
               border: '2px solid hsl(var(--border) / 0.6)',
               background: customHex && /^#[0-9a-fA-F]{3,8}$/.test(customHex) ? customHex : 'linear-gradient(45deg, #f00 0%, #0f0 50%, #00f 100%)',
               cursor: 'pointer',
@@ -236,7 +250,21 @@ function TypographyPanel() {
             className="flex-1 px-2 py-1 text-xs font-mono rounded border"
             style={{ borderColor: 'hsl(var(--border) / 0.6)', background: 'transparent', color: 'hsl(var(--ink))' }}
           />
-          <button onClick={reset} className="flex items-center gap-1 px-2 py-1 text-xs rounded" style={{ border: '0.5px solid hsl(var(--border) / 0.6)', color: 'hsl(var(--ink-light))', cursor: 'pointer' }}>
+          <button
+            onClick={reset}
+            className="flex items-center gap-1 px-2 py-1 text-xs rounded"
+            // ★ 拆长写：`border` 简写会重置 border-image → shuimo 笔触边框画不出来。
+            //   ⚠️ 本文件里「恢复默认」有**两处**（面板一处、设置区一处），
+            //   第一轮只改了设置区那个，面板这个漏了 —— 被浮窗面板扫描抓出来。
+            //   以后改这种"同款按钮出现多次"的地方，务必 grep 全文数一遍。
+            style={{
+              borderWidth: '0.5px',
+              borderStyle: 'solid',
+              borderColor: 'hsl(var(--border) / 0.6)',
+              color: 'hsl(var(--ink-light))',
+              cursor: 'pointer',
+            }}
+          >
             <RotateCcw size={11} /> 恢复默认
           </button>
         </div>
@@ -256,7 +284,7 @@ function TypographyPanel() {
         </div>
       </div>
 
-      {saved && <div className="text-xs" style={{ color: '#22c55e' }}>✓ 已保存</div>}
+      {saved && <div className="text-xs" style={{ color: 'var(--state-done, #22c55e)' }}>✓ 已保存</div>}
       {!loaded && <div className="text-xs opacity-60">加载中...</div>}
     </div>
   );
@@ -304,8 +332,10 @@ function TypographySettingsSection() {
             style={{
               fontWeight: w.value,
               padding: '8px 4px',
-              borderRadius: 8,
-              border: '0.5px solid',
+              borderRadius: 'var(--r-2xs, 8px)',
+              // 拆长写，别用 `border` 简写（会重置 border-image，笔触就没了）
+              borderWidth: '0.5px',
+              borderStyle: 'solid',
               borderColor: settings.weight === w.value ? 'hsl(var(--primary))' : 'hsl(var(--border) / 0.6)',
               background: settings.weight === w.value ? 'hsl(var(--primary) / 0.12)' : 'transparent',
               color: 'hsl(var(--ink))',
@@ -326,7 +356,8 @@ function TypographySettingsSection() {
             persist({ ...DEFAULT_SETTINGS });
           }}
           className="flex items-center gap-1 px-2 py-1 text-xs rounded"
-          style={{ border: '0.5px solid hsl(var(--border) / 0.6)', color: 'hsl(var(--ink-light))', cursor: 'pointer' }}
+          // 拆长写：`border` 简写会重置 border-image → shuimo 笔触边框画不出来
+          style={{ borderWidth: '0.5px', borderStyle: 'solid', borderColor: 'hsl(var(--border) / 0.6)', color: 'hsl(var(--ink-light))', cursor: 'pointer' }}
         >
           <RotateCcw size={11} /> 恢复默认
         </button>

@@ -53,7 +53,8 @@ function ToolbarButton({ def, editor }: { def: EditorToolbarItemDef; editor: Edi
       style={{
         color: active ? 'hsl(var(--primary))' : 'hsl(var(--ink-light))',
         background: active ? 'hsl(var(--primary) / 0.12)' : 'transparent',
-        border: '0.5px solid',
+        borderWidth: '0.5px',
+        borderStyle: 'solid',
         borderColor: active ? 'hsl(var(--primary) / 0.4)' : 'hsl(var(--border) / 0.5)',
       }}
     >

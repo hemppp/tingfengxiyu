@@ -143,11 +143,54 @@ export default {
           done: 'hsl(var(--state-done))',
           blocked: 'hsl(var(--state-blocked))',
         },
+
+        // ============================================================
+        // 墨韵工艺层（2026-09-18）—— 令牌定义见 globals.css「墨韵工艺层」小节
+        //
+        // 纸面层级 paper：由"深"到"浮"共 6 档
+        //   bg-canvas(底) < bg-inset(凹陷) < bg-field(输入) < bg(面) < bg-hover < bg-hover-2
+        // 墨线 line：勾线三档 —— 在纸上，实体感来自勾线而非投影
+        // ============================================================
+        paper: {
+          DEFAULT: 'hsl(var(--paper))',
+          canvas: 'hsl(var(--paper-canvas))',
+          inset: 'hsl(var(--paper-inset))',
+          field: 'hsl(var(--paper-field))',
+          hover: 'hsl(var(--paper-hover))',
+          'hover-2': 'hsl(var(--paper-hover-2))',
+          line: 'hsl(var(--paper-line))',
+          'line-strong': 'hsl(var(--paper-line-strong))',
+          'line-soft': 'hsl(var(--paper-line-soft))',
+        },
+
+        // 墨阶文字 tone：三档（tone-3 只准用于 placeholder / disabled / 装饰）
+        tone: {
+          DEFAULT: 'hsl(var(--tone))',
+          2: 'hsl(var(--tone-2))',
+          3: 'hsl(var(--tone-3))',
+        },
+
+        // 极克制信号色 sig：本体系唯一的彩色，只用于状态指示
+        sig: {
+          run: 'hsl(var(--sig-run))',
+          'run-tint': 'hsl(var(--sig-run-tint))',
+          done: 'hsl(var(--sig-done))',
+          'done-tint': 'hsl(var(--sig-done-tint))',
+          warn: 'hsl(var(--sig-warn))',
+          'warn-tint': 'hsl(var(--sig-warn-tint))',
+          stop: 'hsl(var(--sig-stop))',
+          'stop-tint': 'hsl(var(--sig-stop-tint))',
+        },
       },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
+        // 墨韵工艺层：四级圆角档位（与上面的苹果大圆角并存，迁移可分批）
+        chip: 'var(--radius-chip)',           // 6px  标签 / 徽章 / 极小控件
+        control: 'var(--radius-control)',     // 8px  按钮 / 输入 / 图标按钮
+        card: 'var(--radius-card)',           // 10px 卡片 / 面板
+        window: 'var(--radius-window)',       // 14px 窗口 / 大容器 / 输入区
       },
       fontFamily: {
         sans: ['-apple-system', 'BlinkMacSystemFont', 'SF Pro Text', 'Segoe UI', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Microsoft YaHei UI', 'Microsoft YaHei', 'system-ui', 'sans-serif'],
@@ -292,6 +335,30 @@ export default {
         // —— 青霭玻璃特色阴影
         'ink': '0 8px 24px -8px hsl(var(--ink) / 0.18)',
         'mist': '0 12px 32px -10px hsl(var(--mist-deep) / 0.25)',
+
+        // —— 墨韵工艺层：分级投影，全部含 1px 墨线（令牌见 globals.css）——
+        // hairline 勾线 → card 卡片 → raised 浮起 → overlay 弹层，四级递进
+        hairline: 'var(--shadow-hairline)',
+        card: 'var(--shadow-card)',
+        raised: 'var(--shadow-raised)',
+        overlay: 'var(--shadow-overlay)',
+        btn: 'var(--shadow-btn)',
+        field: 'var(--shadow-inset-field)',
+      },
+      // 墨韵工艺层：三档精修缓动（取 beautifului 的值）
+      transitionTimingFunction: {
+        link: 'var(--ease-link)',                       // 出场 / 展开：快起慢收
+        'out-strong': 'var(--ease-out-strong)',         // 位移 / 放大：更脆
+        'in-out-strong': 'var(--ease-in-out-strong)',   // 循环 / 往复
+      },
+      // 墨韵工艺层：命名字号档位
+      // 为什么要这个：全站已在用 336 处 text-[11px]，但那是"魔法值"，
+      // 后来人不知道 11 是地板还是随手写的。固化成 text-2xs 后语义自明，
+      // 且将来要调档位只改这一处。
+      //   2xs 11px = 面板内小字地板（眉标 / 元信息 / 表格 meta）
+      //   xs  12px = Tailwind 内置，正文下限
+      fontSize: {
+        '2xs': ['11px', { lineHeight: '1.45' }],
       },
     },
   },

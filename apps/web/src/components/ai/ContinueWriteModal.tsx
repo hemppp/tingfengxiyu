@@ -136,7 +136,12 @@ export function ContinueWriteModal({ visible, chapterTitle, onConfirm, onClose }
             className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all hover:scale-[1.02] active:scale-95"
             style={{
               background: 'rgb(var(--glass-tint) / 0.5)',
-              border: '1px solid hsl(var(--border) / 0.4)',
+              // ★ 必须拆长写：`border` 简写会把 border-image 重置为 none，
+              // 而 shuimo 主题的毛笔笔触边框正是用 border-image 画的 —— 一简写就被静默吃掉。
+              // 别改回 `border: '1px solid ...'`，那会让这个按钮在 shuimo 主题下丢笔触。
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderColor: 'hsl(var(--border) / 0.4)',
               boxShadow: 'inset 0 1px 0 hsl(var(--glass-highlight) / 0.5)',
             }}
           >

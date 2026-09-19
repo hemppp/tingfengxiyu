@@ -176,7 +176,9 @@ function ThinkingTrace({ text, defaultOpen }: { text: string; defaultOpen?: bool
         className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors"
         style={{
           color: 'hsl(var(--muted-foreground))',
-          border: '0.5px solid hsl(var(--border) / 0.8)',
+          borderWidth: '0.5px',
+          borderStyle: 'solid',
+          borderColor: 'hsl(var(--border) / 0.8)',
           background: open ? 'hsl(var(--muted) / 0.5)' : 'transparent',
         }}
         title="模型的推理过程原文（思维链），不是发言内容"
@@ -1076,7 +1078,9 @@ export function AutoWriteWorkbench({ project, onBack, onProjectDataChanged }: Au
                       className="ml-auto text-[11px] px-2 py-0.5 rounded-md"
                       style={{
                         color: 'hsl(var(--destructive))',
-                        border: '0.5px solid hsl(var(--destructive) / 0.4)',
+                        borderWidth: '0.5px',
+                        borderStyle: 'solid',
+                        borderColor: 'hsl(var(--destructive) / 0.4)',
                         background: 'transparent',
                         cursor: 'pointer',
                       }}

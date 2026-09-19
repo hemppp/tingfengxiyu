@@ -142,7 +142,7 @@ export function CreditLedger() {
   if (!projectId) {
     return (
       <div className="h-full flex items-center justify-center bg-card">
-        <p className="text-sm text-gray-500 font-medium">请先选择一个项目</p>
+        <p className="text-sm text-muted-foreground font-medium">请先选择一个项目</p>
       </div>
     );
   }
@@ -151,15 +151,15 @@ export function CreditLedger() {
     <div className="h-full flex flex-col bg-card">
       <div className="flex-1 flex overflow-hidden">
         {/* 左侧：人物搜索 + 列表（徽标 = 当前结余） */}
-        <div className="w-64 border-r border-gray-200 flex flex-col bg-muted/40">
+        <div className="w-64 border-r border-border flex flex-col bg-muted/40">
           <div className="px-3 pt-3 pb-2">
             <div className="relative">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={charSearch}
                 onChange={(e) => { setCharSearch(e.target.value); setSelectedCharId(null); setSelectedTxId(null); }}
                 placeholder="搜索人物..."
-                className="w-full pl-8 pr-3 py-1.5 text-sm bg-white border border-gray-200 rounded-[14px] focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-300 placeholder:text-gray-400 transition-shadow"
+                className="w-full pl-8 pr-3 py-1.5 text-sm bg-card border border-border rounded-[14px] focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring placeholder:text-muted-foreground transition-shadow"
               />
             </div>
           </div>
@@ -169,7 +169,7 @@ export function CreditLedger() {
           <div className="flex-1 overflow-y-auto px-2 pb-2">
             {filteredChars.length === 0 ? (
               <div className="px-3 py-8 text-center">
-                <User size={20} className="mx-auto mb-2 text-gray-300" />
+                <User size={20} className="mx-auto mb-2 text-muted-foreground/60" />
                 <p className="text-xs text-muted-foreground">未找到相关人物</p>
               </div>
             ) : (
@@ -181,7 +181,7 @@ export function CreditLedger() {
                     key={c.id}
                     onClick={() => { setSelectedCharId(c.id); setSelectedTxId(null); setShowForm(false); }}
                     className={`w-full text-left px-3 py-2 rounded-2xl mb-0.5 flex items-center justify-between transition-colors ${
-                      selectedCharId === c.id ? 'bg-gray-100' : 'hover:bg-gray-50'
+                      selectedCharId === c.id ? 'bg-muted' : 'hover:bg-muted'
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
@@ -191,7 +191,7 @@ export function CreditLedger() {
                       >
                         {c.name[0]}
                       </div>
-                      <span className="text-sm text-gray-800 truncate">{c.name}</span>
+                      <span className="text-sm text-foreground truncate">{c.name}</span>
                     </div>
                     {hasLedger && (
                       <span
@@ -211,18 +211,18 @@ export function CreditLedger() {
         </div>
 
         {/* 中间：结余汇总 + 流水列表 */}
-        <div className="w-96 border-r border-gray-200 flex flex-col">
+        <div className="w-96 border-r border-border flex flex-col">
           {selectedChar ? (
             <>
-              <div className="px-4 pt-3 pb-3 border-b border-gray-100">
+              <div className="px-4 pt-3 pb-3 border-b border-border/60">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
                     <Coins size={14} className="text-amber-500" />
                     {selectedChar.name} 的积分账本
                   </h3>
                   <button
                     onClick={() => { setSelectedTxId(null); setShowForm(true); setForm({ ...EMPTY_FORM, chapter: '1' }); }}
-                    className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-800 text-white rounded-xl hover:bg-gray-700 transition-colors"
+                    className="flex items-center gap-1 px-2 py-1 text-xs bg-foreground text-background rounded-xl hover:bg-foreground/85 transition-colors"
                   >
                     <Plus size={12} />
                     记一笔
@@ -231,7 +231,7 @@ export function CreditLedger() {
                 <div className="mt-2.5 flex items-end gap-3">
                   <div>
                     <p className="text-[11px] text-muted-foreground">当前结余</p>
-                    <p className={`text-2xl font-bold tabular-nums ${charBalance < 0 ? 'text-red-500' : 'text-gray-800'}`}>
+                    <p className={`text-2xl font-bold tabular-nums ${charBalance < 0 ? 'text-red-500' : 'text-foreground'}`}>
                       {charBalance}
                     </p>
                   </div>
@@ -245,9 +245,9 @@ export function CreditLedger() {
               <div className="flex-1 overflow-y-auto px-2 py-2">
                 {ledger.length === 0 ? (
                   <div className="px-4 py-12 text-center">
-                    <Coins size={24} className="mx-auto mb-2 text-gray-300" />
+                    <Coins size={24} className="mx-auto mb-2 text-muted-foreground/60" />
                     <p className="text-sm text-muted-foreground">暂无积分流水</p>
-                    <p className="text-[11px] text-gray-300 mt-1">点击"记一笔"记录任务奖励或商城兑换</p>
+                    <p className="text-[11px] text-muted-foreground/60 mt-1">点击"记一笔"记录任务奖励或商城兑换</p>
                   </div>
                 ) : (
                   ledger.map((t) => {
@@ -258,7 +258,7 @@ export function CreditLedger() {
                         key={t.id}
                         onClick={() => { if (!showForm) { setSelectedTxId(t.id); } }}
                         className={`w-full text-left px-3 py-2 rounded-2xl mb-0.5 transition-colors ${
-                          selectedTxId === t.id ? 'bg-gray-100' : 'hover:bg-gray-50'
+                          selectedTxId === t.id ? 'bg-muted' : 'hover:bg-muted'
                         }`}
                       >
                         <div className="flex items-center gap-2">
@@ -276,7 +276,7 @@ export function CreditLedger() {
                           <span className={`text-sm font-semibold tabular-nums ${isGain ? 'text-green-600' : 'text-red-500'}`}>
                             {isGain ? '+' : '-'}{t.amount}
                           </span>
-                          <span className="text-sm text-gray-700 truncate flex-1">{t.reason || (isGain ? '获得积分' : '消耗积分')}</span>
+                          <span className="text-sm text-foreground/85 truncate flex-1">{t.reason || (isGain ? '获得积分' : '消耗积分')}</span>
                           <span className="text-[11px] text-muted-foreground shrink-0">余 {t.balanceAfter}</span>
                         </div>
                         <div className="flex items-center gap-1.5 mt-1 ml-8">
@@ -314,12 +314,12 @@ export function CreditLedger() {
             <div className="p-4 space-y-4">
               <div className="flex items-center gap-2">
                 <Zap size={14} className="text-amber-500" />
-                <h3 className="text-sm font-semibold text-gray-800">{selectedTxId ? '编辑流水' : '记一笔'}</h3>
+                <h3 className="text-sm font-semibold text-foreground">{selectedTxId ? '编辑流水' : '记一笔'}</h3>
               </div>
 
               {/* 类型 */}
               <div>
-                <div className="text-xs font-semibold text-gray-500 mb-1.5">类型</div>
+                <div className="text-xs font-semibold text-muted-foreground mb-1.5">类型</div>
                 <div className="flex gap-2">
                   {(['gain', 'spend'] as const).map((t) => (
                     <button
@@ -330,7 +330,7 @@ export function CreditLedger() {
                           ? t === 'gain'
                             ? 'bg-green-50 border-green-300 text-green-700'
                             : 'bg-red-50 border-red-300 text-red-600'
-                          : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                          : 'bg-card border-border text-muted-foreground hover:bg-muted'
                       }`}
                     >
                       {t === 'gain' ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
@@ -343,42 +343,42 @@ export function CreditLedger() {
               {/* 章节 + 数额 */}
               <div className="flex gap-3">
                 <div className="w-28">
-                  <div className="text-xs font-semibold text-gray-500 mb-1.5">章节</div>
+                  <div className="text-xs font-semibold text-muted-foreground mb-1.5">章节</div>
                   <input
                     type="number"
                     min={1}
                     value={form.chapter}
                     onChange={(e) => setForm((f) => ({ ...f, chapter: e.target.value }))}
-                    className="w-full px-2.5 py-1.5 text-sm bg-white border border-gray-200 rounded-[14px] focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-300"
+                    className="w-full px-2.5 py-1.5 text-sm bg-card border border-border rounded-[14px] focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring"
                   />
                 </div>
                 <div className="flex-1">
-                  <div className="text-xs font-semibold text-gray-500 mb-1.5">积分数额</div>
+                  <div className="text-xs font-semibold text-muted-foreground mb-1.5">积分数额</div>
                   <input
                     type="number"
                     min={0}
                     value={form.amount}
                     onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
                     placeholder="如 500"
-                    className="w-full px-2.5 py-1.5 text-sm bg-white border border-gray-200 rounded-[14px] focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-300 placeholder:text-gray-400"
+                    className="w-full px-2.5 py-1.5 text-sm bg-card border border-border rounded-[14px] focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring placeholder:text-muted-foreground"
                   />
                 </div>
               </div>
 
               {/* 事由 */}
               <div>
-                <div className="text-xs font-semibold text-gray-500 mb-1.5">事由</div>
+                <div className="text-xs font-semibold text-muted-foreground mb-1.5">事由</div>
                 <input
                   value={form.reason}
                   onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
                   placeholder={form.type === 'gain' ? '如：完成新手任务 / 击杀魔兽' : '如：兑换功法 / 购买丹药'}
-                  className="w-full px-2.5 py-1.5 text-sm bg-white border border-gray-200 rounded-[14px] focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-300 placeholder:text-gray-400"
+                  className="w-full px-2.5 py-1.5 text-sm bg-card border border-border rounded-[14px] focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring placeholder:text-muted-foreground"
                 />
               </div>
 
               {/* 关联物品 */}
               <div>
-                <div className="text-xs font-semibold text-gray-500 mb-1.5">关联物品（可选）</div>
+                <div className="text-xs font-semibold text-muted-foreground mb-1.5">关联物品（可选）</div>
                 <div className="relative">
                   <select
                     value={form.relatedItemId}
@@ -392,7 +392,7 @@ export function CreditLedger() {
                         amount: f.type === 'spend' && !f.amount && item?.creditPrice ? String(item.creditPrice) : f.amount,
                       }));
                     }}
-                    className="w-full px-2.5 py-1.5 text-sm bg-white border border-gray-200 rounded-[14px] focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-300"
+                    className="w-full px-2.5 py-1.5 text-sm bg-card border border-border rounded-[14px] focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring"
                   >
                     <option value="">无</option>
                     {projectItems.map((i) => (
@@ -418,13 +418,13 @@ export function CreditLedger() {
               <div className="flex gap-2">
                 <button
                   onClick={handleSubmit}
-                  className="px-3 py-1.5 text-sm bg-gray-800 text-white rounded-xl hover:bg-gray-700 transition-colors"
+                  className="px-3 py-1.5 text-sm bg-foreground text-background rounded-xl hover:bg-foreground/85 transition-colors"
                 >
                   {selectedTxId ? '保存' : '记入账本'}
                 </button>
                 <button
                   onClick={() => { setShowForm(false); setSelectedTxId(null); setForm(EMPTY_FORM); setFormError(null); }}
-                  className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+                  className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground/85 transition-colors"
                 >
                   取消
                 </button>
@@ -441,7 +441,7 @@ export function CreditLedger() {
                   {selectedTx.type === 'gain' ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-gray-800">
+                  <h3 className="font-bold text-foreground">
                     {selectedTx.type === 'gain' ? '获得' : '消耗'} {selectedTx.amount} 积分
                   </h3>
                   <p className="text-xs text-muted-foreground mt-0.5">第 {selectedTx.chapter} 章</p>
@@ -450,8 +450,8 @@ export function CreditLedger() {
 
               {selectedTx.reason && (
                 <div>
-                  <div className="text-xs font-semibold text-gray-500 mb-1.5">事由</div>
-                  <div className="text-sm text-gray-700 bg-gray-50 rounded-2xl p-3">{selectedTx.reason}</div>
+                  <div className="text-xs font-semibold text-muted-foreground mb-1.5">事由</div>
+                  <div className="text-sm text-foreground/85 bg-muted rounded-2xl p-3">{selectedTx.reason}</div>
                 </div>
               )}
 
@@ -460,16 +460,16 @@ export function CreditLedger() {
                 if (!relatedItem) return null;
                 return (
                   <div>
-                    <div className="text-xs font-semibold text-gray-500 mb-1.5">关联物品</div>
-                    <div className="flex items-center gap-2 bg-gray-50 rounded-2xl p-3">
-                      <ShoppingCart size={14} className="text-gray-400" />
-                      <span className="text-sm text-gray-700">{relatedItem.name}</span>
+                    <div className="text-xs font-semibold text-muted-foreground mb-1.5">关联物品</div>
+                    <div className="flex items-center gap-2 bg-muted rounded-2xl p-3">
+                      <ShoppingCart size={14} className="text-muted-foreground" />
+                      <span className="text-sm text-foreground/85">{relatedItem.name}</span>
                       {relatedItem.creditPrice != null && (
                         <span className="text-[11px] text-muted-foreground flex items-center gap-0.5">
                           <Coins size={9} /> {relatedItem.creditPrice}
                         </span>
                       )}
-                      <ArrowRight size={12} className="text-gray-300 ml-auto" />
+                      <ArrowRight size={12} className="text-muted-foreground/60 ml-auto" />
                     </div>
                   </div>
                 );
@@ -478,7 +478,7 @@ export function CreditLedger() {
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={() => startEdit(selectedTx)}
-                  className="px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+                  className="px-3 py-1.5 text-sm text-muted-foreground bg-muted rounded-xl hover:bg-secondary transition-colors"
                 >
                   编辑
                 </button>
@@ -499,7 +499,7 @@ export function CreditLedger() {
               <div className="text-center">
                 <Coins size={36} className="mx-auto mb-3 opacity-30" />
                 <p className="text-sm">选择流水查看详情</p>
-                <p className="text-[11px] text-gray-300 mt-1.5 max-w-52">
+                <p className="text-[11px] text-muted-foreground/60 mt-1.5 max-w-52">
                   追踪系统文角色的每笔积分收支与变动后结余，负结余即提示账目不一致
                 </p>
               </div>

@@ -304,7 +304,10 @@ export function AIConfigPanel() {
               background: 'rgba(255,255,255,0.6)',
               backdropFilter: 'blur(12px)',
               WebkitBackdropFilter: 'blur(12px)',
-              border: '1px solid rgba(35,131,199,0.3)',
+              // ★ 拆长写：`border` 简写会重置 border-image → shuimo 笔触画不出来
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderColor: 'rgba(35,131,199,0.3)',
               color: '#1e6fa8',
               boxShadow: '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)',
             }}
@@ -425,7 +428,10 @@ export function AIConfigPanel() {
               background: 'rgba(255,255,255,0.6)',
               backdropFilter: 'blur(12px)',
               WebkitBackdropFilter: 'blur(12px)',
-              border: '1px solid rgba(35,131,199,0.3)',
+              // ★ 拆长写：`border` 简写会重置 border-image → shuimo 笔触画不出来
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderColor: 'rgba(35,131,199,0.3)',
               color: '#1e6fa8',
               boxShadow: '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)',
             }}
@@ -499,7 +505,10 @@ export function AIConfigPanel() {
             background: 'linear-gradient(135deg, #1e6fa8 0%, #1c6e62 100%)',
             color: '#ffffff',
             boxShadow: '0 4px 14px rgba(35,131,116,0.35), inset 0 1px 0 rgba(255,255,255,0.25)',
-            border: '1px solid rgba(35,131,116,0.6)',
+            // ★ 拆长写（同上）：内联 `border` 简写会重置 border-image
+            borderWidth: '1px',
+            borderStyle: 'solid',
+            borderColor: 'rgba(35,131,116,0.6)',
           }}
           onMouseEnter={(e) => {
             if (!e.currentTarget.disabled) {
@@ -525,7 +534,10 @@ export function AIConfigPanel() {
             background: 'rgba(255,255,255,0.6)',
             backdropFilter: 'blur(12px)',
             WebkitBackdropFilter: 'blur(12px)',
-            border: '1px solid rgba(35,131,199,0.3)',
+            // ★ 拆长写：`border` 简写会重置 border-image → shuimo 笔触画不出来
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderColor: 'rgba(35,131,199,0.3)',
             color: '#1e6fa8',
             boxShadow: '0 2px 8px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)',
           }}
@@ -557,7 +569,10 @@ export function AIConfigPanel() {
             background: 'rgba(255,255,255,0.6)',
             backdropFilter: 'blur(12px)',
             WebkitBackdropFilter: 'blur(12px)',
-            border: '1px solid rgba(0,0,0,0.15)',
+            // ★ 拆长写（同上）：内联 `border` 简写会重置 border-image
+            borderWidth: '1px',
+            borderStyle: 'solid',
+            borderColor: 'rgba(0,0,0,0.15)',
             color: 'rgba(0,0,0,0.65)',
             boxShadow: '0 2px 8px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.8)',
           }}
@@ -574,6 +589,10 @@ export function AIConfigPanel() {
         </button>
         <button
           onClick={() => setShowLocalModel(v => !v)}
+          /* ★ 这是 **toggle**：border 随状态变（展开=绿边），刻意**不**拆长写 ——
+             否则 shuimo 的笔触会盖掉 border-color，用户看不出开没开。
+             补 `aria-pressed` 让它落进 shuimo.css 11.11 的语义豁免清单。 */
+          aria-pressed={showLocalModel}
           className="px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-1.5 transition-all"
           style={{
             background: showLocalModel ? 'rgba(35,131,116,0.15)' : 'rgba(255,255,255,0.6)',

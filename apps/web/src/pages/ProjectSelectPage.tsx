@@ -38,7 +38,7 @@ const ProjectSelectPage: React.FC = () => {
         <h1 style={{ fontFamily: "'Playfair Display','Georgia','Noto Serif SC',serif", fontSize: '2.5rem', fontWeight: 600, color: '#f5f5f3', marginBottom: '2rem', letterSpacing: '-0.02em' }}>
           Select Project
         </h1>
-        <div className="rounded-xl p-6 mb-8" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', backdropFilter: 'blur(12px)', transition: TRANSITION }}
+        <div className="rounded-xl p-6 mb-8" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 'var(--r-sm)', backdropFilter: 'blur(12px)', transition: TRANSITION }}
           onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(0,0,0,0.25)'}
           onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'}>
           <h2 style={{ fontFamily: "'Playfair Display','Georgia','Noto Serif SC',serif", fontSize: '1.25rem', fontWeight: 600, color: '#000000', marginBottom: '1.5rem' }}>
@@ -49,7 +49,7 @@ const ProjectSelectPage: React.FC = () => {
               <label className="block text-sm font-medium mb-1" style={{ color: '#f5f5f3' }}>项目名称 *</label>
               <input type="text" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)}
                 className="w-full px-3 py-2 rounded-md outline-none"
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#f5f5f3', borderRadius: '8px', transition: TRANSITION }}
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#f5f5f3', borderRadius: 'var(--r-2xs)', transition: TRANSITION }}
                 onFocus={(e) => e.target.style.borderColor = 'rgba(0,0,0,0.5)'}
                 onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
                 placeholder="输入项目名称" />
@@ -58,7 +58,7 @@ const ProjectSelectPage: React.FC = () => {
               <label className="block text-sm font-medium mb-1" style={{ color: '#f5f5f3' }}>简介</label>
               <textarea value={newProjectDescription} onChange={(e) => setNewProjectDescription(e.target.value)}
                 className="w-full px-3 py-2 rounded-md outline-none resize-none" rows={3}
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#f5f5f3', borderRadius: '8px', transition: TRANSITION }}
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#f5f5f3', borderRadius: 'var(--r-2xs)', transition: TRANSITION }}
                 onFocus={(e) => e.target.style.borderColor = 'rgba(0,0,0,0.5)'}
                 onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
                 placeholder="输入简介（可选）" />
@@ -67,26 +67,26 @@ const ProjectSelectPage: React.FC = () => {
               <label className="block text-sm font-medium mb-1" style={{ color: '#f5f5f3' }}>笔名</label>
               <input type="text" value={newProjectPenName} onChange={(e) => setNewProjectPenName(e.target.value)}
                 className="w-full px-3 py-2 rounded-md outline-none"
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#f5f5f3', borderRadius: '8px', transition: TRANSITION }}
+                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#f5f5f3', borderRadius: 'var(--r-2xs)', transition: TRANSITION }}
                 onFocus={(e) => e.target.style.borderColor = 'rgba(0,0,0,0.5)'}
                 onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
                 placeholder="输入笔名（可选）" />
             </div>
             <button onClick={handleCreateProject} disabled={!newProjectName.trim() || isCreating}
               className="px-6 py-2 rounded-md font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed enabled:hover:brightness-125"
-              style={{ background: newProjectName.trim() ? '#000000' : 'rgba(0,0,0,0.25)', color: newProjectName.trim() ? '#ffffff' : 'rgba(245,245,243,0.35)', borderRadius: '8px', transition: TRANSITION }}>
+              style={{ background: newProjectName.trim() ? '#000000' : 'rgba(0,0,0,0.25)', color: newProjectName.trim() ? '#ffffff' : 'rgba(245,245,243,0.35)', borderRadius: 'var(--r-2xs)', transition: TRANSITION }}>
               {isCreating ? 'Creating...' : 'Create New Project'}
             </button>
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {projects.length === 0 ? (
-            <div className="col-span-3 text-center py-16 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px' }}>
+            <div className="col-span-3 text-center py-16 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 'var(--r-sm)' }}>
               <p className="text-lg" style={{ color: 'rgba(245,245,243,0.25)' }}>暂无项目，创建你的第一个项目吧！</p>
             </div>
           ) : (
             projects.map((project) => (
-              <div key={project.id} className="overflow-hidden cursor-pointer transition-all" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', transition: TRANSITION }}
+              <div key={project.id} className="overflow-hidden cursor-pointer transition-all" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 'var(--r-sm)', transition: TRANSITION }}
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(0,0,0,0.3)'; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.2)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}>
                 <div className="p-5">

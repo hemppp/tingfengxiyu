@@ -194,7 +194,7 @@ function ToastItem({ toast, onRemove }: ToastItemProps) {
     <div ref={containerRef}
       className="relative flex items-center gap-3 px-4 py-3 pr-10 min-w-[280px] max-w-[400px]"
       style={{
-        borderRadius: '16px',
+        borderRadius: 'var(--r-md)',
         background: 'rgb(var(--glass-tint) / 0.7)',
         backdropFilter: 'blur(20px) saturate(180%)',
         WebkitBackdropFilter: 'blur(20px) saturate(180%)',

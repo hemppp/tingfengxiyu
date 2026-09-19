@@ -503,7 +503,7 @@ export function PipelineGraphPanel({
                 disabled={busy || !note.trim()}
                 title={note.trim() ? '带着批注重跑这一段' : '先写批注'}
                 className="inline-flex items-center justify-center gap-1 rounded-md disabled:opacity-40"
-                style={{ padding: '6px 12px', fontSize: 12, background: 'transparent', color: 'hsl(var(--primary))', border: '0.5px solid hsl(var(--primary) / 0.5)', cursor: 'pointer' }}
+                style={{ padding: '6px 12px', fontSize: 12, background: 'transparent', color: 'hsl(var(--primary))', borderWidth: '0.5px', borderStyle: 'solid', borderColor: 'hsl(var(--primary) / 0.5)', cursor: 'pointer' }}
               >
                 <X size={12} />
                 打回重跑
@@ -514,7 +514,7 @@ export function PipelineGraphPanel({
                 disabled={busy}
                 title="方向就错了：退回上一段重立（本段与更晚的产出作废）"
                 className="rounded-md disabled:opacity-40"
-                style={{ padding: '6px 12px', fontSize: 12, background: 'transparent', color: 'hsl(var(--destructive))', border: '0.5px solid hsl(var(--destructive) / 0.5)', cursor: 'pointer' }}
+                style={{ padding: '6px 12px', fontSize: 12, background: 'transparent', color: 'hsl(var(--destructive))', borderWidth: '0.5px', borderStyle: 'solid', borderColor: 'hsl(var(--destructive) / 0.5)', cursor: 'pointer' }}
               >
                 退回上一段
               </button>
@@ -556,7 +556,7 @@ export function PipelineGraphPanel({
               type="button"
               onClick={() => abortRef.current?.abort()}
               className="self-start rounded-md text-[11px] px-2 py-0.5"
-              style={{ color: 'hsl(var(--destructive))', border: '0.5px solid hsl(var(--destructive) / 0.4)', background: 'transparent', cursor: 'pointer' }}
+              style={{ color: 'hsl(var(--destructive))', borderWidth: '0.5px', borderStyle: 'solid', borderColor: 'hsl(var(--destructive) / 0.4)', background: 'transparent', cursor: 'pointer' }}
             >
               停止
             </button>
@@ -643,7 +643,7 @@ export function PipelineGraphPanel({
             type="button"
             onClick={() => void refresh()}
             className="shrink-0 inline-flex items-center gap-1 rounded-md text-[11px]"
-            style={{ padding: '6px 10px', background: 'transparent', border: '0.5px solid hsl(var(--border) / 0.8)', color: 'hsl(var(--muted-foreground))', cursor: 'pointer' }}
+            style={{ padding: '6px 10px', background: 'transparent', borderWidth: '0.5px', borderStyle: 'solid', borderColor: 'hsl(var(--border) / 0.8)', color: 'hsl(var(--muted-foreground))', cursor: 'pointer' }}
             aria-label="重新读取流水线状态"
           >
             <RefreshCw size={11} /> 重新读取

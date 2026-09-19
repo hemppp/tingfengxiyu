@@ -177,6 +177,8 @@ export function BookScanDirectory({ onGoLibrary }: { onGoLibrary: () => void }) 
             <button
               key={b.key}
               onClick={() => setBoard(b.key)}
+              // ★ 选择控件（板块切换），选中态靠 border/bg 表达 → 加 aria-pressed 让 shuimo 显式豁免笔触
+              aria-pressed={board === b.key}
               className="px-2 py-0.5 rounded-full text-[11px] transition-colors"
               style={board === b.key
                 ? { background: 'rgba(35,131,199,0.14)', color: ACCENT, border: `1px solid rgba(35,131,199,0.4)` }
@@ -232,8 +234,8 @@ export function BookScanDirectory({ onGoLibrary }: { onGoLibrary: () => void }) 
                   disabled={collected || isCollecting || processing}
                   className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] transition-all hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-90"
                   style={collected
-                    ? { background: 'hsl(0 0% 32% / 0.08)', border: '1px solid hsl(0 0% 32% / 0.22)', color: 'hsl(0 0% 30%)' }
-                    : { background: 'rgba(35,131,199,0.08)', border: '1px solid rgba(35,131,199,0.22)', color: ACCENT }}
+                    ? { background: 'hsl(0 0% 32% / 0.08)', borderWidth: '1px', borderStyle: 'solid', borderColor: 'hsl(0 0% 32% / 0.22)', color: 'hsl(0 0% 30%)' }
+                    : { background: 'rgba(35,131,199,0.08)', borderWidth: '1px', borderStyle: 'solid', borderColor: 'rgba(35,131,199,0.22)', color: ACCENT }}
                   title={collected ? '已收藏进书架' : `收藏《${item.title}》，之后在 AI 对话中拆书`}
                 >
                   {collected ? <Check size={11} /> : isCollecting ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}

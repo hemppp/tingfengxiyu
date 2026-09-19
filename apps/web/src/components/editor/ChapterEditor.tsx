@@ -120,7 +120,7 @@ export function ChapterEditor() {
             onClick={() => window.location.reload()}
             style={{
               padding: '8px 16px',
-              borderRadius: '8px',
+              borderRadius: 'var(--r-2xs)',
               backgroundColor: 'hsl(var(--primary))',
               color: 'white',
               fontSize: '14px',

@@ -19,80 +19,74 @@ type TemplateKind = 'mountains' | 'bamboo' | 'clouds' | 'moon' | 'pagoda' | 'rai
 interface Template {
   kind: TemplateKind;
   label: string;
-  /** 三段渐变：从上到下 */
-  gradient: [string, string, string];
-  /** 装饰色：用于 SVG 描边/填充 */
-  ink: string;
-  inkSoft: string;
-  /** 卷印记印色 */
-  seal: string;
+  /**
+   * 三段渐变的**墨浓度**百分比：0 = 纸本色，100 = 全墨。
+   *
+   * ★ 为什么不是颜色（2026-09-18 改）：
+   *   原来这里写的是 8 组灰阶 hex，形如 `['#e9e9e9', '#c8c8c8', '#8e8e8e']`。
+   *   它是**内联 style**（见下方 background），主题 CSS 压不动 ——
+   *   于是切到 shuimo（宣纸）主题后，书架页会杵着两块深灰卡片，
+   *   跟纸底完全不是一套东西，是最扎眼的"没换皮"证据。
+   *   改成「浓度 + 主题色」后，换主题只需重定义 `--cover-ink` / `--cover-paper`，
+   *   8 套模板的相对深浅自动跟着走。
+   *
+   * ★ 百分比是按旧灰阶**反算**出来的（ink=#1c1c1c, paper=#ffffff）：
+   *     P = (255 − T) / (255 − 28)
+   *   所以默认主题下渲染结果与改前**逐像素一致**（误差 < 0.4/255）。
+   *   例：远山中段 #c8c8c8(200) → (255−200)/227 = 24.2% → 混出 200.07 ≈ 200 ✅
+   *
+   * ★ 另有全局倍率 `--cover-wash-scale`（默认 1）整体压淡/加深，
+   *   见下方 wash()。shuimo 主题靠它把 8 套封面一起调成"纸上淡墨" ——
+   *   光换纸/墨的端点是不够的：那只是换色温，明度曲线没动，
+   *   封面依然是深色卡片贴在宣纸上（实测踩过）。
+   */
+  wash: [number, number, number];
+  /** 主线条 / 大首字的不透明度（%），对应原 `rgba(28,28,28,.78)` 那组 */
+  lineAlpha: number;
+  /** 次要线条（远景 / 竹叶 / 云带）的不透明度（%） */
+  softAlpha: number;
 }
 
+/** 墨按浓度调进纸里 —— 换主题只换纸和墨，8 套封面自动跟着变 */
+const wash = (pct: number): string =>
+  `color-mix(in srgb, var(--cover-ink) calc(${pct} * var(--cover-wash-scale, 1) * 1%), var(--cover-paper))`;
+
+/**
+ * 同色但带透明度，等价于原来的 `rgba(28,28,28,α)`。
+ * ⚠️ 实测确认 `var()` 与 `color-mix()` **都能用在 SVG 的 `fill=`/`stroke=` 属性上**
+ *    （Chrome 153：`color-mix(in srgb, var(--cover-line) 78%, transparent)`
+ *     → `color(srgb .1098 .1098 .1098 / .78)`，与旧的 rgba(28,28,28,.78) 完全一致）。
+ *    验证脚本 `.workbuddy/ui-checks/plan-svgcolor.json`。
+ */
+const tint = (varName: string, alpha: number): string =>
+  `color-mix(in srgb, var(${varName}) ${alpha}%, transparent)`;
+
+/**
+ * 装饰层专用：在 `tint` 基础上再乘一档**装饰浓度倍率**。
+ *
+ * 为什么要单独一档（2026-09-18 实测）：
+ *   封面下半部有好几条 `fill={ink} opacity="0.5~0.85"` 的"地面"path **叠在一起**，
+ *   叠出来的实际颜色比装饰色本身还暗（shuimo 下实测 rgb(120,115,109)）。
+ *   `--cover-wash-scale` 只压渐变底色，管不到这些叠加 —— 结果就是
+ *   "底色已经很淡了，底部却还是一块中灰"，白字放上去只有 4.42:1，不达 AA。
+ *   所以装饰要能**单独**压淡：shuimo 取 0.35，远山如洗。
+ *
+ * ⚠️ `calc` 里 `% × %` 是非法值，倍率必须是无单位数字 ——
+ *    所以写成 `calc(${alpha}% * var(--cover-decor-alpha, 1))`。
+ */
+const tintDecor = (varName: string, alpha: number): string =>
+  `color-mix(in srgb, var(${varName}) calc(${alpha}% * var(--cover-decor-alpha, 1)), transparent)`;
+
 const TEMPLATES: Template[] = [
-  {
-    kind: 'mountains',
-    label: '远山',
-    gradient: ['#e9e9e9', '#c8c8c8', '#8e8e8e'],
-    ink: 'rgba(28, 28, 28, 0.78)',
-    inkSoft: 'rgba(28, 28, 28, 0.32)',
-    seal: '#3a3a3a',
-  },
-  {
-    kind: 'bamboo',
-    label: '竹影',
-    gradient: ['#e2e2e2', '#b0b0b0', '#6a6a6a'],
-    ink: 'rgba(28, 28, 28, 0.82)',
-    inkSoft: 'rgba(28, 28, 28, 0.30)',
-    seal: '#3a3a3a',
-  },
-  {
-    kind: 'clouds',
-    label: '云海',
-    gradient: ['#f3f3f3', '#d8d8d8', '#a4a4a4'],
-    ink: 'rgba(28, 28, 28, 0.72)',
-    inkSoft: 'rgba(28, 28, 28, 0.28)',
-    seal: '#3a3a3a',
-  },
-  {
-    kind: 'moon',
-    label: '秋月',
-    gradient: ['#e6e6e6', '#b8b8b8', '#6b6b6b'],
-    ink: 'rgba(28, 28, 28, 0.82)',
-    inkSoft: 'rgba(28, 28, 28, 0.32)',
-    seal: '#3a3a3a',
-  },
-  {
-    kind: 'pagoda',
-    label: '古寺',
-    gradient: ['#e8e8e8', '#b8b8b8', '#6e6e6e'],
-    ink: 'rgba(28, 28, 28, 0.82)',
-    inkSoft: 'rgba(28, 28, 28, 0.32)',
-    seal: '#3a3a3a',
-  },
-  {
-    kind: 'rain',
-    label: '听雨',
-    gradient: ['#dcdcdc', '#a8a8a8', '#6a6a6a'],
-    ink: 'rgba(28, 28, 28, 0.80)',
-    inkSoft: 'rgba(28, 28, 28, 0.30)',
-    seal: '#3a3a3a',
-  },
-  {
-    kind: 'waves',
-    label: '碧波',
-    gradient: ['#e0e0e0', '#a0a0a0', '#4e4e4e'],
-    ink: 'rgba(28, 28, 28, 0.82)',
-    inkSoft: 'rgba(28, 28, 28, 0.30)',
-    seal: '#3a3a3a',
-  },
-  {
-    kind: 'plum',
-    label: '寒梅',
-    gradient: ['#ececec', '#c8c8c8', '#7a7a7a'],
-    ink: 'rgba(28, 28, 28, 0.80)',
-    inkSoft: 'rgba(28, 28, 28, 0.30)',
-    seal: '#3a3a3a',
-  },
+  //  wash = [顶, 中, 底]；lineAlpha / softAlpha 沿用原模板的不透明度
+  { kind: 'mountains', label: '远山', wash: [9.7, 24.2, 49.8], lineAlpha: 78, softAlpha: 32 },
+  { kind: 'bamboo', label: '竹影', wash: [12.8, 34.8, 65.6], lineAlpha: 82, softAlpha: 30 },
+  { kind: 'clouds', label: '云海', wash: [5.3, 17.2, 40.1], lineAlpha: 72, softAlpha: 28 },
+  { kind: 'moon', label: '秋月', wash: [11.0, 31.3, 65.2], lineAlpha: 82, softAlpha: 32 },
+  { kind: 'pagoda', label: '古寺', wash: [10.1, 31.3, 63.9], lineAlpha: 82, softAlpha: 32 },
+  { kind: 'rain', label: '听雨', wash: [15.4, 38.3, 65.6], lineAlpha: 80, softAlpha: 30 },
+  { kind: 'waves', label: '碧波', wash: [13.7, 41.9, 78.0], lineAlpha: 82, softAlpha: 30 },
+  { kind: 'plum', label: '寒梅', wash: [8.4, 24.2, 58.6], lineAlpha: 80, softAlpha: 30 },
 ];
 
 /** 装饰元素：远山 */
@@ -240,19 +234,35 @@ export const BookCover: React.FC<BookCoverProps> = ({ book, className, style, sh
   const Element = ElementByKind[tpl.kind];
   const firstChar = (book.name || '·').trim().charAt(0) || '·';
 
+  // 三个色值全部从主题变量派生 —— 换主题时纸 / 墨 / 印一起换，
+  // 组件本身不需要知道当前是哪个主题。
+  //
+  // ★ 装饰与文字**必须用两个变量**（2026-09-18 踩）：
+  //   原先两者共用一个 ink。shuimo 下把 ink 调暖后封面**依然发暗** ——
+  //   因为暗的不是渐变（渐变已经很淡），而是 SVG 装饰层里那些
+  //   `fill={ink} opacity="0.85"` 的"地面"色块，它们在画布底部铺满近黑。
+  //   把 ink 整体调淡又会让书名 / 大首字读不清。
+  //   所以拆开：装饰走 `--cover-decor`（shuimo 下调成淡墨，像墨在纸上化开），
+  //   文字走 `--cover-line`（始终够深）。默认主题两者同值，外观不变。
+  const inkColor = tint('--cover-line', tpl.lineAlpha);
+  // 装饰层走 tintDecor（额外乘 --cover-decor-alpha）—— 见 tintDecor 的注释
+  const decorInk = tintDecor('--cover-decor', tpl.lineAlpha);
+  const decorSoft = tintDecor('--cover-decor', tpl.softAlpha);
+  const sealColor = 'var(--cover-seal)';
+
   return (
     <div
       className={className}
       style={{
         position: 'relative',
         overflow: 'hidden',
-        background: `linear-gradient(180deg, ${tpl.gradient[0]} 0%, ${tpl.gradient[1]} 50%, ${tpl.gradient[2]} 100%)`,
+        background: `linear-gradient(180deg, ${wash(tpl.wash[0])} 0%, ${wash(tpl.wash[1])} 50%, ${wash(tpl.wash[2])} 100%)`,
         ...style,
       }}
       aria-label={`${tpl.label}封面`}
     >
       {/* 装饰 SVG 层 */}
-      <Element ink={tpl.ink} soft={tpl.inkSoft} seal={tpl.seal} />
+      <Element ink={decorInk} soft={decorSoft} seal={sealColor} />
 
       {/* 顶部细线 + 模板名（中文小字） */}
       <div
@@ -264,7 +274,7 @@ export const BookCover: React.FC<BookCoverProps> = ({ book, className, style, sh
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          color: tpl.ink,
+          color: inkColor,
           opacity: 0.75,
         }}
       >
@@ -284,12 +294,12 @@ export const BookCover: React.FC<BookCoverProps> = ({ book, className, style, sh
           style={{
             display: 'inline-block',
             padding: '1px 5px',
-            background: tpl.seal,
+            background: sealColor,
             color: 'rgba(245, 245, 245, 0.95)',
             fontFamily: "'Noto Serif SC', serif",
             fontSize: 9,
             letterSpacing: '0.1em',
-            borderRadius: 1,
+            borderRadius: 'var(--r-3xs)',
             boxShadow: '0 0 0 1px rgba(28, 28, 28, 0.06)',
           }}
         >
@@ -314,7 +324,7 @@ export const BookCover: React.FC<BookCoverProps> = ({ book, className, style, sh
               fontFamily: "'Noto Serif SC', 'Source Han Serif SC', serif",
               fontSize: 'min(38%, 92px)',
               fontWeight: 500,
-              color: tpl.ink,
+              color: inkColor,
               opacity: 0.42,
               writingMode: 'vertical-rl',
               textOrientation: 'upright',
@@ -336,7 +346,7 @@ export const BookCover: React.FC<BookCoverProps> = ({ book, className, style, sh
           right: 0,
           bottom: 6,
           textAlign: 'center',
-          color: tpl.ink,
+          color: inkColor,
           fontFamily: "'Noto Serif SC', 'Source Han Serif SC', serif",
           fontSize: 11,
           fontWeight: 500,

@@ -342,7 +342,9 @@ export function PipelinePanel({ projectId, onProjectDataChanged, onTurn, hasChap
         style={{
           height: 30,
           background: 'rgb(var(--glass-tint) / 0.3)',
-          border: '0.5px solid hsl(var(--border) / 0.5)',
+          borderWidth: '0.5px',
+          borderStyle: 'solid',
+          borderColor: 'hsl(var(--border) / 0.5)',
           color: 'hsl(var(--muted-foreground))',
         }}
       >
@@ -529,7 +531,7 @@ export function PipelinePanel({ projectId, onProjectDataChanged, onTurn, hasChap
                     disabled={busy || !note.trim()}
                     title={note.trim() ? '带着批注重跑这一段' : '先写批注'}
                     className="inline-flex items-center gap-1 rounded-full disabled:opacity-40"
-                    style={{ padding: '5px 14px', fontSize: 12, background: 'hsl(var(--primary) / 0.14)', color: 'hsl(var(--primary))', border: '0.5px solid hsl(var(--primary) / 0.4)', cursor: 'pointer' }}
+                    style={{ padding: '5px 14px', fontSize: 12, background: 'hsl(var(--primary) / 0.14)', color: 'hsl(var(--primary))', borderWidth: '0.5px', borderStyle: 'solid', borderColor: 'hsl(var(--primary) / 0.4)', cursor: 'pointer' }}
                   >
                     <X size={12} />
                     打回重跑
@@ -540,7 +542,7 @@ export function PipelinePanel({ projectId, onProjectDataChanged, onTurn, hasChap
                     disabled={busy}
                     title="方向就错了：退回上一段重立（本段与更晚的产出作废）"
                     className="rounded-full disabled:opacity-40"
-                    style={{ padding: '5px 12px', fontSize: 12, background: 'transparent', color: 'hsl(var(--destructive))', border: '0.5px solid hsl(var(--destructive) / 0.4)', cursor: 'pointer' }}
+                    style={{ padding: '5px 12px', fontSize: 12, background: 'transparent', color: 'hsl(var(--destructive))', borderWidth: '0.5px', borderStyle: 'solid', borderColor: 'hsl(var(--destructive) / 0.4)', cursor: 'pointer' }}
                   >
                     退回上一段
                   </button>
@@ -585,7 +587,7 @@ export function PipelinePanel({ projectId, onProjectDataChanged, onTurn, hasChap
                 type="button"
                 onClick={() => abortRef.current?.abort()}
                 className="self-start rounded-md text-[11px] px-2 py-0.5"
-                style={{ color: 'hsl(var(--destructive))', border: '0.5px solid hsl(var(--destructive) / 0.4)', background: 'transparent', cursor: 'pointer' }}
+                style={{ color: 'hsl(var(--destructive))', borderWidth: '0.5px', borderStyle: 'solid', borderColor: 'hsl(var(--destructive) / 0.4)', background: 'transparent', cursor: 'pointer' }}
               >
                 停止
               </button>

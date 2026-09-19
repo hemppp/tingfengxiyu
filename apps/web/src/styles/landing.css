@@ -1,16 +1,26 @@
 :root {
-  /* 水墨化（2026-09-15）：落地页原为冷调瓷白 + 霁青系，现整体归入黑白灰 */
-  --landing-bg: #f5f5f5;
-  --landing-accent: #1f1f1f;
-  --landing-accent-light: #6e6e6e;
-  --landing-accent-dim: #b5b5b5;
-  --landing-accent-pale: #e5e5e5;
+  /* 水墨化（2026-09-15）：落地页原为冷调瓷白 + 霁青系，现整体归入黑白灰。
+   *
+   * ★ 2026-09-18 改为**全部跟随主题变量**（原来是硬编码浅色，属既存缺陷）：
+   *   硬编码导致在「松烟」「水墨UI」这类暗色主题下，落地页仍是浅底 ——
+   *   全站都暗了只有它是白的，视觉上像坏掉。
+   *
+   * accent 系列一律写成 `hsl(var(--ink) / α)` 而非具体墨阶，这是关键：
+   *   --ink 在浅色主题下是深墨、暗色主题下反相为亮墨，
+   *   叠上 alpha 后**两种模式下都自然**（浅底=淡黑山影，暗底=淡白山影）。
+   *   若改用 --mountain-pale 之类的墨阶令牌，暗色下会取到"深色"值 → 山影消失。
+   */
+  --landing-bg: hsl(var(--background));
+  --landing-accent: hsl(var(--ink));
+  --landing-accent-light: hsl(var(--ink) / 0.6);
+  --landing-accent-dim: hsl(var(--ink) / 0.35);
+  --landing-accent-pale: hsl(var(--ink) / 0.12);
   --landing-text-primary: hsl(var(--foreground, 0 0% 9%));
   --landing-text-secondary: hsl(var(--muted-foreground, 0 0% 42%));
   --landing-text-muted: hsl(var(--ink-pale, 0 0% 58%));
   --landing-card-bg: transparent;           /* 由玻璃 backdrop-filter 接管 */
   --landing-card-border: hsl(var(--border, 0 0% 82%) / 0.5);
-  --landing-card-hover-border: hsl(0 0% 12% / 0.35);
+  --landing-card-hover-border: hsl(var(--ink) / 0.35);
   --landing-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
   --landing-serif: "Noto Serif SC", "Source Han Serif SC", serif;
 }

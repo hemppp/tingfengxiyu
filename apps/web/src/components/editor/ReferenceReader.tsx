@@ -173,7 +173,7 @@ export function ReferenceReader() {
               onChange={(e) => setActiveBook(e.target.value || null)}
               className="flex-1 min-w-0 px-3 py-1.5 text-sm border outline-none transition-colors"
               style={{
-                borderRadius: 14,
+                borderRadius: 'var(--r-md)',
                 background: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
                 color: isDark ? '#f5f5f3' : '#37352f',
                 borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
@@ -188,7 +188,7 @@ export function ReferenceReader() {
             </select>
             {processing && <Loader2 size={12} className="animate-spin shrink-0" style={{ color: ACCENT }} />}
             <input ref={fileInputRef} type="file" accept=".txt,.md" className="hidden" onChange={handleFileChange} />
-            <button onClick={() => fileInputRef.current?.click()} className="p-1.5 hover:bg-white/10 transition-colors" style={{ borderRadius: 12, color: processing ? 'rgba(0,0,0,0.4)' : ACCENT }} disabled={processing} title="上传 txt 文件">
+            <button onClick={() => fileInputRef.current?.click()} className="p-1.5 hover:bg-white/10 transition-colors" style={{ borderRadius: 'var(--r-sm)', color: processing ? 'rgba(0,0,0,0.4)' : ACCENT }} disabled={processing} title="上传 txt 文件">
               <Upload size={14} />
             </button>
           </div>
@@ -197,13 +197,13 @@ export function ReferenceReader() {
           {activeBook && (
             <div className="shrink-0 px-4 py-1.5 border-b flex items-center justify-between" style={{ borderColor: 'rgba(0,0,0,0.08)' }}>
               <div className="flex items-center gap-1">
-                <button onClick={handlePrevChapter} className="p-1 hover:bg-white/10 transition-colors" style={{ borderRadius: 10, color: 'rgba(55,53,47,0.4)' }} disabled={activeBook.currentChapter <= 0}>
+                <button onClick={handlePrevChapter} className="p-1 hover:bg-white/10 transition-colors" style={{ borderRadius: 'var(--r-xs)', color: 'rgba(55,53,47,0.4)' }} disabled={activeBook.currentChapter <= 0}>
                   <ChevronLeft size={14} />
                 </button>
                 <span className="text-xs" style={{ color: 'rgba(55,53,47,0.5)' }}>
                   {activeBook.currentChapter + 1}/{activeBook.chapters.length}
                 </span>
-                <button onClick={handleNextChapter} className="p-1 hover:bg-white/10 transition-colors" style={{ borderRadius: 10, color: 'rgba(55,53,47,0.4)' }} disabled={activeBook.currentChapter >= activeBook.chapters.length - 1}>
+                <button onClick={handleNextChapter} className="p-1 hover:bg-white/10 transition-colors" style={{ borderRadius: 'var(--r-xs)', color: 'rgba(55,53,47,0.4)' }} disabled={activeBook.currentChapter >= activeBook.chapters.length - 1}>
                   <ChevronRight size={14} />
                 </button>
               </div>
@@ -218,9 +218,9 @@ export function ReferenceReader() {
                     <ScrollText size={12} /> 查看拆书报告
                   </button>
                 )}
-                <button onClick={() => changeFontSize(-1)} className="p-1 hover:bg-white/10" style={{ borderRadius: 10, color: 'rgba(55,53,47,0.4)' }} title="缩小字号"><Minus size={12} /></button>
-                <button onClick={() => changeFontSize(1)} className="p-1 hover:bg-white/10" style={{ borderRadius: 10, color: 'rgba(55,53,47,0.4)' }} title="放大字号"><Plus size={12} /></button>
-                <button onClick={() => { if (activeBook) removeBook(activeBook.id); }} className="p-1 hover:bg-red-500/20" style={{ borderRadius: 10, color: '#c95454' }} title="删除此书"><Trash2 size={12} /></button>
+                <button onClick={() => changeFontSize(-1)} className="p-1 hover:bg-white/10" style={{ borderRadius: 'var(--r-xs)', color: 'rgba(55,53,47,0.4)' }} title="缩小字号"><Minus size={12} /></button>
+                <button onClick={() => changeFontSize(1)} className="p-1 hover:bg-white/10" style={{ borderRadius: 'var(--r-xs)', color: 'rgba(55,53,47,0.4)' }} title="放大字号"><Plus size={12} /></button>
+                <button onClick={() => { if (activeBook) removeBook(activeBook.id); }} className="p-1 hover:bg-red-500/20" style={{ borderRadius: 'var(--r-xs)', color: '#c95454' }} title="删除此书"><Trash2 size={12} /></button>
               </div>
             </div>
           )}
@@ -266,7 +266,7 @@ export function ReferenceReader() {
                   </div>
                   <p className="text-sm mb-2">从书架选择一本参考书开始对照阅读</p>
                   <p className="text-xs">扫榜收藏的书会出现在书架 · 上传 .txt（最大 10MB）</p>
-                  <button onClick={() => fileInputRef.current?.click()} className="mt-4 px-4 py-2 text-sm transition-colors" style={{ borderRadius: 18, background: '#000000', color: '#ffffff' }}>选择文件</button>
+                  <button onClick={() => fileInputRef.current?.click()} className="mt-4 px-4 py-2 text-sm transition-colors" style={{ borderRadius: 'var(--r-md)', background: '#000000', color: '#ffffff' }}>选择文件</button>
                   <p className="mt-3 text-xs opacity-50">或拖拽文件到此面板</p>
                 </div>
               ) : currentChapterData ? (

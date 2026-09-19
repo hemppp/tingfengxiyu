@@ -326,8 +326,8 @@ export function OutlineFillDialog({
           {/* 填入模式 */}
           {existingText.trim() && (
             <div>
-              <label className="nm-modal-label">填入模式</label>
-              <div className="flex gap-2">
+              <label className="nm-modal-label" id="nm-fill-mode-label">填入模式</label>
+              <div className="flex gap-2" role="radiogroup" aria-labelledby="nm-fill-mode-label">
                 <ModeButton
                   active={!mergeMode}
                   onClick={() => setMergeMode(false)}
@@ -437,6 +437,9 @@ function TargetOption({
   return (
     <button
       onClick={onClick}
+      // ★ 选择控件，不是动作按钮：选中态靠 border/bg 表达。
+      // 加 aria-pressed 让 shuimo 主题显式豁免笔触（笔触一生效 border-color 就不再绘制，选中环会消失）。
+      aria-pressed={selected}
       className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 transition-all text-left"
       style={{
         background: selected ? `${color}14` : 'rgb(var(--glass-tint) / 0.3)',
@@ -496,6 +499,10 @@ function ModeButton({
   return (
     <button
       onClick={onClick}
+      // ★ 互斥二选一 = 选择控件，不是动作按钮：active 态靠渐变背景 + border 表达，
+      // 穿上 shuimo 笔触反而会把选中态盖掉。role=radio 让主题侧显式豁免。
+      role="radio"
+      aria-checked={active}
       className="flex-1 rounded-xl px-3 py-2 transition-all text-left"
       style={{
         background: active

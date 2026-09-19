@@ -12,7 +12,7 @@ interface EntityFormProps<T extends Character | Item | Location> {
 }
 
 const TAG_COLORS = [
-  'bg-gray-100 text-gray-600',
+  'bg-muted text-muted-foreground',
   'bg-amber-50 text-amber-700',
   'bg-rose-50 text-rose-700',
   'bg-sky-50 text-sky-700',
@@ -28,9 +28,9 @@ const HOLDER_ACTION_META: Record<ItemHolder['action'], { label: string; icon: ty
 };
 
 // 表单元素统一样式（顶层常量，子组件可复用）
-const inputCls = "w-full px-3 py-2 text-sm text-gray-800 bg-white border border-gray-200 rounded-[14px] focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-300 placeholder:text-gray-400 transition-shadow";
-const textareaCls = "w-full px-3 py-2 text-sm text-gray-800 bg-white border border-gray-200 rounded-[14px] focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-300 placeholder:text-gray-400 transition-shadow resize-none";
-const selectCls = "w-full px-3 py-2 text-sm text-gray-800 bg-white border border-gray-200 rounded-[14px] focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-300 transition-shadow appearance-none";
+const inputCls = "w-full px-3 py-2 text-sm text-foreground bg-card border border-border rounded-[14px] focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring placeholder:text-muted-foreground transition-shadow";
+const textareaCls = "w-full px-3 py-2 text-sm text-foreground bg-card border border-border rounded-[14px] focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring placeholder:text-muted-foreground transition-shadow resize-none";
+const selectCls = "w-full px-3 py-2 text-sm text-foreground bg-card border border-border rounded-[14px] focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring transition-shadow appearance-none";
 
 function getTagColor(tag: string) {
   let hash = 0;
@@ -41,7 +41,7 @@ function getTagColor(tag: string) {
 function FormField({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">{label}</label>
+      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</label>
       {children}
       {hint && <p className="text-[11px] text-muted-foreground mt-0.5">{hint}</p>}
     </div>
@@ -54,7 +54,7 @@ const CHAR_ROLE_META: Record<CharRole, { label: string; activeCls: string }> = {
   protagonist: { label: '主角', activeCls: 'bg-amber-100 text-amber-800 border-amber-300' },
   femaleLead: { label: '女主', activeCls: 'bg-pink-100 text-pink-800 border-pink-300' },
   supporting: { label: '配角', activeCls: 'bg-sky-100 text-sky-800 border-sky-300' },
-  minor: { label: '路人甲', activeCls: 'bg-gray-100 text-gray-600 border-gray-300' },
+  minor: { label: '路人甲', activeCls: 'bg-muted text-muted-foreground border-border' },
 };
 const CHAR_ROLES: CharRole[] = ['protagonist', 'femaleLead', 'supporting', 'minor'];
 
@@ -100,10 +100,10 @@ export default function EntityForm<T extends Character | Item | Location>({ enti
           value={name}
           onChange={(e) => setName(e.target.value)}
           onBlur={handleSave}
-          className="w-full text-2xl font-bold text-gray-900 bg-transparent border-none outline-none placeholder:text-gray-300 focus:ring-0"
+          className="w-full text-2xl font-bold text-foreground bg-transparent border-none outline-none placeholder:text-muted-foreground/60 focus:ring-0"
           placeholder="未命名"
         />
-        <div className="mt-2 h-px bg-gray-100" />
+        <div className="mt-2 h-px bg-muted" />
       </div>
 
       {/* Properties 区块 */}
@@ -129,7 +129,7 @@ export default function EntityForm<T extends Character | Item | Location>({ enti
                       className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full border transition-all ${
                         isActive
                           ? `${meta.activeCls} shadow-sm scale-105`
-                          : 'bg-white text-muted-foreground border-gray-200 hover:border-gray-300 hover:text-gray-600'
+                          : 'bg-card text-muted-foreground border-border hover:border-ring hover:text-foreground'
                       }`}
                     >
                       {meta.label}
@@ -141,18 +141,18 @@ export default function EntityForm<T extends Character | Item | Location>({ enti
 
             {/* 基本信息只读概览卡：展示从正文自动提取的简介 / 首次出场章 / 标签，
                 与下方编辑表单区分，一眼看到提取结果（不重复进入输入框） */}
-            <div className="rounded-2xl border border-gray-200 bg-gray-50/60 p-4 space-y-3">
-              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">基本信息</div>
+            <div className="rounded-2xl border border-border bg-muted/60 p-4 space-y-3">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">基本信息</div>
               {(entity as Character).backstory && (
                 <div>
                   <div className="text-[11px] text-muted-foreground mb-0.5">简介</div>
-                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{(entity as Character).backstory}</p>
+                  <p className="text-sm text-foreground/85 leading-relaxed whitespace-pre-wrap">{(entity as Character).backstory}</p>
                 </div>
               )}
               {(entity as Character).chapters && (entity as Character).chapters!.length > 0 && (
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-[11px] text-muted-foreground">首次出场</span>
-                  <span className="text-gray-700 font-medium">第 {Math.min(...(entity as Character).chapters!)} 章</span>
+                  <span className="text-foreground/85 font-medium">第 {Math.min(...(entity as Character).chapters!)} 章</span>
                   <span className="text-[11px] text-muted-foreground">（共 {(entity as Character).chapters!.length} 章）</span>
                 </div>
               )}
@@ -313,7 +313,7 @@ export default function EntityForm<T extends Character | Item | Location>({ enti
 
         {/* Tags */}
         <div className="space-y-2">
-          <label className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
             <Tag size={12} />
             标签
           </label>
@@ -344,7 +344,7 @@ export default function EntityForm<T extends Character | Item | Location>({ enti
       </div>
 
       {/* Delete 按钮 */}
-      <div className="mt-10 pt-6 border-t border-gray-100">
+      <div className="mt-10 pt-6 border-t border-border/60">
         <button
           onClick={() => {
             if (safeConfirm('确定删除？此操作不可撤销。')) {
@@ -392,7 +392,7 @@ function ItemHoldersEditor({ item, onSave }: ItemHoldersEditorProps) {
   return (
     <>
       <div className="space-y-2">
-        <label className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
           <Check size={12} />
           当前持有者
           <span className="text-[11px] text-muted-foreground normal-case font-normal">
@@ -413,7 +413,7 @@ function ItemHoldersEditor({ item, onSave }: ItemHoldersEditorProps) {
                   className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full border transition-colors ${
                     isOn
                       ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                      : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                      : 'bg-card text-muted-foreground border-border hover:bg-muted'
                   }`}
                   aria-pressed={isOn}
                 >
@@ -432,10 +432,10 @@ function ItemHoldersEditor({ item, onSave }: ItemHoldersEditorProps) {
       {/* 装备流转史 */}
       {timeline.length > 0 && (
         <div className="space-y-2">
-          <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
             装备流转史
           </label>
-          <ol className="border-l-2 border-gray-100 pl-4 space-y-2">
+          <ol className="border-l-2 border-border/60 pl-4 space-y-2">
             {timeline.map((h, i) => {
               const meta = HOLDER_ACTION_META[h.action];
               const Icon = meta.icon;
@@ -446,7 +446,7 @@ function ItemHoldersEditor({ item, onSave }: ItemHoldersEditorProps) {
                     <Icon size={10} />
                     {meta.label}
                   </span>
-                  <span className="text-gray-700">{char?.name ?? '未知角色'}</span>
+                  <span className="text-foreground/85">{char?.name ?? '未知角色'}</span>
                   <span className="text-muted-foreground">第 {h.chapter} 章</span>
                 </li>
               );
@@ -523,7 +523,7 @@ function CharacterRelationsEditor({ character, onSave }: CharacterRelationsEdito
 
   return (
     <div className="space-y-2">
-      <label className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
         <Network size={12} />
         角色关系
         <span className="text-[11px] text-muted-foreground normal-case font-normal">
@@ -543,16 +543,16 @@ function CharacterRelationsEditor({ character, onSave }: CharacterRelationsEdito
             return (
               <li
                 key={`${r.targetId}-${r.type}-${idx}`}
-                className="group flex items-center gap-2 px-2.5 py-1.5 rounded-2xl border border-gray-100 bg-white hover:bg-gray-50 transition-colors"
+                className="group flex items-center gap-2 px-2.5 py-1.5 rounded-2xl border border-border/60 bg-card hover:bg-muted transition-colors"
               >
                 <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-xl text-[11px] ${meta.color}`}>
                   <Icon size={10} />
                   {meta.label}
                 </span>
-                <span className="text-sm text-gray-800 font-medium">
+                <span className="text-sm text-foreground font-medium">
                   {r.type}
                 </span>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-muted-foreground">
                   {target?.name ?? '未知角色'}
                 </span>
                 {r.chapter !== undefined && (
@@ -566,7 +566,7 @@ function CharacterRelationsEditor({ character, onSave }: CharacterRelationsEdito
                 <button
                   type="button"
                   onClick={() => removeRelation(idx)}
-                  className="ml-auto p-1 rounded-xl text-gray-300 hover:text-rose-500 hover:bg-rose-50 transition-colors opacity-0 group-hover:opacity-100"
+                  className="ml-auto p-1 rounded-xl text-muted-foreground/60 hover:text-rose-500 hover:bg-rose-50 transition-colors opacity-0 group-hover:opacity-100"
                   title="删除此关系"
                   aria-label="删除此关系"
                 >
@@ -584,15 +584,15 @@ function CharacterRelationsEditor({ character, onSave }: CharacterRelationsEdito
           type="button"
           onClick={() => setShowAdd(true)}
           disabled={projectChars.length === 0}
-          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50 border border-dashed border-gray-200 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground/85 hover:bg-muted border border-dashed border-border rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus size={12} />
           添加关系
         </button>
       ) : (
-        <div className="p-3 border border-gray-200 rounded-2xl bg-gray-50/50 space-y-2.5">
+        <div className="p-3 border border-border rounded-2xl bg-muted/50 space-y-2.5">
           {projectChars.length === 0 ? (
-            <p className="text-xs text-gray-500 italic">该项目中暂无其他角色，无法添加关系</p>
+            <p className="text-xs text-muted-foreground italic">该项目中暂无其他角色，无法添加关系</p>
           ) : (
             <>
               <div className="grid grid-cols-2 gap-2">
@@ -650,7 +650,7 @@ function CharacterRelationsEditor({ character, onSave }: CharacterRelationsEdito
                 <button
                   type="button"
                   onClick={reset}
-                  className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                  className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground/85 transition-colors"
                 >
                   取消
                 </button>
@@ -679,7 +679,7 @@ const ITEM_RELATION_META: Record<ItemRelationType, { label: string; color: strin
   part_of: { label: '部件', color: 'text-violet-700 bg-violet-50', hint: '组件-整机' },
   opposite_of: { label: '对立', color: 'text-rose-700 bg-rose-50', hint: '正-邪法宝' },
   transforms_into: { label: '变形', color: 'text-emerald-700 bg-emerald-50', hint: '狼人-人形' },
-  related_to: { label: '关联', color: 'text-gray-700 bg-gray-100', hint: '泛关联' },
+  related_to: { label: '关联', color: 'text-foreground/85 bg-muted', hint: '泛关联' },
 };
 
 const ITEM_RELATION_TYPES: ItemRelationType[] = [
@@ -732,7 +732,7 @@ function ItemRelationsEditor({ item, onSave }: ItemRelationsEditorProps) {
 
   return (
     <div className="space-y-2">
-      <label className="text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
         <Link2 size={12} />
         物品间关系
         <span className="text-[11px] text-muted-foreground normal-case font-normal">
@@ -751,12 +751,12 @@ function ItemRelationsEditor({ item, onSave }: ItemRelationsEditorProps) {
             return (
               <li
                 key={`${r.targetItemId}-${r.type}-${idx}`}
-                className="group flex items-center gap-2 px-2.5 py-1.5 rounded-2xl border border-gray-100 bg-white hover:bg-gray-50 transition-colors"
+                className="group flex items-center gap-2 px-2.5 py-1.5 rounded-2xl border border-border/60 bg-card hover:bg-muted transition-colors"
               >
                 <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-xl text-[11px] ${meta.color}`}>
                   {meta.label}
                 </span>
-                <span className="text-sm text-gray-800 font-medium">
+                <span className="text-sm text-foreground font-medium">
                   {target?.name ?? '未知物品'}
                 </span>
                 {r.chapter !== undefined && (
@@ -770,7 +770,7 @@ function ItemRelationsEditor({ item, onSave }: ItemRelationsEditorProps) {
                 <button
                   type="button"
                   onClick={() => removeRelation(idx)}
-                  className="ml-auto p-1 rounded-xl text-gray-300 hover:text-rose-500 hover:bg-rose-50 transition-colors opacity-0 group-hover:opacity-100"
+                  className="ml-auto p-1 rounded-xl text-muted-foreground/60 hover:text-rose-500 hover:bg-rose-50 transition-colors opacity-0 group-hover:opacity-100"
                   title="删除此关系"
                   aria-label="删除此关系"
                 >
@@ -788,15 +788,15 @@ function ItemRelationsEditor({ item, onSave }: ItemRelationsEditorProps) {
           type="button"
           onClick={() => setShowAdd(true)}
           disabled={projectItems.length === 0}
-          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-50 border border-dashed border-gray-200 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground/85 hover:bg-muted border border-dashed border-border rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus size={12} />
           添加物品关系
         </button>
       ) : (
-        <div className="p-3 border border-gray-200 rounded-2xl bg-gray-50/50 space-y-2.5">
+        <div className="p-3 border border-border rounded-2xl bg-muted/50 space-y-2.5">
           {projectItems.length === 0 ? (
-            <p className="text-xs text-gray-500 italic">该项目中暂无其他物品，无法添加关系</p>
+            <p className="text-xs text-muted-foreground italic">该项目中暂无其他物品，无法添加关系</p>
           ) : (
             <>
               <div className="grid grid-cols-2 gap-2">
@@ -850,7 +850,7 @@ function ItemRelationsEditor({ item, onSave }: ItemRelationsEditorProps) {
                 <button
                   type="button"
                   onClick={reset}
-                  className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                  className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground/85 transition-colors"
                 >
                   取消
                 </button>

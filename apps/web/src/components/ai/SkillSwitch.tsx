@@ -33,7 +33,7 @@ export function SkillSwitch({
       style={{
         width: 62,
         height: 26,
-        borderRadius: 999,
+        borderRadius: 'var(--r-pill)',
         border: `1px solid ${enabled ? 'hsl(var(--state-done, 142 71% 45%))' : 'hsl(var(--border))'}`,
         background: enabled
           ? 'linear-gradient(135deg, hsl(var(--state-done, 142 71% 45%) / 0.20), hsl(var(--state-done, 142 71% 45%) / 0.10))'
@@ -74,7 +74,7 @@ export function SkillSwitch({
           left: enabled ? 36 : 1,
           width: 22,
           height: 22,
-          borderRadius: 999,
+          borderRadius: 'var(--r-pill)',
           background: 'hsl(var(--background))',
           boxShadow: '0 1px 3px hsl(var(--ink-deep, 220 20% 10%) / 0.25)',
           transition: 'left 160ms cubic-bezier(0.4, 0, 0.2, 1)',

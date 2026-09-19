@@ -162,10 +162,10 @@ export function GraphShell({
         </div>
         <div className="flex-1 flex items-center justify-center bg-background">
           <div className="text-center max-w-sm px-6">
-            <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-              <Network size={28} className="text-gray-400" />
+            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+              <Network size={28} className="text-muted-foreground" />
             </div>
-            <p className="text-sm text-gray-700 font-medium mb-1">暂无数据</p>
+            <p className="text-sm text-foreground/85 font-medium mb-1">暂无数据</p>
             <p className="text-xs text-muted-foreground">{emptyHint}</p>
           </div>
         </div>

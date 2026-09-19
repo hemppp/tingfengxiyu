@@ -125,10 +125,18 @@ export function SettingsPage() {
               <button
                 key={c.key}
                 onClick={() => setCategory(c.key)}
-                className="w-full text-left px-3 py-2.5 rounded-lg transition-colors"
+                /* ★ `nm-nav-item` / `--active` 是给主题的**显式钩子**：
+                   shuimo 下导航项整体不穿笔触（6 个都穿太吵，且导航不是动作按钮），
+                   只让**选中项**穿 —— 作为"当前所在"的墨框标记。见 shuimo.css 11.10。 */
+                className={`nm-nav-item w-full text-left px-3 py-2.5 rounded-lg transition-colors${
+                  category === c.key ? ' nm-nav-item--active' : ''
+                }`}
                 style={{
                   background: category === c.key ? 'rgb(var(--glass-tint) / 0.55)' : 'transparent',
-                  border: category === c.key ? '0.5px solid hsl(var(--border) / 0.6)' : '0.5px solid transparent',
+                  // ★ 拆长写：`border` 简写会重置 border-image，选中项的墨框就画不出来
+                  borderWidth: '0.5px',
+                  borderStyle: 'solid',
+                  borderColor: category === c.key ? 'hsl(var(--border) / 0.6)' : 'transparent',
                 }}
               >
                 <div className="flex items-center gap-2 text-sm font-medium" style={{ color: category === c.key ? 'hsl(var(--ink))' : 'hsl(var(--ink-light) / 0.75)' }}>

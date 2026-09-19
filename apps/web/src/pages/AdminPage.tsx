@@ -171,6 +171,14 @@ export function AdminPage() {
           <button
             onClick={() => navigate('/')}
             className="nm-btn-outline-pill text-[12px]"
+            /* ★ 修一个**原有布局 bug**（2026-09-19 实测，与主题无关）：
+               `.nm-btn-outline-pill` 在 globals.css 里写了 `width: 100%`
+               （Login/Register 拿它当整行提交按钮，所以那里是对的）。
+               这里顶栏是 `flex justify-between`，`width: 100%` 让它**抢满整行** ——
+               实测两个主题下都是 948px 宽、把「管理员后台」挤成两行。
+               shuimo 的笔触框会把这个超宽按钮放大成"巨型笔触"，所以顺手修掉。
+               内联 `width: auto` 优先级最高，稳定压过类里的 100%。 */
+            style={{ width: 'auto' }}
           >
             返回写作
           </button>
@@ -203,14 +211,8 @@ export function AdminPage() {
         )}
 
         {/* 用户列表 */}
-        <div
-          className="rounded-2xl overflow-hidden"
-          style={{
-            background: 'rgb(var(--glass-tint) / 0.5)',
-            backdropFilter: 'blur(16px)',
-            border: '1px solid hsl(var(--border) / 0.3)',
-          }}
-        >
+        {/* 同上：改用 `nm-card`，别再堆 ad-hoc 的 glass-tint 内联样式 */}
+        <div className="nm-card overflow-hidden">
           <div
             className="px-5 py-3 flex items-center justify-between"
             style={{ borderBottom: '1px solid hsl(var(--border) / 0.3)' }}
@@ -394,14 +396,19 @@ export function AdminPage() {
 
 function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
   return (
-    <div
-      className="rounded-2xl p-5"
-      style={{
-        background: 'rgb(var(--glass-tint) / 0.5)',
-        backdropFilter: 'blur(16px)',
-        border: '1px solid hsl(var(--border) / 0.3)',
-      }}
-    >
+    /* ★ 改用项目自己的卡片约定 `nm-card`（2026-09-19）
+       原先这里是 ad-hoc 内联样式：`background: rgb(var(--glass-tint) / 0.5)`
+       + `backdropFilter: blur(16px)` + `border: 1px solid hsl(var(--border) / 0.3)`。
+       问题：shuimo 主题把 `--glass-tint` 设成了**纸色本身**（rgb 247,241,230），
+       而页面底 `--background` 是 rgb(241,238,233) —— 两者只差 6 级；
+       再乘 0.5 alpha（填充）和 0.3 alpha（边框），卡面在宣纸上**几乎完全看不见**
+       （实测对比度 1.07）。
+       ★ 算过：**0.5 alpha 的填充在浅底上根本做不出可见卡面** ——
+         即使填纯白，0.5 叠上去也只有 1.07。所以正解不是调色，而是
+         **边框 + 投影**（shuimo 的 11.3 节就是这么定义纸面的：
+         纸色 + 宣纸纹理 + 1px 墨线 + 纸感投影 + 直角）。
+       换成 `nm-card` 后，两套主题都走同一套卡片语言，也跟设置页保持一致。 */
+    <div className="nm-card p-5">
       <div className="flex items-center gap-2 mb-2" style={{ color: 'hsl(var(--ink-light))' }}>
         {icon}
         <span className="text-[12px]">{label}</span>

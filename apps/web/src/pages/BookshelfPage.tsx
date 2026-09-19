@@ -44,6 +44,13 @@ const sortOptions = [
 
 function CalligraphyTitle() {
   return (
+    /* ★ 品牌名改为「听风细雨」（2026-09-19）
+       这里原先硬编码英文 `Novel` + `Muse` 两段 span。
+       应用早在 commit 7e021b8「应用品牌名改为「听风细雨」」就改名了，
+       登录页 / `<title>` / 页脚都改了，**唯独这个书架页字标漏了** ——
+       实测 `grep -rn "NovelMuse"` 只在这一处是用户可见的（其余都是
+       函数名/类型名/注释/console.error，不进 UI）。
+       保留原来的**双色处理**（前半墨色、后半主色），只换字。 */
     <h1
       className="select-none"
       style={{
@@ -55,8 +62,8 @@ function CalligraphyTitle() {
         lineHeight: 1,
       }}
     >
-      <span className="opacity-90">Novel</span>
-      <span style={{ color: 'hsl(var(--primary))' }}>Muse</span>
+      <span className="opacity-90">听风</span>
+      <span style={{ color: 'hsl(var(--primary))' }}>细雨</span>
     </h1>
   );
 }

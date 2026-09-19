@@ -87,7 +87,7 @@ export function MemoryAuditPanel({ projectId }: { projectId?: string | null }) {
           onClick={() => void load()}
           aria-label="刷新"
           className="ml-auto flex items-center gap-1 text-[10.5px] px-2 py-0.5 rounded"
-          style={{ background: 'transparent', border: '0.5px solid hsl(var(--border))', color: 'hsl(var(--muted-foreground))', cursor: 'pointer' }}
+          style={{ background: 'transparent', borderWidth: '0.5px', borderStyle: 'solid', borderColor: 'hsl(var(--border))', color: 'hsl(var(--muted-foreground))', cursor: 'pointer' }}
         >
           {loading ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
           刷新
@@ -147,7 +147,7 @@ export function MemoryAuditPanel({ projectId }: { projectId?: string | null }) {
                       data-resolve={`${c.id}:${decision}`}
                       onClick={() => void resolveConflict(c.id, decision).then((r) => { setHint(r?.hint ?? null); return load(); })}
                       className="text-[10.5px] px-2 py-0.5 rounded"
-                      style={{ background: 'transparent', border: '0.5px solid hsl(var(--border))', color: 'hsl(var(--muted-foreground))', cursor: 'pointer' }}
+                      style={{ background: 'transparent', borderWidth: '0.5px', borderStyle: 'solid', borderColor: 'hsl(var(--border))', color: 'hsl(var(--muted-foreground))', cursor: 'pointer' }}
                     >
                       {label}
                     </button>

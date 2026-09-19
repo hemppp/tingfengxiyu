@@ -175,7 +175,11 @@ export const ProjectIndexPage: React.FC = () => {
               fontSize: 13,
               color: 'hsl(var(--card))',
               background: 'hsl(var(--mountain-deep))',
-              border: 'none',
+              // ★ 这里原本有内联 `border: 'none'`（2026-09-19 删）：
+              //   `border-style: none` 时 **border-image 根本不绘制** →
+              //   shuimo 的笔触边框穿不上（11.6 的元素级规则被静默吃掉）。
+              //   删掉无副作用：ink 主题下 Tailwind preflight 本来就是 `border-width: 0`。
+              //   ⚠️ 本文件另一处「开始写作」按钮（~316 行）同样处理。
               cursor: 'pointer',
             }}
           >
@@ -198,13 +202,18 @@ export const ProjectIndexPage: React.FC = () => {
                     key={b.id}
                     type="button"
                     onClick={() => openFromShelf(b)}
-                    className="w-full px-3 py-2 rounded-md transition-all text-left truncate"
+                    // ★ 导航项（打开某本书），不是动作按钮 → nm-nav-item 显式豁免笔触
+                    className="nm-nav-item w-full px-3 py-2 rounded-md transition-all text-left truncate"
                     style={{
                       fontFamily: "'Noto Serif SC', serif",
                       fontSize: 13,
                       color: 'hsl(var(--ink))',
                       background: 'hsl(var(--card) / 0.6)',
-                      border: '1px solid hsl(var(--border) / 0.5)',
+                      // ★ 拆长写：让豁免完全由 nm-nav-item 显式承担，
+                      //   不依赖「inline border 简写重置 border-image」这个隐式副作用
+                      borderWidth: '1px',
+                      borderStyle: 'solid',
+                      borderColor: 'hsl(var(--border) / 0.5)',
                       cursor: 'pointer',
                     }}
                     title={b.name}
@@ -308,7 +317,7 @@ export const ProjectIndexPage: React.FC = () => {
               fontSize: 13,
               color: 'hsl(var(--card))',
               background: 'hsl(var(--mountain-deep))',
-              border: 'none',
+              // 同「去书架」按钮：删掉内联 `border: 'none'`，否则 shuimo 笔触穿不上
             }}
           >
             <Plus size={14} />

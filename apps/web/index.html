@@ -1,5 +1,12 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="emerald">
+<!--
+  ★ 首屏初始 data-theme 写 shuimo（2026-09-19）：
+    与 themeStore 的默认主题保持一致，避免"先按错误主题画一帧再被 JS 改掉"的闪烁。
+    这里原先写的是 `emerald` —— 一个全仓已无定义的陈旧值（改主题体系时的残留），
+    它不匹配任何 CSS，首屏实际回落 :root，再被 applyStoredTheme() 覆盖。
+    ⚠️ 若用户在 localStorage 里选了别的主题，applyStoredTheme() 会覆盖本属性，无需改这里。
+-->
+<html lang="zh-CN" data-theme="shuimo">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />

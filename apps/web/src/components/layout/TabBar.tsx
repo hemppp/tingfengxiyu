@@ -127,22 +127,20 @@ export function TabBar({
           onClick={onBackToBody}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onBackToBody?.(); } }}
           title={onCloseBody ? '正文 —— 主编辑器里打开的那份稿子' : '正文 —— 主编辑器里打开的那份稿子（常驻，不可关闭）'}
-          className="group shrink-0 flex items-center gap-1.5 cursor-pointer select-none"
+          className="group flex shrink-0 cursor-pointer select-none items-center gap-1.5 border-r border-paper-line text-[12.5px]"
           style={{
             height: '100%',
             padding: '0 10px',
             background: bodyFocused ? EDITOR_BG : 'transparent',
-            borderRight: '0.5px solid hsl(var(--border) / 0.5)',
-            // 激活标签：顶部强调线（VSCode 就是这条，不是底部下划线）
-            boxShadow: bodyFocused ? 'inset 0 1px 0 hsl(var(--primary))' : undefined,
-            color: bodyFocused ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
-            fontSize: 12.5,
+            // 激活标签：顶部一条墨线（VSCode 用的就是这条，不是底部下划线）
+            boxShadow: bodyFocused ? 'inset 0 1px 0 hsl(var(--paper-line-strong))' : undefined,
+            color: bodyFocused ? 'hsl(var(--tone))' : 'hsl(var(--tone-2))',
           }}
         >
-          <Pin size={12} aria-hidden="true" style={{ color: bodyFocused ? 'hsl(var(--primary))' : undefined }} />
+          <Pin size={12} aria-hidden="true" className={bodyFocused ? 'text-tone' : 'text-tone-3'} />
           <span>正文</span>
           {bodySubtitle && (
-            <span className="text-[10.5px]" style={{ color: 'hsl(var(--muted-foreground))' }}>{bodySubtitle}</span>
+            <span className="text-2xs text-tone-3">{bodySubtitle}</span>
           )}
           {onCloseBody && (
             <button
@@ -150,14 +148,11 @@ export function TabBar({
               aria-label="关闭正文"
               data-close="__body__"
               onClick={(e) => { e.stopPropagation(); onCloseBody(); }}
-              className={`shrink-0 flex items-center justify-center rounded ${bodyFocused ? '' : 'opacity-0 group-hover:opacity-100'}`}
-              style={{
-                width: 16, height: 16, background: 'transparent', border: 'none',
-                color: 'inherit', cursor: 'pointer', opacity: bodyFocused ? 0.7 : undefined,
-                transition: 'opacity 0.12s, background 0.12s',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'hsl(var(--foreground) / 0.1)'; e.currentTarget.style.opacity = '1'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.opacity = bodyFocused ? '0.7' : ''; }}
+              /* hover 交给 CSS。原来是 onMouseEnter/onMouseLeave 里直接改
+                 e.currentTarget.style —— 既绕过样式体系，快速划过时还会留下残留样式。 */
+              className={`flex size-4 shrink-0 items-center justify-center rounded-chip border-0 bg-transparent text-inherit transition-colors duration-150 ease-out hover:bg-paper-line ${
+                bodyFocused ? 'opacity-70 hover:opacity-100' : 'opacity-0 group-hover:opacity-100'
+              }`}
             >
               <X size={12} aria-hidden="true" />
             </button>
@@ -245,19 +240,17 @@ export function TabBar({
             aria-label="已打开的看板"
             onClick={() => setOverflowOpen((v) => !v)}
             title="已打开的看板"
-            className="flex items-center justify-center"
-            style={{ width: 26, height: '100%', background: 'transparent', border: 'none', borderLeft: '0.5px solid hsl(var(--border) / 0.5)', color: 'hsl(var(--muted-foreground))', cursor: 'pointer' }}
+            /* 原来是整段内联 style 写死背景/边框/颜色（globals.css 自己把这称反模式）。
+               静态部分全部换成工具类，只留真正动态的（width/height 由布局决定）。 */
+            className="flex items-center justify-center border-0 border-l border-paper-line bg-transparent text-tone-2 transition-colors duration-150 ease-out hover:bg-paper-hover hover:text-tone"
+            style={{ width: 26, height: '100%' }}
           >
             <ChevronDown size={12} aria-hidden="true" />
           </button>
           {overflowOpen && (
             <div
-              className="absolute right-0 rounded-lg py-1 z-50"
-              style={{
-                top: 34, width: 220, maxHeight: 320, overflowY: 'auto',
-                background: 'hsl(var(--card))', border: '0.5px solid hsl(var(--border))',
-                boxShadow: '0 12px 32px hsl(var(--glass-shadow) / 0.18)',
-              }}
+              className="mc-scroll absolute right-0 z-50 rounded-card border border-paper-line bg-paper py-1 shadow-overlay"
+              style={{ top: 34, width: 220, maxHeight: 320, overflowY: 'auto' }}
             >
               {tabs.map((k) => (
                 <button
@@ -265,21 +258,19 @@ export function TabBar({
                   type="button"
                   data-overflow-item={k}
                   onClick={() => { onActivate(k); setOverflowOpen(false); }}
-                  className="w-full flex items-center gap-2 px-3 text-left"
-                  style={{ height: 26, background: 'transparent', border: 'none', fontSize: 12, color: 'hsl(var(--foreground))', cursor: 'pointer' }}
+                  className="flex h-[26px] w-full items-center gap-2 bg-transparent px-3 text-left text-[12.5px] text-tone transition-colors duration-150 ease-out hover:bg-paper-hover"
                 >
                   {iconOf(k)}
                   <span className="truncate flex-1">{labelOf(k)}</span>
-                  {previewKey === k && <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }}>预览</span>}
-                  {active === k && <Check size={11} style={{ color: 'hsl(var(--primary))' }} aria-hidden="true" />}
+                  {previewKey === k && <span className="text-2xs text-tone-3">预览</span>}
+                  {active === k && <Check size={11} className="text-tone" aria-hidden="true" />}
                 </button>
               ))}
               {onOpenQuick && (
                 <button
                   type="button"
                   onClick={() => { onOpenQuick(); setOverflowOpen(false); }}
-                  className="w-full px-3 text-left"
-                  style={{ height: 26, background: 'transparent', border: 'none', borderTop: '0.5px solid hsl(var(--border) / 0.5)', fontSize: 12, color: 'hsl(var(--primary))', cursor: 'pointer' }}
+                  className="h-[26px] w-full border-0 border-t border-paper-line bg-transparent px-3 text-left text-[12.5px] text-tone-2 transition-colors duration-150 ease-out hover:bg-paper-hover hover:text-tone"
                 >
                   显示全部看板…（Ctrl+P）
                 </button>
@@ -295,14 +286,11 @@ export function TabBar({
           ref={menuRef}
           role="menu"
           data-tab-menu={menu.key}
-          className="fixed rounded-lg py-1 z-[60]"
+          className="fixed z-[60] rounded-card border border-paper-line bg-paper py-1 shadow-overlay"
           style={{
             left: Math.min(menu.x, window.innerWidth - 190),
             top: Math.min(menu.y, window.innerHeight - 170),
             width: 180,
-            background: 'hsl(var(--card))',
-            border: '0.5px solid hsl(var(--border))',
-            boxShadow: '0 12px 32px hsl(var(--glass-shadow) / 0.2)',
           }}
         >
           {[
@@ -319,8 +307,7 @@ export function TabBar({
               type="button"
               role="menuitem"
               onClick={() => { item.run(); setMenu(null); }}
-              className="w-full px-3 text-left"
-              style={{ height: 26, background: 'transparent', border: 'none', fontSize: 12, color: 'hsl(var(--foreground))', cursor: 'pointer' }}
+              className="h-[26px] w-full border-0 bg-transparent px-3 text-left text-[12.5px] text-tone transition-colors duration-150 ease-out hover:bg-paper-hover"
             >
               {item.label}
             </button>

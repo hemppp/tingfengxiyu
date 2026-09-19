@@ -1,4 +1,5 @@
 import { type ReactNode, type ElementType } from 'react';
+import { LoadingPixels } from '@/components/ai/primitives';
 
 export interface PanelSectionProps {
   title: string;
@@ -47,35 +48,37 @@ export function PanelSection({
 
   return (
     <section
-      className={`nm-panel-section glass-panel glass-edge-glow flex flex-col overflow-hidden ${grow === 'flex-1' ? 'flex-1' : ''} ${active ? 'nm-panel-section-active' : ''}`}
-      style={{
-        ...heightStyle,
-        borderRadius: 28,
-        border: 'none',
-        boxShadow: '0 8px 32px rgba(31, 38, 80, 0.10), 0 2px 8px rgba(31, 38, 80, 0.06), inset 0 1px 0 rgba(255,255,255,0.5)',
-      }}
+      /* 墨韵工艺层改造（2026-09-18）：
+         · 原来 `borderRadius: 28` + 硬编码阴影
+           `0 8px 32px rgba(31,38,80,…)` —— 那个 (31,38,80) 是**偏蓝**的，
+             属「青霭玻璃」时代的残留。全站已迁到中性墨黑投影
+             （globals.css: "投影自中性墨黑发出，而非靛蓝"），这里是漏网的一处。
+             现改用 --shadow-raised 档位令牌，与其它面板同一套。
+         · 圆角 28px → --radius-window(14px)：28 远超这套体系的最大档位，
+             在已收窄的面板内显得"玩具化"，14px 与全站其它容器对齐。 */
+      className={`nm-panel-section glass-panel glass-edge-glow flex flex-col overflow-hidden rounded-window border-0 shadow-raised ${
+        grow === 'flex-1' ? 'flex-1' : ''
+      } ${active ? 'nm-panel-section-active' : ''}`}
+      style={heightStyle}
       aria-label={title}
     >
       {/* 标题栏 */}
       <header
-        className="nm-panel-section-header shrink-0 flex items-center gap-2 px-3 select-none"
+        className="nm-panel-section-header flex shrink-0 select-none items-center gap-2 px-3"
         style={{
           height: headerHeight,
           cursor: onHeaderMouseDown ? (dragging ? 'grabbing' : 'grab') : undefined,
         }}
         onMouseDown={onHeaderMouseDown}
       >
-        <span className="nm-panel-section-icon shrink-0" style={{ color: 'hsl(var(--muted-foreground))' }}>
+        <span className="nm-panel-section-icon shrink-0 text-tone-3">
           <Icon size={13} aria-hidden="true" />
         </span>
-        <h3
-          className="text-[12px] font-[Noto_Serif_SC,serif] font-semibold tracking-wide flex-1 truncate"
-          style={{ color: 'hsl(var(--foreground))' }}
-        >
+        <h3 className="flex-1 truncate text-[12px] font-semibold tracking-wide text-tone font-[Noto_Serif_SC,serif]">
           {title}
         </h3>
         {headerActions && (
-          <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <div className="flex shrink-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
             {headerActions}
           </div>
         )}
@@ -83,16 +86,12 @@ export function PanelSection({
 
       {/* 内容区 */}
       {!collapsed && (
-        <div className="flex-1 overflow-hidden relative">
+        <div className="relative flex-1 overflow-hidden">
           {loading ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="flex flex-col items-center gap-2">
-                <div
-                  className="w-4 h-4 rounded-full border-2 border-transparent animate-spin"
-                  style={{ borderTopColor: 'hsl(var(--mountain-cyan))', borderRightColor: 'hsl(var(--mountain-cyan))' }}
-                />
-                <span className="text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }}>加载中...</span>
-              </div>
+            /* 原来是 borderTopColor/RightColor 手搓的转圈。
+               改用像素网格加载器：单一元素、无边框技巧、与全站加载态统一。 */
+            <div className="flex h-full items-center justify-center">
+              <LoadingPixels label="加载中" />
             </div>
           ) : (
             children

@@ -58,7 +58,7 @@ function CharacterCard({
       className="w-full text-left"
       style={{
         cursor: 'pointer',
-        borderRadius: 16,
+        borderRadius: 'var(--r-md)',
         overflow: 'hidden',
         aspectRatio: '3 / 4',
         position: 'relative',
@@ -132,7 +132,7 @@ function CharacterCard({
                 style={{
                   fontSize: 10,
                   padding: '2px 6px',
-                  borderRadius: 14,
+                  borderRadius: 'var(--r-md)',
                   fontWeight: 500,
                   background: 'rgba(255,255,255,0.28)',
                   color: 'rgba(255,255,255,0.95)',
@@ -157,7 +157,7 @@ function CharacterCard({
             style={{
               fontSize: 10,
               padding: '2px 6px',
-              borderRadius: 14,
+              borderRadius: 'var(--r-md)',
               fontWeight: 600,
               background: roleBadge.bg,
               color: roleBadge.fg,

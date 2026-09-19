@@ -5,6 +5,10 @@ import './styles/globals.css';
 // ★ 主题层在主样式之后引入。非默认主题的选择器写作 html[data-theme="..."]，
 //   特异性高于 .dark，所以不依赖引入顺序即可稳定覆盖 —— 这里只是双保险。
 import './styles/themes.css';
+// ★ 水墨UI（shuimo.design）移植层。全部规则限定在 `html[data-theme="shuimo"]`
+//   或 `.sm-*` 类名下 —— 不挂该主题时对既有样式零影响。
+//   它同时重定义了 76 个 `nm-*` 语义类，所以切到该主题 = 全站换皮（tsx 无需改动）。
+import './styles/shuimo.css';
 import { registerProjectIdGetter } from './services/api/apiClient';
 import { applyStoredTheme } from './stores/themeStore';
 

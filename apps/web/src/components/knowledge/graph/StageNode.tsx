@@ -87,7 +87,7 @@ function Badge({ ink, children, title }: { ink: string; children: React.ReactNod
         fontSize: 9,
         lineHeight: 1,
         padding: '2px 4px',
-        borderRadius: 4,
+        borderRadius: 'var(--r-3xs)',
         color: ink,
         border: `0.5px solid ${ink}`,
         background: 'transparent',
@@ -138,7 +138,7 @@ export const StageNode = memo(function StageNode({ data }: NodeProps) {
         style={{
           background: 'hsl(var(--card))',
           border: `${raised ? 1.2 : 1}px ${d.dimmed ? 'dashed' : 'solid'} ${raised ? ink : 'hsl(var(--border) / 0.75)'}`,
-          borderRadius: 10,
+          borderRadius: 'var(--r-xs)',
           boxShadow,
           minHeight: 58,
         }}

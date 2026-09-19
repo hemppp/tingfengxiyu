@@ -216,7 +216,7 @@ export function TimelineView() {
   return (
     <div className="h-full flex flex-col">
       {/* 顶部工具栏 */}
-      <div className="glass-frost p-4 space-y-3" style={{ borderRadius: 14 }}>
+      <div className="glass-frost p-4 space-y-3" style={{ borderRadius: 'var(--r-md)' }}>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 flex-1">
             <input

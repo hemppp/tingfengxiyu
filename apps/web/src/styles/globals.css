@@ -43,6 +43,98 @@
     --radius-lg: 1.25rem;                  /* 20px */
     --radius-xl: 1.5rem;                   /* 24px */
 
+    /* —— 内联圆角语义档位（2026-09-18）——
+       背景：全仓曾有 63 处内联 `style={{ borderRadius: 20 }}`。内联样式在层叠里
+       优先级最高（与特异性无关），CSS 选择器压不过它，导致换肤时改不动这批圆角。
+       现改为引用这里的变量，主题重新获得控制权。
+
+       默认值 = 该档位迁移前**出现最多的那个值**，所以绝大多数元素外观零变化；
+       少数档位内微调 ≤4px（18→14、11→12、24→20），肉眼不可辨。
+       迁移脚本：`.workbuddy/ui-checks/migrate-radius.mjs` */
+    --r-pill: 999px;                       /* 胶囊：原 999 / 980 */
+    --r-lg: 20px;                          /* 大卡片：原 20 / 24 */
+    --r-md: 14px;                          /* 中容器：原 14 / 16 / 18 */
+    --r-sm: 12px;                          /* 小卡片：原 11 / 12 */
+    --r-xs: 10px;                          /* 控件 */
+    --r-2xs: 8px;                          /* 小控件 */
+    --r-3xs: 4px;                          /* 极小：原 1 / 4 */
+
+    /* —— 书封（BookCover.tsx）的纸 / 墨 / 印 ——
+       组件用 `color-mix(in srgb, var(--cover-ink) P%, var(--cover-paper))`
+       按"墨浓度"合成三段渐变，`--cover-line` 供 SVG 线条用，`--cover-seal` 是卷印。
+
+       ★ 为什么抽成变量（2026-09-18）：这 8 套封面的渐变色值原来是**内联 style**
+         里的硬编码灰阶，主题 CSS 压不动 —— 切到 shuimo（宣纸）主题后，
+         书架页杵着两块深灰卡片，是最扎眼的"没换皮"证据。
+
+       ★ 默认值刻意选成与旧灰阶**等价**（旧值 = mix(#1c1c1c P%, #ffffff)，
+         P 由 `(255 − T) / 227` 反算），所以默认主题下渲染结果逐像素不变。 */
+    --cover-ink: #1c1c1c;
+    --cover-paper: #ffffff;
+    /* 浓度倍率：整体压淡/加深 8 套封面的墨量（1 = 原样）。
+       无单位数字 —— 组件里写作 `calc(P * var(--cover-wash-scale) * 1%)`，
+       ⚠️ 不能写成百分比再相乘：calc 里 `% × %` 是非法值。 */
+    --cover-wash-scale: 1;
+    --cover-line: #1c1c1c;
+    /* 装饰层（SVG 的山/云/竹…）与文字分开：文字要深、装饰要淡。
+       默认主题两者同值，所以外观与改前一致。 */
+    --cover-decor: #1c1c1c;
+    --cover-seal: #3a3a3a;
+
+    /* —— 书封上的**文字与浮层**（BookCard.tsx）——
+       ★ 为什么抽出来（2026-09-18 实测）：
+         书封上的文字/胶囊/统计条原来全是**硬编码白色系**
+         （书名 `rgba(255,255,255,.95)`、作者 `.65`、体裁胶囊 `.18/.25/.92`、
+          统计条 `.10/.15/.75`），因为原设计封面下半部被好几条 `fill={ink}`
+          的"地面"path 叠成近黑，白字放上去才读得清。
+         shuimo 把封面改成暖调淡纸后，白字实测只有 **4.42:1** ——
+         裁剪量像素、半透明前景先合成再算，低于项目 4.5:1 的 AA 门槛。
+         正确解法不是"把封面再压黑"，而是让文字跟着纸走：宣纸底配墨字。
+
+       ★ 只用一个变量：`--cover-fg` 表示"封面上的前景色"，
+         其余全部用 `color-mix(in srgb, var(--cover-fg) N%, transparent)` 推出来。
+         **这是等价的** —— `color-mix(in srgb, #fff 65%, transparent)`
+         算出来就是 `rgba(255,255,255,0.65)`，逐像素一致。
+         所以默认主题外观不变，而主题只需换一个值就能整体翻面。 */
+    --cover-fg: #ffffff;
+    /* 各处的白度（原值原样搬过来，别改 —— 改了默认主题就变样了） */
+    --cover-title-alpha: 95%;
+    --cover-meta-alpha: 65%;
+    --cover-chip-fg-alpha: 92%;
+    --cover-chip-bg-alpha: 18%;
+    --cover-chip-border-alpha: 25%;
+    --cover-stats-fg-alpha: 75%;
+    --cover-stats-bg-alpha: 10%;
+    --cover-stats-border-alpha: 15%;
+    /* 白字在暗底上需要一点投影；换墨字后投影要撤掉，否则字发糊 */
+    --cover-title-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+
+    /* 装饰层**额外**的浓度倍率（1 = 原样）。
+       和 --cover-wash-scale 的区别：那个管渐变底色，这个只管 SVG 山/云/竹。
+       shuimo 需要"底色淡 + 装饰更淡"（远山如洗），所以要单独一档。
+       无单位数字 —— `% × %` 在 calc 里非法，倍率必须是无单位的。 */
+    --cover-decor-alpha: 1;
+
+    /* —— 封面底部的**可读性遮罩**（BookCard.tsx）——
+       ★ 这是封面偏暗的**真凶**，也是最难找的一个（2026-09-18）：
+         它盖住封面下 55%，书名位置实际叠了约 **0.55 的黑**。
+         只调 `--cover-wash-scale`（渐变底色）和 `--cover-decor-alpha`（装饰）
+         都是在治标 —— 底色已经调到 rgb(206,200,190) 了，渲染出来还是 rgb(99,95,89)。
+       ★ 定位手法（隔离实验，值得复用）：把封面底改成**纯红**
+         `cover.style.background = 'rgb(255,0,0)'` 再截图 ——
+         如果渲染出来是**上亮下暗的红渐变**而不是平色，就说明有渐变遮罩盖着。
+         比逐个隐藏元素快得多，而且一眼就能看出遮罩的**方向与范围**。
+       ★ 另外两个坑：`elementsFromPoint` **不含伪元素**；所以还配合查了
+         `getComputedStyle(el, '::before'/'::after')`（本例确实没有）。
+       ★ 默认值 = 原硬编码渐变 + 原 opacity ⇒ 默认主题逐像素不变。 */
+    --cover-scrim: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0) 0%,
+      rgba(0, 0, 0, 0.35) 50%,
+      rgba(0, 0, 0, 0.75) 100%
+    );
+    --cover-scrim-opacity: 0.92;
+
     /* —— 语义色板（沿用旧命名，值改为「墨分五色」灰阶）——
        焦墨 9% / 浓墨 16% / 重墨 30% / 淡墨 50% / 清墨 68%。
        命名保留是为了不动组件；语义已从「山水色」转为「墨色深浅」。 */
@@ -144,6 +236,104 @@
     --chapter-6: 0 0% 29%;
     --chapter-7: 0 0% 33%;
     --chapter-8: 0 0% 38%;
+
+    /* ============================================================
+     * 墨韵工艺层 · Ink Craft Layer（2026-09-18）
+     *
+     * 来源：beautifului.dev 的非彩色设计基座，移植到水墨体系上。
+     * 目的：把「纸的层级 / 墨的深浅 / 圆角档位 / 投影档位 / 缓动」
+     *       从散落的工具类收编成一套**有档位**的令牌，
+     *       供 AI 交互面与布局外壳统一取用。
+     *
+     * 原则：
+     *   1. **不新增彩色** —— 主要层级全是灰阶（饱和度恒 0），
+     *      唯一例外是下面那组「极克制信号色」，且只准用于状态指示。
+     *   2. 纸面层级一律**别名**到既有语义变量（--card / --background …），
+     *      所以换肤契约（改 --card 等）依然一路生效到新代码。
+     *   3. 字号地板：面板内正文/标签下限 11px，关键信息 12px。
+     *      与 --tone-* 配套 —— 见文件末尾「排版地板」小节。
+     *
+     * ⚠️ **加了新令牌，必须同步补 `themes.css` 的 `html[data-theme="soot"]`**。
+     *    非默认主题只覆盖 globals.css 里 :root/.dark 定义过的变量，
+     *    漏一组就会从 :root 继承**亮色**值 —— 在松烟暗底上表现为
+     *    「悬停变白、次级文字比正文还暗」，即 themes.css 自己警告的"换了一半皮"。
+     *    别名类（--paper / --paper-canvas / --paper-inset / --paper-field）除外，
+     *    它们跟着 --card 等自动反相，主题里不要重列。
+     * ============================================================ */
+
+    /* —— 纸面层级（paper）：由底到面共 6 档 ——
+       越靠前越"深"（凹陷），越靠后越"浮"（抬升）。 */
+    --paper-canvas: var(--background);      /* 底层宣纸 · 页面底 */
+    --paper: var(--card);                   /* 承墨的纸 · 卡片/面板面 */
+    --paper-inset: var(--muted);            /* 凹陷 · 内嵌块 / 行 hover */
+    --paper-field: var(--input);            /* 输入域 · 输入框/下拉底 */
+    --paper-hover: 0 0% 95%;                /* 交互态一档：轻浮起 */
+    --paper-hover-2: 0 0% 91%;              /* 交互态二档：按下/选中 */
+
+    /* —— 墨线（勾线三档）：卡片不靠投影，靠一根 1px 墨线 —— */
+    --paper-line: var(--border);            /* 常规勾线 */
+    --paper-line-strong: 0 0% 70%;          /* 强勾线 · 聚焦/选中/主按钮 */
+    --paper-line-soft: 0 0% 90%;            /* 弱勾线 · 分区/内部栅格 */
+
+    /* —— 墨阶文字（tone）三档 ——
+       tone   = 正文（= --foreground）
+       tone-2 = 次级：标签 / 说明 / 表格 meta
+                **实测最差面（field 92%）4.61:1，四档纸面全过 AA**
+       tone-3 = 三级：placeholder / disabled / 装饰性序号
+                ⚠️ 实测亮色仅 2.8–3.3:1（≥3:1 达 AA-large），**不得承载任何信息**；
+                   暗色 4.48–5.6:1 达标。任何"用户需要读"的内容一律用 tone-2。
+                （2026-09-16 审计 C1：gray-400 2.45:1 用在真实内容上属缺陷 —— 别重蹈）
+       取值经对比度求解器验过，不是估的。 */
+    --tone: var(--foreground);
+    --tone-2: 0 0% 41%;
+    --tone-3: 0 0% 50%;
+
+    /* —— 圆角档位（radius）：四级，替代到处写 rounded-[10px] ——
+       ⚠️ 与既有 --radius(16px 苹果大圆角) 并存，不覆盖它：
+          新代码用档位，老代码保持大圆角，迁移可分批。 */
+    --radius-chip: 6px;                     /* 标签/徽章/极小控件 */
+    --radius-control: 8px;                  /* 按钮/输入/图标按钮 */
+    --radius-card: 10px;                    /* 卡片/面板 */
+    --radius-window: 14px;                  /* 窗口/大容器/输入区 */
+
+    /* —— 投影档位（shadow）：全部**含 1px 墨线** ——
+       在纸上，实体感来自勾线而非阴影，所以阴影极轻。 */
+    --shadow-hairline: 0 0 0 1px hsl(var(--paper-line));
+    --shadow-card:
+      0 0 0 1px hsl(var(--paper-line)),
+      0 1px 2px hsl(0 0% 0% / 0.04);
+    --shadow-raised:
+      0 0 0 1px hsl(var(--paper-line)),
+      0 2px 8px hsl(0 0% 0% / 0.07);
+    --shadow-overlay:
+      0 0 0 1px hsl(var(--paper-line)),
+      0 8px 28px hsl(0 0% 0% / 0.13);
+    --shadow-btn:
+      0 0 0 1px hsl(var(--paper-line-strong)),
+      0 1px 1px hsl(0 0% 0% / 0.03);
+    --shadow-inset-field: inset 0 1px 2px hsl(0 0% 0% / 0.05);
+
+    /* —— 缓动（ease）：三档，取该库精修值 ——
+       link       = 出场/展开（快起慢收，最常用）
+       out-strong = 位移/放大（比 ease-out 更脆）
+       in-out-strong = 循环/往复 */
+    --ease-link: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+
+    /* —— 极克制信号色（sig）——
+       **本体系唯一的彩色，且只准用于状态指示**（圆点/图标/细线/极小标签底）。
+       取法：色相借自该库的状态色，饱和度压到 16–36%（该库 15–20% chroma），
+       明度按水墨调子收紧。禁止用于大面积填充、正文、边框。
+       实测：作为 11px 文字压在自身 10% 淡底上，亮色最低 4.57:1 / 暗色最低 5.54:1，全过 AA。 */
+    --sig-run: 210 18% 42%;                 /* 进行中 / 思考中 / 流式 */
+    --sig-done: 152 16% 34%;                /* 已完成 / 已落库 */
+    --sig-warn: 36 32% 38%;                 /* 待审批 / 存疑 / 漂移 */
+    --sig-stop: 4 34% 44%;                  /* 失败 / 被阻断 */
+    --sig-run-tint: 210 18% 42% / 0.1;
+    --sig-done-tint: 152 16% 34% / 0.1;
+    --sig-warn-tint: 36 32% 38% / 0.1;
+    --sig-stop-tint: 4 34% 44% / 0.1;
   }
 
   /* —— 暗色模式（夜墨：纸转入夜，墨转为亮）—— */
@@ -221,6 +411,50 @@
     --chapter-6: 0 0% 71%;
     --chapter-7: 0 0% 66%;
     --chapter-8: 0 0% 62%;
+
+    /* —— 墨韵工艺层：夜墨反相 ——
+       纸面层级里的 --paper / --paper-canvas / --paper-inset / --paper-field
+       都是别名，已随 --card / --background … 自动反相，无需重列。
+       这里只列**写死的档位**与信号色。 */
+
+    /* 交互态：夜底上"浮起"= 更亮 */
+    --paper-hover: 0 0% 17%;
+    --paper-hover-2: 0 0% 21%;
+
+    /* 勾线：夜墨里线要更亮才看得出 */
+    --paper-line-strong: 0 0% 36%;
+    --paper-line-soft: 0 0% 18%;
+
+    /* 墨阶文字：暗底上"浅"= 更亮，整体上翻。
+       tone-3 从 52% 提到 60%：52% 压在 field(18%) 上只有 3.68:1，58% 也只有 4.48:1（差一点），
+       60% 得 4.77:1 —— 暗色下这一档**也达标 AA**，比亮色那档更严。 */
+    --tone-2: 0 0% 68%;
+    --tone-3: 0 0% 60%;
+
+    /* 投影：夜底上黑影不可见，改由高不透明度黑 + 勾线共同定位 */
+    --shadow-card:
+      0 0 0 1px hsl(var(--paper-line)),
+      0 1px 2px hsl(0 0% 0% / 0.32);
+    --shadow-raised:
+      0 0 0 1px hsl(var(--paper-line)),
+      0 2px 8px hsl(0 0% 0% / 0.42);
+    --shadow-overlay:
+      0 0 0 1px hsl(var(--paper-line)),
+      0 8px 28px hsl(0 0% 0% / 0.55);
+    --shadow-btn:
+      0 0 0 1px hsl(var(--paper-line-strong)),
+      0 1px 1px hsl(0 0% 0% / 0.24);
+    --shadow-inset-field: inset 0 1px 2px hsl(0 0% 0% / 0.28);
+
+    /* 信号色：暗底上提亮，饱和度略抬以抵消夜墨的"吸色" */
+    --sig-run: 210 20% 68%;
+    --sig-done: 152 18% 64%;
+    --sig-warn: 36 34% 70%;
+    --sig-stop: 4 36% 70%;
+    --sig-run-tint: 210 20% 68% / 0.14;
+    --sig-done-tint: 152 18% 64% / 0.14;
+    --sig-warn-tint: 36 34% 70% / 0.14;
+    --sig-stop-tint: 4 36% 70% / 0.14;
   }
 }
 
@@ -2113,4 +2347,255 @@ body.nm-dragging-active .ambient-ink-bamboo {
 @media (prefers-reduced-motion: reduce) {
   .nm-ink-lift { transition: none !important; }
   .nm-ink-lift:hover { transform: none; }
+}
+
+/* ============================================================================
+   墨韵工艺层 · 工具类与组件类（2026-09-18）
+   —— 令牌见文件顶部 :root / .dark 里的「墨韵工艺层」小节。
+
+   本层只放**工具类表达不了的东西**：
+     · 展开/收起的 grid-template-rows 动画（无需固定高度）
+     · 状态信号三件套（文字 / 淡底 / 勾线）
+     · 排版地板
+   其余（纸面 / 墨线 / 圆角 / 投影 / 缓动 / 墨阶文字）已由 tailwind.config.js
+   暴露成 bg-paper / border-line / rounded-card / shadow-overlay / text-tone-2 /
+   ease-link 等工具类，直接写工具类即可，不要在这里再包一层。
+
+   ★ 本段刻意**不放进 @layer**：Tailwind 3 的 @layer 只是指令不是原生级联层，
+     所以整份 CSS 处于同一层级、由源序决定胜负。本段在文件末尾，
+     且选择器与 Tailwind 生成的工具类同为一个类（特异性 0,1,0）
+     → 源序靠后者胜。这是「排版地板」能一条规则盖住全站 296 处的前提。
+   ============================================================================ */
+
+/* —— 1. 排版地板 ——
+   2026-09-16 审计 D1 说"全站 text-[9px] / text-[10px] 共 294 处"。
+   ⚠️ 2026-09-18 实测更正：**text-[9px] 根本不存在（0 处）**，那 294 是审计脚本
+      把 .5 档也算进去的数。真实分布（本次实测）：
+        text-[11px]   336   ← 已经是事实上的地板，绝大多数小字已达标
+        text-[12px]    71
+        text-[11.5px]  24
+        text-[10.5px]  20   ← 需抬
+        text-[13px]    19
+        text-[12.5px]   5
+        text-[10px]     4   ← 需抬
+        text-[8px]      1   ← 需抬（此前漏网的）
+      也就是说 D1 **此前已被大规模修过**，剩下要抬的只有 25 处，不是 294 处。
+   所以这条规则是**兜底安全网**，不是主力手段；主力是把 11px 固化成
+   text-2xs 命名档位（见 tailwind.config.js fontSize），新代码不要再写 text-[11px]。
+   ⚠️ 显式退回：确实需要微观密度的装饰性刻度加 .text-micro。 */
+.text-\[8px\],
+.text-\[10px\] { font-size: 11px; line-height: 1.45; }
+.text-\[10\.5px\] { font-size: 11.5px; line-height: 1.45; }
+.text-micro { font-size: 10px; line-height: 1.4; }
+
+/* —— 2. 排版纪律 —— */
+/* 眉标：等宽小字，用于面板小标题 / 元信息标签（该库的签名手法） */
+.mc-eyebrow {
+  font-family: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: hsl(var(--tone-3));
+}
+/* 数字对齐：所有计数 / 百分比 / 章节号 —— 避免跳动 */
+.mc-num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1, 'lnum' 1; }
+
+/* —— 3. 展开 / 收起 ——
+   grid-template-rows 0fr → 1fr 的动画：内容自然高度，**不需要量高度、不需要 max-height 猜值**。
+   用法：外层 .mc-collapse[data-open="true"]，内层套一层 overflow:hidden 的 div。 */
+.mc-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0.4;
+  transition:
+    grid-template-rows 0.34s var(--ease-link),
+    opacity 0.24s var(--ease-out-strong);
+}
+.mc-collapse[data-open='true'] { grid-template-rows: 1fr; opacity: 1; }
+.mc-collapse > * { min-height: 0; overflow: hidden; }
+
+/* —— 4. 状态信号三件套 ——
+   唯一的彩色出口。只准用于：状态圆点 / 状态标签 / 极细的状态线。
+   禁止用于大面积填充、正文、面板边框。 */
+.mc-sig-run  { color: hsl(var(--sig-run)); }
+.mc-sig-done { color: hsl(var(--sig-done)); }
+.mc-sig-warn { color: hsl(var(--sig-warn)); }
+.mc-sig-stop { color: hsl(var(--sig-stop)); }
+
+.mc-sig-run-bg  { background-color: hsl(var(--sig-run-tint)); }
+.mc-sig-done-bg { background-color: hsl(var(--sig-done-tint)); }
+.mc-sig-warn-bg { background-color: hsl(var(--sig-warn-tint)); }
+.mc-sig-stop-bg { background-color: hsl(var(--sig-stop-tint)); }
+
+/* 状态圆点：含一圈同色淡晕，远看仍是墨点，近看才有颜色 */
+.mc-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background-color: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 16%, transparent);
+  flex: none;
+}
+
+/* 状态胶囊：极淡同色底 + 同色文字。文字实测过 AA。 */
+.mc-sig-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--radius-chip);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* —— 5. 思维链竖轨 ——
+   该库签名手法：左侧一根 1px 墨线 + 内缩 16px 的内容列。 */
+.mc-rail { position: relative; padding-left: 16px; }
+.mc-rail::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background-color: hsl(var(--paper-line));
+}
+/* 轨上的节点：正在跑的那个用信号色 */
+.mc-rail-node {
+  position: absolute;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background-color: hsl(var(--paper));
+  box-shadow: 0 0 0 1px hsl(var(--paper-line-strong));
+}
+
+/* —— 6. 流式光标 —— */
+.mc-caret {
+  display: inline-block;
+  width: 2px;
+  height: 0.9em;
+  vertical-align: -0.1em;
+  margin-left: 1px;
+  border-radius: 9999px;
+  background-color: hsl(var(--tone));
+  animation: mc-caret-blink 1.1s steps(2, start) infinite;
+}
+@keyframes mc-caret-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.15; }
+}
+
+/* 尾部光标 —— 挂在**容器**上，光标自动贴到最后一块内容的结尾。
+   为什么不用在 JSX 里插 <span>：Markdown 渲染出来的是一个 <div>，
+   插在它后面的 span 会掉到下一行，光标孤零零悬在段落外。
+   用 :last-child::after 则永远贴在最后一个内联内容之后，换行也对。
+
+   ⚠️ 刻意不用 :has()，也不写成逗号选择器列表 ——
+      CSS 里逗号列表中任一选择器无效会**整条规则被丢弃**，
+      老浏览器不支持 :has() 时会把这条基础规则一起废掉。 */
+.mc-caret-tail > :last-child::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 0.9em;
+  vertical-align: -0.1em;
+  margin-left: 2px;
+  border-radius: 9999px;
+  background-color: hsl(var(--tone));
+  animation: mc-caret-blink 1.1s steps(2, start) infinite;
+}
+
+/* —— 7. 交互反馈 —— */
+/* 按压：该库统一 active:scale-[0.96]，比"变暗"更有实体感 */
+.mc-press { transition: transform 0.15s var(--ease-out-strong); }
+.mc-press:active { transform: scale(0.96); }
+.mc-press-strong:active { transform: scale(0.94); }
+
+/* 焦点环：只用墨线，不用彩色 ring —— 与水墨基调一致 */
+.mc-focus:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--paper-canvas)), 0 0 0 4px hsl(var(--paper-line-strong));
+}
+
+/* —— 8. 骨架 / 加载 ——
+   该库的像素网格加载器：3×3 方格交错呼吸。比转圈更"有工序感"。 */
+.mc-pixels {
+  display: grid;
+  grid-template-columns: repeat(3, 4px);
+  gap: 1.5px;
+}
+.mc-pixels > i {
+  display: block;
+  width: 4px;
+  height: 4px;
+  border-radius: 1px;
+  background-color: hsl(var(--tone));
+  animation: mc-pixel-breathe 1.05s ease-in-out infinite;
+}
+.mc-pixels > i:nth-child(1) { animation-delay: 0s; }
+.mc-pixels > i:nth-child(2) { animation-delay: 0.1s; }
+.mc-pixels > i:nth-child(3) { animation-delay: 0.2s; }
+.mc-pixels > i:nth-child(4) { animation-delay: 0.1s; }
+.mc-pixels > i:nth-child(5) { animation-delay: 0.2s; }
+.mc-pixels > i:nth-child(6) { animation-delay: 0.3s; }
+.mc-pixels > i:nth-child(7) { animation-delay: 0.2s; }
+.mc-pixels > i:nth-child(8) { animation-delay: 0.3s; }
+.mc-pixels > i:nth-child(9) { animation-delay: 0.4s; }
+@keyframes mc-pixel-breathe {
+  0%, 100% { opacity: 0.14; }
+  50% { opacity: 1; }
+}
+
+/* 流式文字尾部的微光扫过（只在生成中挂，生成完摘掉） */
+.mc-shimmer-text {
+  background-image: linear-gradient(
+    90deg,
+    hsl(var(--tone-3)) 0%,
+    hsl(var(--tone)) 45%,
+    hsl(var(--tone-3)) 90%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: mc-shimmer-sweep 2.4s linear infinite;
+}
+@keyframes mc-shimmer-sweep {
+  0% { background-position: 130% 0; }
+  100% { background-position: -30% 0; }
+}
+
+/* —— 9. 细滚动条 ——
+   该库面板内的滚动条极细，默认浏览器滚动条太抢眼。 */
+.mc-scroll { scrollbar-width: thin; scrollbar-color: hsl(var(--paper-line-strong)) transparent; }
+.mc-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.mc-scroll::-webkit-scrollbar-track { background: transparent; }
+.mc-scroll::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--paper-line));
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.mc-scroll::-webkit-scrollbar-thumb:hover { background-color: hsl(var(--paper-line-strong)); }
+
+/* —— 10. 顶面高光 ——
+   主按钮上沿一道 1px 高光，是"实体按键"的关键一笔（该库 signature）。 */
+.mc-sheen { box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.14); }
+
+/* —— 降级：动效敏感用户一律静态 —— */
+@media (prefers-reduced-motion: reduce) {
+  .mc-collapse { transition: none; }
+  .mc-caret,
+  .mc-pixels > i,
+  .mc-shimmer-text { animation: none; }
+  .mc-press:active,
+  .mc-press-strong:active { transform: none; }
+  .mc-shimmer-text { color: hsl(var(--tone-2)); -webkit-text-fill-color: currentColor; background: none; }
 }

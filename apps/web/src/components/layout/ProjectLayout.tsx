@@ -54,9 +54,9 @@ function PanelGuard({ label, children }: { label: string; children: React.ReactN
       renderError={function(error) {
         return (
           <div className="h-full flex flex-col items-center justify-center gap-3 p-6 text-center overflow-auto">
-            <AlertTriangle size={20} style={{ color: '#f59e0b' }} />
+            <AlertTriangle size={20} style={{ color: 'var(--state-running, #f59e0b)' }} />
             <div className="text-[12px]" style={{ color: '#aeaeb2' }}>「{label}」面板组件运行出错，已隔离在本面板内</div>
-            <div className="text-[11px] font-mono break-all max-w-full" style={{ color: '#f59e0b' }}>
+            <div className="text-[11px] font-mono break-all max-w-full" style={{ color: 'var(--state-running, #f59e0b)' }}>
               {String(error.message || error)}
               <br />
               {(error.stack || '').split('\n').slice(1, 5).join('\n')}
@@ -73,7 +73,7 @@ function PanelGuard({ label, children }: { label: string; children: React.ReactN
       }}
       fallback={
         <div className="h-full flex flex-col items-center justify-center gap-3 p-6 text-center">
-          <AlertTriangle size={20} style={{ color: '#f59e0b' }} />
+          <AlertTriangle size={20} style={{ color: 'var(--state-running, #f59e0b)' }} />
           <div className="text-[12px]" style={{ color: '#aeaeb2' }}>「{label}」面板组件运行出错，已隔离在本面板内</div>
           <button
             type="button"

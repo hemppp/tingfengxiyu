@@ -22,11 +22,11 @@ interface QuickPhraseBubbleProps {
 }
 
 const categoryConfig: Record<QuickPhrase['category'], { icon: typeof User; color: string; label: string }> = {
-  character: { icon: User, color: '#3b82f6', label: '角色' },
-  location: { icon: MapPin, color: '#a855f7', label: '地点' },
-  item: { icon: Package, color: '#22c55e', label: '物品' },
-  ai: { icon: Wand2, color: '#f59e0b', label: 'AI推荐' },
-  custom: { icon: Sparkles, color: '#6b7280', label: '自定义' },
+  character: { icon: User, color: 'var(--entity-character, #3b82f6)', label: '角色' },
+  location: { icon: MapPin, color: 'var(--entity-location, #a855f7)', label: '地点' },
+  item: { icon: Package, color: 'var(--entity-item, #22c55e)', label: '物品' },
+  ai: { icon: Wand2, color: 'var(--state-running, #f59e0b)', label: 'AI推荐' },
+  custom: { icon: Sparkles, color: 'var(--state-idle, #6b7280)', label: '自定义' },
 };
 
 /**
@@ -248,7 +248,7 @@ export function QuickPhraseBubble({ editor }: QuickPhraseBubbleProps) {
             backdropFilter: 'blur(24px) saturate(180%)',
             WebkitBackdropFilter: 'blur(24px) saturate(180%)',
             border: '1px solid hsl(var(--border) / 0.4)',
-            borderRadius: '16px',
+            borderRadius: 'var(--r-md)',
             boxShadow:
               '0 12px 40px hsl(var(--ink-deep) / 0.15), 0 4px 12px hsl(var(--ink-deep) / 0.08), inset 0 1px 0 hsl(var(--glass-highlight) / 0.6)',
             padding: '12px',
@@ -348,7 +348,10 @@ export function QuickPhraseBubble({ editor }: QuickPhraseBubbleProps) {
                       className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] transition-all hover:scale-105 active:scale-95"
                       style={{
                         background: 'hsl(var(--card) / 0.7)',
-                        border: `1px solid ${config.color}33`,
+                        // ★ 拆长写：`border` 简写会重置 border-image → shuimo 笔触边框画不出来
+                        borderWidth: '1px',
+                        borderStyle: 'solid',
+                        borderColor: `color-mix(in srgb, ${config.color} 20%, transparent)`,
                         color: 'hsl(var(--ink))',
                         fontFamily: "'Noto Serif SC', serif",
                         cursor: 'pointer',

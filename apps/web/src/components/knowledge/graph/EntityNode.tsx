@@ -121,7 +121,7 @@ export const EntityNode = memo(function EntityNode({ data }: NodeProps) {
           minHeight: 42,
           background: 'hsl(var(--card))',
           border: `${raised ? 1.2 : 1}px solid ${raised ? ink : 'hsl(var(--border) / 0.75)'}`,
-          borderRadius: 8,
+          borderRadius: 'var(--r-2xs)',
           boxShadow,
         }}
       >
@@ -159,7 +159,7 @@ export const EntityNode = memo(function EntityNode({ data }: NodeProps) {
               style={{
                 fontSize: 9.5,
                 padding: '1px 5px',
-                borderRadius: 999,
+                borderRadius: 'var(--r-pill)',
                 color: ink,
                 border: `0.5px solid ${ink}`,
               }}

@@ -1,6 +1,21 @@
 import { useMemo, useEffect, useState } from 'react';
 import { useChapterStore } from '@/stores';
-import { Loader2 } from 'lucide-react';
+import { LoadingPixels, SignalChip } from '@/components/ai/primitives';
+
+/**
+ * 状态栏 —— 墨韵工艺层改造示范（2026-09-18）
+ *
+ * 改了什么：
+ *   1. 原来整篇是 `style={{ color: 'hsl(var(--muted-foreground))' }}` 内联色。
+ *      globals.css 自己写着「表单输入通用类 —— 替代内联 style 的反模式」，
+ *      这里正是那类反模式，已全部换成 text-tone / text-tone-2 / text-tone-3 工具类。
+ *   2. 数字（字数 / 阅读时长）加 mc-num 等宽对齐 —— 原来字数从 999 跳到 1000 时
+ *      整行会横移一格。
+ *   3. 「正在读取时间线」原来是一个转圈的 Loader2 + 主色文字；
+ *      现改用 SignalChip(run) + 像素网格加载器 —— 这是全站唯一允许出现彩色的位置，
+ *      且像素网格比转圈更符合"工序"调性。
+ *   4. 分隔符从 `w-px h-3 bg-border/60` 换成一根墨线，粗细与其它面板统一。
+ */
 
 function formatRelativeTime(ts: number | undefined | null): string {
   if (!ts) return '—';
@@ -13,11 +28,23 @@ function formatRelativeTime(ts: number | undefined | null): string {
   return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+const STATUS_TEXT: Record<string, string> = {
+  draft: '草稿',
+  revised: '已修订',
+  final: '已完成',
+  archived: '已归档',
+};
+
 interface StatusBarProps {
   /** 实时字数（编辑器输入即更新），null 表示未初始化，此时回退到 store 的 chapter.wordCount */
   liveWordCount?: number | null;
   /** 是否正在 AI 扫描时间线 */
   isScanning?: boolean;
+}
+
+/** 分隔符：一根 1px 墨线，与全站勾线同粗细 */
+function Sep() {
+  return <span className="h-3 w-px shrink-0 bg-paper-line" aria-hidden="true" />;
 }
 
 export function StatusBar({ liveWordCount, isScanning }: StatusBarProps) {
@@ -40,17 +67,17 @@ export function StatusBar({ liveWordCount, isScanning }: StatusBarProps) {
   // 1 分钟刷新一次「相对时间」
   const [, setTick] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 60_000);
+    const id = setInterval(() => setTick((t) => t + 1), 60_000);
     return () => clearInterval(id);
   }, []);
 
+  const shell =
+    'h-7 nm-statusbar glass-frost fixed bottom-0 left-0 right-0 z-30 flex items-center gap-2 px-3 sm:gap-3 sm:px-4 text-2xs';
+
   if (!display) {
     return (
-      <div
-        className="h-7 nm-statusbar glass-frost flex items-center px-4 text-[11px] font-[Inter,sans-serif] tabular-nums fixed bottom-0 left-0 right-0 z-30"
-        aria-label="写作状态"
-      >
-        <span style={{ color: 'hsl(var(--muted-foreground))' }}>未选择章节</span>
+      <div className={shell} aria-label="写作状态">
+        <span className="text-tone-3">未选择章节</span>
       </div>
     );
   }
@@ -59,38 +86,35 @@ export function StatusBar({ liveWordCount, isScanning }: StatusBarProps) {
   const readMinutes = wordCount === 0 ? 0 : Math.max(1, Math.ceil(wordCount / 300));
 
   return (
-    <div
-      className="h-7 nm-statusbar glass-frost flex items-center px-3 sm:px-4 text-[11px] font-[Inter,sans-serif] tabular-nums gap-2 sm:gap-3 fixed bottom-0 left-0 right-0 z-30"
-      aria-label="写作状态"
-    >
-      <span className="font-[Noto_Serif_SC,serif] font-medium truncate max-w-[140px] sm:max-w-[260px]" style={{ color: 'hsl(var(--foreground))' }}>
+    <div className={shell} aria-label="写作状态">
+      <span className="max-w-[140px] truncate font-medium text-tone font-[Noto_Serif_SC,serif] sm:max-w-[260px]">
         {display.title}
       </span>
-      <span className="w-px h-3 shrink-0" style={{ background: 'hsl(var(--border) / 0.6)' }} />
-      <span className="shrink-0" style={{ color: 'hsl(var(--muted-foreground))' }}>{wordCount.toLocaleString()} 字</span>
+      <Sep />
+
+      <span className="mc-num shrink-0 text-tone-2">{wordCount.toLocaleString()} 字</span>
       {wordCount > 0 && (
-        <span className="nm-statusbar-secondary shrink-0">
-          <span style={{ color: 'hsl(var(--ink-pale))' }}>·</span>
-          <span style={{ color: 'hsl(var(--muted-foreground))' }}>约 {readMinutes} 分钟</span>
-        </span>
+        <span className="mc-num hidden shrink-0 text-tone-3 sm:inline">约 {readMinutes} 分钟</span>
       )}
-      <span className="nm-statusbar-secondary shrink-0">
-        <span style={{ color: 'hsl(var(--ink-pale))' }}>·</span>
-        <span style={{ color: 'hsl(var(--muted-foreground))' }}>
-          {display.status === 'draft' ? '草稿' : display.status === 'final' ? '已完成' : display.status === 'revised' ? '已修订' : '已归档'}
-        </span>
-      </span>
-      <div className="flex-1" />
+
+      <Sep />
+      <span className="shrink-0 text-tone-2">{STATUS_TEXT[display.status] ?? '已归档'}</span>
+
+      <span className="flex-1" />
+
       {isScanning && (
-        <span className="nm-statusbar-secondary shrink-0">
-          <span className="flex items-center gap-1" style={{ color: 'hsl(var(--primary))' }}>
-            <Loader2 size={10} className="animate-spin" />
-            <span>正在读取时间线...</span>
-          </span>
-          <span className="w-px h-3" style={{ background: 'hsl(var(--border) / 0.6)' }} />
-        </span>
+        <>
+          <SignalChip tone="run" className="nm-statusbar-secondary shrink-0">
+            <LoadingPixels />
+            正在读取时间线
+          </SignalChip>
+          <Sep />
+        </>
       )}
-      <span className="shrink-0" style={{ color: 'hsl(var(--muted-foreground))' }}>已自动保存 · {formatRelativeTime(display.updatedAt)}</span>
+
+      <span className="nm-statusbar-secondary mc-num shrink-0 text-tone-3">
+        已自动保存 · {formatRelativeTime(display.updatedAt)}
+      </span>
     </div>
   );
 }
