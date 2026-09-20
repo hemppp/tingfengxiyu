@@ -125,3 +125,6 @@ graphflow-out/
 
 # 设计评审会话截图与演示产物
 .design-review/
+
+# 内部安全审计报告：含可直接利用的漏洞细节，2026-09-20 开源前移出仓库
+security_best_practices_report.md
