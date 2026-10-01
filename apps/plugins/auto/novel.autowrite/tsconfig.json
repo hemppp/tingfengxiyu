@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "jsx": "react-jsx",
+    "types": ["node", "vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["../../../web/src/*"],
+      "@novel-plugins/ui-kit": ["../../shared/ui-kit/src/index.ts"],
+      "@novel-plugins/ui-kit/*": ["../../shared/ui-kit/src/*"],
+      "@novel-plugins/data-core": ["../../shared/data-core/src/index.ts"],
+      "@novel-plugins/data-core/*": ["../../shared/data-core/src/*"],
+      "@novel-plugins/data-core/stores": ["../../shared/data-core/src/stores/index.ts"],
+      "@novel-plugins/data-core/api/apiClient": ["../../shared/data-core/src/api/apiClient.ts"],
+      "@novel-plugins/ui-graph": ["../../shared/ui-graph/src/index.ts"]
+    },
+    "noEmit": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
+  },
+  // ★ D46：`chat-wheel.tsx` 现经 **恒在的 shared 包** 引用 SkillsBar/QuickPromptsBar
+  //   （展示层 @novel-plugins/ui-kit + 数据层 @novel-plugins/data-core）。
+  //   故本包**不再**需要 `@novel-plugins/auto-workbench/*` 的 paths 映射 ——
+  //   移走 auto 模块后本包仍可独立完成类型检查与构建（可分离性的必要条件）。
+  //   另：ui-graph 的 Graph3D 经 d3-force-3d 引类型，而 d3-force-3d 在 npm 上无
+  //   @types 包 —— 其最小声明在 kernel 树里（apps/web/src/types/d3-force-3d.d.ts）。
+  //   此处显式纳入，使本包能独立完成类型检查。
+  "include": [
+    "server/**/*",
+    "web/**/*",
+    "../../../web/src/types/d3-force-3d.d.ts"
+  ],
+  "exclude": ["node_modules"]
+}

@@ -1,0 +1,38 @@
+{
+  "name": "@novel/core",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./web": {
+      "types": "./src/web.ts",
+      "import": "./src/web.ts",
+      "default": "./src/web.ts"
+    }
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@novel/db": "workspace:*",
+    "@novel/shared": "workspace:*",
+    "@types/react": "^19.0.0",
+    "hono": "^4.13.3",
+    "lucide-react": "^0.460.0",
+    "react": "^19.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.7"
+  },
+  "description": "NovelMuse 插件契约包（Cordis 底座版）：类型契约 + 纯工具，内核由 @deepseek-ai/cordis 承担"
+}

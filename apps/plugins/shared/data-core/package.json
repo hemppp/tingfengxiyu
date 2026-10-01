@@ -1,0 +1,52 @@
+{
+  "name": "@novel-plugins/data-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "共享数据层：鉴权 API 客户端（resolveApiUrl）、数据库/同步服务、实体检测与共享 store",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./stores": {
+      "types": "./src/stores/index.ts",
+      "import": "./src/stores/index.ts",
+      "default": "./src/stores/index.ts"
+    },
+    "./api/apiClient": {
+      "types": "./src/api/apiClient.ts",
+      "import": "./src/api/apiClient.ts",
+      "default": "./src/api/apiClient.ts"
+    },
+    "./api/authApi": {
+      "types": "./src/api/authApi.ts",
+      "import": "./src/api/authApi.ts",
+      "default": "./src/api/authApi.ts"
+    },
+    "./*": {
+      "types": "./src/*.ts",
+      "import": "./src/*.ts",
+      "default": "./src/*.ts"
+    },
+    "./*/*": {
+      "types": "./src/*/*.ts",
+      "import": "./src/*/*.ts",
+      "default": "./src/*/*.ts"
+    }
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "dependencies": {
+    "@novel-plugins/ui-kit": "workspace:*",
+    "@novel/core": "workspace:*",
+    "@novel/shared": "workspace:*",
+    "@tiptap/react": "^2.11.0",
+    "nanoid": "^5.1.16",
+    "zustand": "^5.0.0"
+  }
+}

@@ -1,0 +1,15 @@
+# 统一行尾为 LF，避免 Windows / macOS / Linux 协作时的 CRLF 混乱
+* text=auto eol=lf
+
+# 二进制资源：禁止行尾转换与文本 diff
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+*.pdf binary
+*.zip binary

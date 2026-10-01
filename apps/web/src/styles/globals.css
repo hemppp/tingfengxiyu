@@ -1,0 +1,2601 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   NovelMuse · 青霭玻璃设计系统 (Azure Glass HUD)
+   macOS 风：氛围渐变底 + 毛玻璃面板 + 系统无衬线字体
+   色相体系：青(205° azure) → 靛(225° indigo)，朱砂仅作暖点缀
+   核心要素：backdrop-filter 模糊 + 饱和度提升 + 边缘高光 + 柔和多层投影
+   ============================================================ */
+
+@layer base {
+  :root {
+    /* —— 基底：宣纸（严格中性灰，饱和度恒为 0）—— */
+    --background: 0 0% 96%;                /* #f5f5f5 宣纸白 */
+    --foreground: 0 0% 9%;                 /* #171717 焦墨 */
+    --card: 0 0% 99%;                      /* #fcfcfc 生宣 */
+    --card-foreground: 0 0% 9%;
+
+    /* —— 主色：墨（取代霁青）—— */
+    --primary: 0 0% 12%;                   /* #1f1f1f 浓墨 */
+    --primary-foreground: 0 0% 98%;
+
+    /* —— 辅助色 —— */
+    --secondary: 0 0% 92%;
+    --secondary-foreground: 0 0% 20%;
+    --muted: 0 0% 94%;
+    --muted-foreground: 0 0% 42%;          /* 淡墨 */
+    --accent: 0 0% 22%;
+    --accent-foreground: 0 0% 98%;
+    /* ⚠️ 严格黑白灰下危险色不再用红：改以「最深墨 + 描边」表达重量。
+       若某处需要彩色警示，把下行换成 `0 72% 45%` 即可局部恢复。 */
+    --destructive: 0 0% 16%;
+    --destructive-foreground: 0 0% 98%;
+
+    /* —— 边框 / 输入 / 焦点 —— */
+    --border: 0 0% 82%;
+    --input: 0 0% 92%;
+    --ring: 0 0% 25%;
+
+    /* —— 圆角（苹果大圆角）—— */
+    --radius: 1rem;                        /* 16px */
+    --radius-lg: 1.25rem;                  /* 20px */
+    --radius-xl: 1.5rem;                   /* 24px */
+
+    /* —— 内联圆角语义档位（2026-09-18）——
+       背景：全仓曾有 63 处内联 `style={{ borderRadius: 20 }}`。内联样式在层叠里
+       优先级最高（与特异性无关），CSS 选择器压不过它，导致换肤时改不动这批圆角。
+       现改为引用这里的变量，主题重新获得控制权。
+
+       默认值 = 该档位迁移前**出现最多的那个值**，所以绝大多数元素外观零变化；
+       少数档位内微调 ≤4px（18→14、11→12、24→20），肉眼不可辨。
+       迁移脚本：`.workbuddy/ui-checks/migrate-radius.mjs` */
+    --r-pill: 999px;                       /* 胶囊：原 999 / 980 */
+    --r-lg: 20px;                          /* 大卡片：原 20 / 24 */
+    --r-md: 14px;                          /* 中容器：原 14 / 16 / 18 */
+    --r-sm: 12px;                          /* 小卡片：原 11 / 12 */
+    --r-xs: 10px;                          /* 控件 */
+    --r-2xs: 8px;                          /* 小控件 */
+    --r-3xs: 4px;                          /* 极小：原 1 / 4 */
+
+    /* —— 书封（BookCover.tsx）的纸 / 墨 / 印 ——
+       组件用 `color-mix(in srgb, var(--cover-ink) P%, var(--cover-paper))`
+       按"墨浓度"合成三段渐变，`--cover-line` 供 SVG 线条用，`--cover-seal` 是卷印。
+
+       ★ 为什么抽成变量（2026-09-18）：这 8 套封面的渐变色值原来是**内联 style**
+         里的硬编码灰阶，主题 CSS 压不动 —— 切到 shuimo（宣纸）主题后，
+         书架页杵着两块深灰卡片，是最扎眼的"没换皮"证据。
+
+       ★ 默认值刻意选成与旧灰阶**等价**（旧值 = mix(#1c1c1c P%, #ffffff)，
+         P 由 `(255 − T) / 227` 反算），所以默认主题下渲染结果逐像素不变。 */
+    --cover-ink: #1c1c1c;
+    --cover-paper: #ffffff;
+    /* 浓度倍率：整体压淡/加深 8 套封面的墨量（1 = 原样）。
+       无单位数字 —— 组件里写作 `calc(P * var(--cover-wash-scale) * 1%)`，
+       ⚠️ 不能写成百分比再相乘：calc 里 `% × %` 是非法值。 */
+    --cover-wash-scale: 1;
+    --cover-line: #1c1c1c;
+    /* 装饰层（SVG 的山/云/竹…）与文字分开：文字要深、装饰要淡。
+       默认主题两者同值，所以外观与改前一致。 */
+    --cover-decor: #1c1c1c;
+    --cover-seal: #3a3a3a;
+
+    /* —— 书封上的**文字与浮层**（BookCard.tsx）——
+       ★ 为什么抽出来（2026-09-18 实测）：
+         书封上的文字/胶囊/统计条原来全是**硬编码白色系**
+         （书名 `rgba(255,255,255,.95)`、作者 `.65`、体裁胶囊 `.18/.25/.92`、
+          统计条 `.10/.15/.75`），因为原设计封面下半部被好几条 `fill={ink}`
+          的"地面"path 叠成近黑，白字放上去才读得清。
+         shuimo 把封面改成暖调淡纸后，白字实测只有 **4.42:1** ——
+         裁剪量像素、半透明前景先合成再算，低于项目 4.5:1 的 AA 门槛。
+         正确解法不是"把封面再压黑"，而是让文字跟着纸走：宣纸底配墨字。
+
+       ★ 只用一个变量：`--cover-fg` 表示"封面上的前景色"，
+         其余全部用 `color-mix(in srgb, var(--cover-fg) N%, transparent)` 推出来。
+         **这是等价的** —— `color-mix(in srgb, #fff 65%, transparent)`
+         算出来就是 `rgba(255,255,255,0.65)`，逐像素一致。
+         所以默认主题外观不变，而主题只需换一个值就能整体翻面。 */
+    --cover-fg: #ffffff;
+    /* 各处的白度（原值原样搬过来，别改 —— 改了默认主题就变样了） */
+    --cover-title-alpha: 95%;
+    --cover-meta-alpha: 65%;
+    --cover-chip-fg-alpha: 92%;
+    --cover-chip-bg-alpha: 18%;
+    --cover-chip-border-alpha: 25%;
+    --cover-stats-fg-alpha: 75%;
+    --cover-stats-bg-alpha: 10%;
+    --cover-stats-border-alpha: 15%;
+    /* 白字在暗底上需要一点投影；换墨字后投影要撤掉，否则字发糊 */
+    --cover-title-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+
+    /* 装饰层**额外**的浓度倍率（1 = 原样）。
+       和 --cover-wash-scale 的区别：那个管渐变底色，这个只管 SVG 山/云/竹。
+       shuimo 需要"底色淡 + 装饰更淡"（远山如洗），所以要单独一档。
+       无单位数字 —— `% × %` 在 calc 里非法，倍率必须是无单位的。 */
+    --cover-decor-alpha: 1;
+
+    /* —— 封面底部的**可读性遮罩**（BookCard.tsx）——
+       ★ 这是封面偏暗的**真凶**，也是最难找的一个（2026-09-18）：
+         它盖住封面下 55%，书名位置实际叠了约 **0.55 的黑**。
+         只调 `--cover-wash-scale`（渐变底色）和 `--cover-decor-alpha`（装饰）
+         都是在治标 —— 底色已经调到 rgb(206,200,190) 了，渲染出来还是 rgb(99,95,89)。
+       ★ 定位手法（隔离实验，值得复用）：把封面底改成**纯红**
+         `cover.style.background = 'rgb(255,0,0)'` 再截图 ——
+         如果渲染出来是**上亮下暗的红渐变**而不是平色，就说明有渐变遮罩盖着。
+         比逐个隐藏元素快得多，而且一眼就能看出遮罩的**方向与范围**。
+       ★ 另外两个坑：`elementsFromPoint` **不含伪元素**；所以还配合查了
+         `getComputedStyle(el, '::before'/'::after')`（本例确实没有）。
+       ★ 默认值 = 原硬编码渐变 + 原 opacity ⇒ 默认主题逐像素不变。 */
+    --cover-scrim: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0) 0%,
+      rgba(0, 0, 0, 0.35) 50%,
+      rgba(0, 0, 0, 0.75) 100%
+    );
+    --cover-scrim-opacity: 0.92;
+
+    /* —— 语义色板（沿用旧命名，值改为「墨分五色」灰阶）——
+       焦墨 9% / 浓墨 16% / 重墨 30% / 淡墨 50% / 清墨 68%。
+       命名保留是为了不动组件；语义已从「山水色」转为「墨色深浅」。 */
+    --mountain-cyan: 0 0% 12%;             /* 主强调：浓墨 */
+    --mountain-light: 0 0% 52%;            /* 淡墨 */
+    --mountain-deep: 0 0% 20%;             /* 深墨（深锚点 / 文字强调） */
+    --mountain-pale: 0 0% 90%;             /* 极淡墨（纸面浅痕） */
+    --mist-blue: 0 0% 62%;                 /* 中淡墨 */
+    --mist-pale: 0 0% 92%;                 /* 淡雾 → 纸灰 */
+    --mist-deep: 0 0% 44%;                 /* 深雾 → 重墨偏淡 */
+    --ink: 0 0% 9%;                        /* 焦墨 */
+    --ink-light: 0 0% 38%;                 /* 淡墨 */
+    --ink-pale: 0 0% 58%;                  /* 清墨 */
+    --cinnabar: 0 0% 18%;                  /* 朱砂 → 最重墨 */
+    --cinnabar-pale: 0 0% 90%;
+    --willow: 0 0% 28%;                    /* 成功/生长 → 浓墨 */
+    --willow-pale: 0 0% 90%;
+    --ochre: 0 0% 46%;                     /* 警示 → 重墨 */
+    --ochre-pale: 0 0% 90%;
+
+    /* —— 质感 token：由「液态玻璃」转为「宣纸」——
+       纸不折射、不染饱和度，故 blur 下调、saturate 归 100%，
+       投影自中性墨黑发出（而非靛蓝），高光是纸面的「蛤白」。 */
+    --glass-blur: 10px;
+    --glass-saturate: 100%;
+    --glass-tint: 250 250 250;             /* 纸面基调 — 中性白（饱和度 0） */
+    --glass-highlight: 255 255 255;        /* 顶部高光 (RGB 三元组) */
+    --glass-shadow: 0 0% 0%;               /* 投影色 → 纯墨黑 */
+
+    /* 各层级不透明度（纸是不透明的：整体上调；
+       边框取墨线，比玻璃更低的不透明度即可形成"勾线"感。
+       surface 用于小控件（按钮/搜索框）需较高不透明度保证可读性；
+       panel/frost 用于大面积面板，保留纸的呼吸感）*/
+    --glass-surface-bg: 0.55;              /* 轻表面 — 小控件 */
+    --glass-surface-border: 0.34;
+    --glass-surface-highlight: 0.30;
+    --glass-panel-bg: 0.62;                /* 中等面板 */
+    --glass-panel-border: 0.34;
+    --glass-panel-highlight: 0.30;
+    --glass-frost-bg: 0.72;                /* 顶栏霜 */
+    --glass-frost-border: 0.38;
+    --glass-frost-highlight: 0.34;
+    --glass-strong-bg: 0.80;               /* 重面板 */
+    --glass-strong-border: 0.32;
+    --glass-strong-highlight: 0.28;
+    --glass-modal-bg: 0.90;                /* 模态 */
+    --glass-modal-border: 0.26;
+    --glass-modal-highlight: 0.32;
+
+    /* ============================================================
+     * 语义扩展层 —— 换肤契约（2026-09-11）
+     *
+     * 为什么有这一层：组件里散落着大量硬编码色值（`#4F918C` 这类），
+     * 它们不会跟随主题切换 —— 所以"全局换肤"必须先把语义色收编成变量。
+     *
+     * 原则：
+     *   1. 这里**只放语义**，不放具体场景。换肤只改这一层的值。
+     *   2. 取值 = 收编前的现值，保证接入过程**零视觉变化**。
+     *   3. 数据可视化配色（关系图节点等）与用户自定义色**不进这里** ——
+     *      前者该跟着数据走，后者是用户选的，都不该被主题覆盖。
+     * ============================================================ */
+
+    /* —— 实体分类色（知识库 / 状态看板里的实体类型）——
+       区分手段由「色相」改为「墨阶」：靠深浅而非颜色。 */
+    --entity-character: 0 0% 12%;      /* 角色 · 焦墨 */
+    --entity-location: 0 0% 26%;       /* 地点 · 浓墨 */
+    --entity-item: 0 0% 36%;           /* 物品 · 重墨 */
+    --entity-foreshadow: 0 0% 46%;     /* 伏笔 · 中墨 */
+    --entity-event: 0 0% 58%;          /* 事件 · 淡墨 */
+    --entity-outline: 0 0% 68%;        /* 大纲 · 清墨 */
+
+    /* —— 智能体色（AI 写作工作台的四官 + 写作官）—— */
+    --agent-plot: 0 0% 20%;            /* 剧情设计师 */
+    --agent-character: 0 0% 30%;       /* 角色设计师 */
+    --agent-continuity: 0 0% 40%;      /* 设定管家 */
+    --agent-convener: 0 0% 50%;        /* 定稿官 */
+    --agent-writer: 0 0% 8%;           /* 写作官 · 落笔最重 */
+
+    /* —— 状态色（阶段推进 / 门槛结果）—— */
+    --state-idle: 0 0% 72%;            /* 待开始 · 纸未着墨 */
+    --state-running: 0 0% 40%;         /* 进行中 · 墨在晕 */
+    --state-done: 0 0% 14%;            /* 已完成 · 墨已定 */
+    --state-blocked: 0 0% 8%;          /* 被挡下 · 焦墨压住 */
+
+    /* —— 章节区分墨阶（时间线章列头 / 事件类型标签）——
+       原为 6 色高饱和板（#4a90d9 蓝 / #8b5cf6 紫 / #ec4899 粉 / #f97316 橙 /
+       #14b8a6 青 / #eab308 黄）+ 3 个事件类型色（#d4a853 金 等）。
+       两套色作为「文字压在自身 10% 透明底上」时对比度仅 1.71–3.56:1，全部低于 AA(4.5)，
+       且与黑白水墨主题直接冲突（详见 docs/ui-audit-2026-09-16.md C2）。
+
+       改为 8 档墨阶：明度 4%→38%，相邻差 4–5%，灰阶下可区分；
+       最浅档（38%）在自身 10% 底上仍有 5.14:1，全部过 AA。
+       ⚠️ 上限就是 38%：44% 起降到 4.16:1 不再达标，别往更浅调。 */
+    --chapter-1: 0 0% 4%;
+    --chapter-2: 0 0% 9%;
+    --chapter-3: 0 0% 14%;
+    --chapter-4: 0 0% 19%;
+    --chapter-5: 0 0% 24%;
+    --chapter-6: 0 0% 29%;
+    --chapter-7: 0 0% 33%;
+    --chapter-8: 0 0% 38%;
+
+    /* ============================================================
+     * 墨韵工艺层 · Ink Craft Layer（2026-09-18）
+     *
+     * 来源：beautifului.dev 的非彩色设计基座，移植到水墨体系上。
+     * 目的：把「纸的层级 / 墨的深浅 / 圆角档位 / 投影档位 / 缓动」
+     *       从散落的工具类收编成一套**有档位**的令牌，
+     *       供 AI 交互面与布局外壳统一取用。
+     *
+     * 原则：
+     *   1. **不新增彩色** —— 主要层级全是灰阶（饱和度恒 0），
+     *      唯一例外是下面那组「极克制信号色」，且只准用于状态指示。
+     *   2. 纸面层级一律**别名**到既有语义变量（--card / --background …），
+     *      所以换肤契约（改 --card 等）依然一路生效到新代码。
+     *   3. 字号地板：面板内正文/标签下限 11px，关键信息 12px。
+     *      与 --tone-* 配套 —— 见文件末尾「排版地板」小节。
+     *
+     * ⚠️ **加了新令牌，必须同步补 `themes.css` 的 `html[data-theme="soot"]`**。
+     *    非默认主题只覆盖 globals.css 里 :root/.dark 定义过的变量，
+     *    漏一组就会从 :root 继承**亮色**值 —— 在松烟暗底上表现为
+     *    「悬停变白、次级文字比正文还暗」，即 themes.css 自己警告的"换了一半皮"。
+     *    别名类（--paper / --paper-canvas / --paper-inset / --paper-field）除外，
+     *    它们跟着 --card 等自动反相，主题里不要重列。
+     * ============================================================ */
+
+    /* —— 纸面层级（paper）：由底到面共 6 档 ——
+       越靠前越"深"（凹陷），越靠后越"浮"（抬升）。 */
+    --paper-canvas: var(--background);      /* 底层宣纸 · 页面底 */
+    --paper: var(--card);                   /* 承墨的纸 · 卡片/面板面 */
+    --paper-inset: var(--muted);            /* 凹陷 · 内嵌块 / 行 hover */
+    --paper-field: var(--input);            /* 输入域 · 输入框/下拉底 */
+    --paper-hover: 0 0% 95%;                /* 交互态一档：轻浮起 */
+    --paper-hover-2: 0 0% 91%;              /* 交互态二档：按下/选中 */
+
+    /* —— 墨线（勾线三档）：卡片不靠投影，靠一根 1px 墨线 —— */
+    --paper-line: var(--border);            /* 常规勾线 */
+    --paper-line-strong: 0 0% 70%;          /* 强勾线 · 聚焦/选中/主按钮 */
+    --paper-line-soft: 0 0% 90%;            /* 弱勾线 · 分区/内部栅格 */
+
+    /* —— 墨阶文字（tone）三档 ——
+       tone   = 正文（= --foreground）
+       tone-2 = 次级：标签 / 说明 / 表格 meta
+                **实测最差面（field 92%）4.61:1，四档纸面全过 AA**
+       tone-3 = 三级：placeholder / disabled / 装饰性序号
+                ⚠️ 实测亮色仅 2.8–3.3:1（≥3:1 达 AA-large），**不得承载任何信息**；
+                   暗色 4.48–5.6:1 达标。任何"用户需要读"的内容一律用 tone-2。
+                （2026-09-16 审计 C1：gray-400 2.45:1 用在真实内容上属缺陷 —— 别重蹈）
+       取值经对比度求解器验过，不是估的。 */
+    --tone: var(--foreground);
+    --tone-2: 0 0% 41%;
+    --tone-3: 0 0% 50%;
+
+    /* —— 圆角档位（radius）：四级，替代到处写 rounded-[10px] ——
+       ⚠️ 与既有 --radius(16px 苹果大圆角) 并存，不覆盖它：
+          新代码用档位，老代码保持大圆角，迁移可分批。 */
+    --radius-chip: 6px;                     /* 标签/徽章/极小控件 */
+    --radius-control: 8px;                  /* 按钮/输入/图标按钮 */
+    --radius-card: 10px;                    /* 卡片/面板 */
+    --radius-window: 14px;                  /* 窗口/大容器/输入区 */
+
+    /* —— 投影档位（shadow）：全部**含 1px 墨线** ——
+       在纸上，实体感来自勾线而非阴影，所以阴影极轻。 */
+    --shadow-hairline: 0 0 0 1px hsl(var(--paper-line));
+    --shadow-card:
+      0 0 0 1px hsl(var(--paper-line)),
+      0 1px 2px hsl(0 0% 0% / 0.04);
+    --shadow-raised:
+      0 0 0 1px hsl(var(--paper-line)),
+      0 2px 8px hsl(0 0% 0% / 0.07);
+    --shadow-overlay:
+      0 0 0 1px hsl(var(--paper-line)),
+      0 8px 28px hsl(0 0% 0% / 0.13);
+    --shadow-btn:
+      0 0 0 1px hsl(var(--paper-line-strong)),
+      0 1px 1px hsl(0 0% 0% / 0.03);
+    --shadow-inset-field: inset 0 1px 2px hsl(0 0% 0% / 0.05);
+
+    /* —— 缓动（ease）：三档，取该库精修值 ——
+       link       = 出场/展开（快起慢收，最常用）
+       out-strong = 位移/放大（比 ease-out 更脆）
+       in-out-strong = 循环/往复 */
+    --ease-link: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+
+    /* —— 极克制信号色（sig）——
+       **本体系唯一的彩色，且只准用于状态指示**（圆点/图标/细线/极小标签底）。
+       取法：色相借自该库的状态色，饱和度压到 16–36%（该库 15–20% chroma），
+       明度按水墨调子收紧。禁止用于大面积填充、正文、边框。
+       实测：作为 11px 文字压在自身 10% 淡底上，亮色最低 4.57:1 / 暗色最低 5.54:1，全过 AA。 */
+    --sig-run: 210 18% 42%;                 /* 进行中 / 思考中 / 流式 */
+    --sig-done: 152 16% 34%;                /* 已完成 / 已落库 */
+    --sig-warn: 36 32% 38%;                 /* 待审批 / 存疑 / 漂移 */
+    --sig-stop: 4 34% 44%;                  /* 失败 / 被阻断 */
+    --sig-run-tint: 210 18% 42% / 0.1;
+    --sig-done-tint: 152 16% 34% / 0.1;
+    --sig-warn-tint: 36 32% 38% / 0.1;
+    --sig-stop-tint: 4 34% 44% / 0.1;
+  }
+
+  /* —— 暗色模式（夜墨：纸转入夜，墨转为亮）—— */
+  .dark {
+    --background: 0 0% 7%;                 /* #121212 夜宣 */
+    --foreground: 0 0% 94%;                /* 反相焦墨 → 亮墨 */
+    --card: 0 0% 11%;
+    --card-foreground: 0 0% 94%;
+    --primary: 0 0% 92%;                   /* 暗底主色反相 */
+    --primary-foreground: 0 0% 8%;
+    --secondary: 0 0% 18%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 62%;
+    --accent: 0 0% 86%;
+    --accent-foreground: 0 0% 8%;
+    /* ⚠️ 必须覆盖：亮色的 --destructive 是 16% 深墨，在夜底上完全不可见 */
+    --destructive: 0 0% 88%;
+    --destructive-foreground: 0 0% 8%;
+    --border: 0 0% 24%;
+    --input: 0 0% 18%;
+    --ring: 0 0% 70%;
+
+    --ink: 0 0% 94%;
+    --ink-light: 0 0% 70%;
+    --ink-pale: 0 0% 52%;
+
+    /* 夜墨质感：纸在夜里近乎不显，高光更弱、叠加略高于玻璃期（纸不透明） */
+    --glass-tint: 255 255 255;
+    --glass-highlight: 255 255 255;
+    --glass-shadow: 0 0% 0%;
+    --glass-surface-bg: 0.06;
+    --glass-surface-border: 0.10;
+    --glass-surface-highlight: 0.04;
+    --glass-panel-bg: 0.08;
+    --glass-panel-border: 0.12;
+    --glass-panel-highlight: 0.06;
+    --glass-frost-bg: 0.10;
+    --glass-frost-border: 0.14;
+    --glass-frost-highlight: 0.08;
+    --glass-strong-bg: 0.12;
+    --glass-strong-border: 0.16;
+    --glass-strong-highlight: 0.10;
+    --glass-modal-bg: 0.16;
+    --glass-modal-border: 0.22;
+    --glass-modal-highlight: 0.12;
+
+    /* —— 语义扩展层：暗底反相 —— 墨阶整体上翻，并保持彼此可辨的距离 —— */
+    --entity-character: 0 0% 92%;      /* 焦墨 → 最亮 */
+    --entity-location: 0 0% 78%;
+    --entity-item: 0 0% 68%;
+    --entity-foreshadow: 0 0% 58%;
+    --entity-event: 0 0% 48%;
+    --entity-outline: 0 0% 40%;
+
+    --agent-plot: 0 0% 82%;
+    --agent-character: 0 0% 72%;
+    --agent-continuity: 0 0% 62%;
+    --agent-convener: 0 0% 52%;
+    --agent-writer: 0 0% 95%;
+
+    --state-idle: 0 0% 38%;
+    --state-running: 0 0% 60%;
+    --state-done: 0 0% 88%;
+    --state-blocked: 0 0% 96%;
+
+    /* 章节墨阶：暗底反相 —— 与亮色模式同序（chapter-1 最重），
+       在夜宣底上「重」= 更亮。最暗档（第 8 档）取 62%，
+       保证压在自身 10% 底（≈夜底微亮）上仍过 AA。 */
+    --chapter-1: 0 0% 96%;
+    --chapter-2: 0 0% 91%;
+    --chapter-3: 0 0% 86%;
+    --chapter-4: 0 0% 81%;
+    --chapter-5: 0 0% 76%;
+    --chapter-6: 0 0% 71%;
+    --chapter-7: 0 0% 66%;
+    --chapter-8: 0 0% 62%;
+
+    /* —— 墨韵工艺层：夜墨反相 ——
+       纸面层级里的 --paper / --paper-canvas / --paper-inset / --paper-field
+       都是别名，已随 --card / --background … 自动反相，无需重列。
+       这里只列**写死的档位**与信号色。 */
+
+    /* 交互态：夜底上"浮起"= 更亮 */
+    --paper-hover: 0 0% 17%;
+    --paper-hover-2: 0 0% 21%;
+
+    /* 勾线：夜墨里线要更亮才看得出 */
+    --paper-line-strong: 0 0% 36%;
+    --paper-line-soft: 0 0% 18%;
+
+    /* 墨阶文字：暗底上"浅"= 更亮，整体上翻。
+       tone-3 从 52% 提到 60%：52% 压在 field(18%) 上只有 3.68:1，58% 也只有 4.48:1（差一点），
+       60% 得 4.77:1 —— 暗色下这一档**也达标 AA**，比亮色那档更严。 */
+    --tone-2: 0 0% 68%;
+    --tone-3: 0 0% 60%;
+
+    /* 投影：夜底上黑影不可见，改由高不透明度黑 + 勾线共同定位 */
+    --shadow-card:
+      0 0 0 1px hsl(var(--paper-line)),
+      0 1px 2px hsl(0 0% 0% / 0.32);
+    --shadow-raised:
+      0 0 0 1px hsl(var(--paper-line)),
+      0 2px 8px hsl(0 0% 0% / 0.42);
+    --shadow-overlay:
+      0 0 0 1px hsl(var(--paper-line)),
+      0 8px 28px hsl(0 0% 0% / 0.55);
+    --shadow-btn:
+      0 0 0 1px hsl(var(--paper-line-strong)),
+      0 1px 1px hsl(0 0% 0% / 0.24);
+    --shadow-inset-field: inset 0 1px 2px hsl(0 0% 0% / 0.28);
+
+    /* 信号色：暗底上提亮，饱和度略抬以抵消夜墨的"吸色" */
+    --sig-run: 210 20% 68%;
+    --sig-done: 152 18% 64%;
+    --sig-warn: 36 34% 70%;
+    --sig-stop: 4 36% 70%;
+    --sig-run-tint: 210 20% 68% / 0.14;
+    --sig-done-tint: 152 18% 64% / 0.14;
+    --sig-warn-tint: 36 34% 70% / 0.14;
+    --sig-stop-tint: 4 36% 70% / 0.14;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border) / 0.5);
+  }
+
+  html {
+    background-color: transparent;
+    color: hsl(var(--foreground));
+  }
+
+  body {
+    background-color: transparent;
+    color: hsl(var(--foreground));
+    /* 玻璃 HUD：UI 一律系统无衬线（macOS SF / Windows 雅黑优先），中文回退链完整 */
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1, "lnum" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    color: hsl(var(--foreground));
+    font-feature-settings: "lnum" 1, "locl" 1;
+  }
+}
+
+/* ============================================================
+   液态玻璃核心工具类
+   统一体系：.glass-* 命名，替代旧的 .nm-glass-*
+   层次：surface (轻) → panel (中) → frost (顶栏) → strong (重) → modal
+   ============================================================ */
+
+.glass-surface,
+.nm-glass-mist {
+  background: rgb(var(--glass-tint) / var(--glass-surface-bg));
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 0.5px solid hsl(var(--border) / var(--glass-surface-border));
+  box-shadow:
+    0 2px 8px hsl(var(--glass-shadow) / 0.10),
+    0 1px 2px hsl(var(--glass-shadow) / 0.06),
+    inset 0 1px 0 rgb(var(--glass-highlight) / var(--glass-surface-highlight));
+}
+
+/* iOS 26 .clear 变体：高通透浮层（极低不透明度 + 轻模糊 + 极简边框/高光）*/
+.glass-clear {
+  background: rgb(var(--glass-tint) / 0.08);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 0.5px solid rgb(var(--glass-highlight) / 0.18);
+  box-shadow:
+    inset 0 1px 0 rgb(var(--glass-highlight) / 0.12),
+    0 4px 16px hsl(var(--glass-shadow) / 0.06),
+    0 1px 2px hsl(var(--glass-shadow) / 0.04);
+}
+
+.glass-panel,
+.nm-glass {
+  background: rgb(var(--glass-tint) / var(--glass-panel-bg));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) contrast(1.05);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) contrast(1.05);
+  border: 0.5px solid hsl(var(--border) / var(--glass-panel-border));
+  box-shadow:
+    0 6px 20px hsl(var(--glass-shadow) / 0.12),
+    0 2px 6px hsl(var(--glass-shadow) / 0.08),
+    inset 0 1px 0 rgb(var(--glass-highlight) / var(--glass-panel-highlight)),
+    inset 0 -0.5px 0 hsl(var(--mountain-deep) / 0.06);
+}
+
+/* 拖拽浮窗时禁用 backdrop-filter：24px 模糊逐帧采样是拖动卡顿的主因。
+   浮窗位置由 transform 驱动，禁用后拖拽只剩纯合成开销，视觉不变。
+   ★ blur 关闭后，玻璃原本的低透明度底色（0.28/0.06）会显得透明——
+   背后内容锐利可见。用主题卡片色的高不透明度底补偿，保持拖拽中的实体感。 */
+.is-dragging,
+.is-dragging * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.is-dragging .glass-panel,
+.is-dragging.glass-panel,
+.is-dragging .glass-frost,
+.is-dragging.glass-frost {
+  background-color: hsl(var(--card) / 0.96) !important;
+}
+
+/* 浮窗/面板右下角调整大小手柄：两条斜向纹理线 + nwse 光标 */
+.nm-resize-handle {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 18px;
+  height: 18px;
+  z-index: 50;
+  cursor: nwse-resize;
+  touch-action: none;
+  /* ★ 默认隐藏（视觉降噪）：命中区域保留，调整大小功能不受影响 */
+  opacity: 0;
+  border-radius: 5px;
+  transition: opacity 0.15s ease;
+}
+.nm-resize-handle::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: inherit;
+  background:
+    linear-gradient(135deg, transparent 40%, hsl(var(--muted-foreground) / 0.65) 40%, hsl(var(--muted-foreground) / 0.65) 50%, transparent 50%),
+    linear-gradient(135deg, transparent 62%, hsl(var(--muted-foreground) / 0.45) 62%, hsl(var(--muted-foreground) / 0.45) 72%, transparent 72%);
+}
+/* 悬停浮窗时浮现，保留可发现性 */
+.nm-float-panel-mobile:hover .nm-resize-handle,
+.nm-chapter-panel:hover .nm-resize-handle {
+  opacity: 0.5;
+}
+.nm-resize-handle:hover,
+.nm-resize-handle:active {
+  opacity: 1;
+}
+
+.glass-frost,
+.nm-glass-frost {
+  background: rgb(var(--glass-tint) / var(--glass-frost-bg));
+  backdrop-filter: blur(28px) saturate(180%) contrast(1.06);
+  -webkit-backdrop-filter: blur(28px) saturate(180%) contrast(1.06);
+  border: 0.5px solid rgb(var(--glass-highlight) / var(--glass-frost-border));
+  box-shadow:
+    inset 0 1px 0 rgb(var(--glass-highlight) / var(--glass-frost-highlight)),
+    0 4px 16px hsl(var(--glass-shadow) / 0.10),
+    0 1px 2px hsl(var(--glass-shadow) / 0.06);
+}
+
+.glass-strong,
+.nm-glass-strong {
+  background: rgb(var(--glass-tint) / var(--glass-strong-bg));
+  backdrop-filter: blur(36px) saturate(200%) contrast(1.08);
+  -webkit-backdrop-filter: blur(36px) saturate(200%) contrast(1.08);
+  border: 0.5px solid hsl(var(--border) / var(--glass-strong-border));
+  box-shadow:
+    0 16px 48px hsl(var(--glass-shadow) / 0.18),
+    0 6px 16px hsl(var(--glass-shadow) / 0.10),
+    inset 0 1px 0 rgb(var(--glass-highlight) / var(--glass-strong-highlight)),
+    inset 0 0 0 0.5px rgb(var(--glass-highlight) / 0.15),
+    inset 0 -0.5px 0 hsl(var(--mountain-deep) / 0.08);
+}
+
+.glass-modal {
+  background: rgb(var(--glass-tint) / var(--glass-modal-bg));
+  backdrop-filter: blur(40px) saturate(200%) contrast(1.08);
+  -webkit-backdrop-filter: blur(40px) saturate(200%) contrast(1.08);
+  border: 0.5px solid rgb(var(--glass-highlight) / var(--glass-modal-border));
+  box-shadow:
+    0 28px 72px hsl(var(--glass-shadow) / 0.24),
+    0 12px 32px hsl(var(--glass-shadow) / 0.12),
+    inset 0 1px 0 rgb(var(--glass-highlight) / var(--glass-modal-highlight)),
+    inset 0 0 0 0.5px rgb(var(--glass-highlight) / 0.2);
+}
+
+/* —— 玻璃交互态 —— */
+.glass-hover,
+.nm-glass-hover {
+  transition: background 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              backdrop-filter 0.35s,
+              box-shadow 0.35s,
+              transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.glass-hover:hover,
+.nm-glass-hover:hover {
+  background: rgb(var(--glass-tint) / var(--glass-strong-bg));
+  box-shadow:
+    0 10px 28px hsl(var(--glass-shadow) / 0.16),
+    0 3px 8px hsl(var(--glass-shadow) / 0.10),
+    inset 0 1px 0 rgb(var(--glass-highlight) / var(--glass-panel-highlight));
+}
+
+.glass-lift,
+.nm-hover-lift {
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              background 0.35s;
+}
+.glass-lift:hover,
+.nm-hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    0 20px 48px hsl(var(--glass-shadow) / 0.20),
+    0 6px 16px hsl(var(--glass-shadow) / 0.10),
+    inset 0 1px 0 rgb(var(--glass-highlight) / var(--glass-panel-highlight));
+}
+.glass-lift:active,
+.nm-hover-lift:active {
+  transform: translateY(-1px) scale(0.98);
+  transition-duration: 0.1s;
+}
+
+/* ============================================================
+   iOS 26 液态玻璃核心交互层
+   —— 点击发光扩散 + 弹性放大反馈 + 边缘色散高光
+   ============================================================ */
+
+/* 可按压玻璃：点击时弹性放大（iOS 26 视觉放大反馈机制）*/
+.glass-pressable {
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              background 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+.glass-pressable:active {
+  transform: scale(0.96);
+  transition-duration: 0.08s;
+}
+
+/* 波纹发光容器：相对定位 + 裁切波纹 */
+.glass-ripple {
+  position: relative;
+  overflow: hidden;
+}
+
+/* 点击波纹光晕（由 JS 注入 .glass-ripple-ink span）*/
+/* 用 !important 覆盖 .glass-edge-glow > * 的 position:relative，避免波纹撑开容器 */
+.glass-ripple-ink {
+  position: absolute !important;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0);
+  background:
+    radial-gradient(circle,
+      transparent 50%,
+      rgba(138, 120, 220, 0.18) 60%,
+      transparent 72%),
+    radial-gradient(circle,
+      transparent 38%,
+      rgba(120, 200, 220, 0.22) 50%,
+      transparent 62%),
+    radial-gradient(circle,
+      rgb(var(--glass-highlight) / 0.55) 0%,
+      rgb(var(--glass-highlight) / 0.25) 40%,
+      transparent 70%);
+  mix-blend-mode: screen;
+  animation: glass-ripple-spread 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes glass-ripple-spread {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+  }
+}
+
+/* 边缘色散高光：顶部强光带（iOS 26 玻璃顶部高光过渡）*/
+.glass-edge-glow {
+  position: relative;
+  --glass-light-x: 50%;
+  --glass-light-y: 50%;
+}
+.glass-edge-glow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at var(--glass-light-x) var(--glass-light-y),
+    rgb(var(--glass-highlight) / 0.40) 0%,
+    rgb(var(--glass-highlight) / 0.16) 30%,
+    rgb(var(--glass-highlight) / 0.04) 60%,
+    transparent 80%
+  );
+  mix-blend-mode: screen;
+  z-index: 1;
+}
+/* ★ 玻璃面板斜向反光条 — 模拟玻璃顶部斜向高光反射 */
+.glass-edge-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    125deg,
+    rgb(var(--glass-highlight) / 0.22) 0%,
+    rgb(var(--glass-highlight) / 0.08) 18%,
+    transparent 38%,
+    transparent 62%,
+    rgb(var(--glass-highlight) / 0.05) 80%,
+    rgb(var(--glass-highlight) / 0.12) 100%
+  );
+  mix-blend-mode: screen;
+  z-index: 1;
+  opacity: 0.85;
+}
+.glass-edge-glow > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* —— 玻璃入场动画 —— */
+.glass-enter,
+.nm-glass-enter {
+  animation: glass-appear 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes glass-appear {
+  0%   { opacity: 0; backdrop-filter: blur(0px) saturate(100%); transform: scale(0.98); }
+  100% { opacity: 1; backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)); transform: scale(1); }
+}
+
+.glass-pop,
+.nm-glass-enter-strong {
+  animation: glass-pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes glass-pop-in {
+  from { opacity: 0; transform: scale(0.92) translateY(6px); backdrop-filter: blur(0px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)); }
+}
+
+/* —— 通用入场/列表动画 —— */
+.nm-page-enter {
+  animation: nm-page-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes nm-page-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.nm-pop-in {
+  animation: nm-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes nm-pop {
+  from { opacity: 0; transform: scale(0.92) translateY(6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.nm-list-stagger > * {
+  opacity: 0;
+  animation: nm-fade-slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.nm-list-stagger > *:nth-child(1)  { animation-delay: 0.00s; }
+.nm-list-stagger > *:nth-child(2)  { animation-delay: 0.04s; }
+.nm-list-stagger > *:nth-child(3)  { animation-delay: 0.08s; }
+.nm-list-stagger > *:nth-child(4)  { animation-delay: 0.12s; }
+.nm-list-stagger > *:nth-child(5)  { animation-delay: 0.16s; }
+.nm-list-stagger > *:nth-child(6)  { animation-delay: 0.20s; }
+.nm-list-stagger > *:nth-child(7)  { animation-delay: 0.24s; }
+.nm-list-stagger > *:nth-child(8)  { animation-delay: 0.28s; }
+.nm-list-stagger > *:nth-child(n+9){ animation-delay: 0.32s; }
+@keyframes nm-fade-slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* —— 卡片/列表交错入场（BookCard、CharacterManager、LeftSidebar 等内联引用）——
+   注意：只做透明度淡入，不写 transform。这些组件的根元素用内联 transform 实现
+   hover/按压位移，若此处动画也设置 transform 并 fill forwards，会永久覆盖内联
+   hover 位移，导致悬浮效果失效。 */
+@keyframes slideTop {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.nm-pulse-glow {
+  animation: nm-pulse 1.2s ease-out;
+}
+@keyframes nm-pulse {
+  0%   { box-shadow: 0 0 0 0 hsl(var(--mountain-cyan) / 0.4); }
+  100% { box-shadow: 0 0 0 12px transparent; }
+}
+
+.nm-slide-in {
+  animation: nm-slide 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes nm-slide {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* —— 输入聚焦：液态玻璃环 —— */
+input, textarea, select {
+  transition: box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s;
+}
+
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: none;
+  border-color: hsl(var(--ring) / 0.6);
+  box-shadow:
+    0 0 0 4px hsl(var(--ring) / 0.12),
+    inset 0 1px 0 hsl(var(--glass-highlight) / 0.4);
+}
+
+.storymap-marker {
+  background: none !important;
+  border: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+
+/* ============================================================
+   苹果风交互按钮系统（保留原 nm-btn-apple 体系，向后兼容）
+   ============================================================ */
+
+.nm-btn-apple {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 980px;
+  border: 0.5px solid transparent;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro", "Helvetica Neue", Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  outline: none;
+}
+.nm-btn-apple:hover { transform: translateY(-1px); }
+.nm-btn-apple:active { transform: scale(0.97); }
+
+.nm-btn-apple-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 980px;                    /* 统一胶囊椭圆 */
+  border: 0.5px solid rgba(255,255,255,0.22);
+  background: hsl(var(--primary) / 0.82);  /* 半透明霁青 */
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  color: #fff;
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 10px hsl(var(--primary) / 0.25), inset 0 1px 0 rgba(255,255,255,0.28);
+}
+.nm-btn-apple-primary:hover {
+  background: hsl(var(--primary) / 0.95);
+  box-shadow: 0 4px 14px hsl(var(--primary) / 0.40), inset 0 1px 0 rgba(255,255,255,0.30);
+}
+.nm-btn-apple-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.nm-btn-apple-secondary {
+  background: rgb(var(--glass-tint) / var(--glass-surface-bg));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  color: hsl(var(--foreground));
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 500;
+  border-color: hsl(var(--border) / var(--glass-surface-border));
+  box-shadow: inset 0 1px 0 rgb(var(--glass-highlight) / var(--glass-surface-highlight));
+}
+.nm-btn-apple-secondary:hover {
+  background: hsl(var(--glass-tint) / 0.7);
+  border-color: hsl(var(--border) / 0.8);
+}
+
+.nm-btn-apple-ghost {
+  background: transparent;
+  color: hsl(var(--primary));
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.nm-btn-apple-ghost:hover {
+  background: hsl(var(--primary) / 0.08);
+}
+
+.nm-btn-apple-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: hsl(var(--muted-foreground));
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+.nm-btn-apple-icon:hover {
+  background: rgb(var(--glass-tint) / var(--glass-surface-bg));
+  color: hsl(var(--foreground));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow:
+    inset 0 0 0 0.5px hsl(var(--border) / var(--glass-surface-border)),
+    inset 0 1px 0 rgb(var(--glass-highlight) / var(--glass-surface-highlight));
+}
+.nm-btn-apple-icon.active,
+.nm-btn-apple-icon[aria-pressed="true"] {
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+}
+
+.nm-btn-apple-destructive {
+  background: transparent;
+  color: hsl(var(--destructive) / 0.95);
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.nm-btn-apple-destructive:hover {
+  background: hsl(var(--destructive) / 0.08);
+}
+
+.nm-btn-apple-icon-sm {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: hsl(var(--muted-foreground));
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+.nm-btn-apple-icon-sm:hover {
+  background: rgb(var(--glass-tint) / var(--glass-surface-bg));
+  color: hsl(var(--foreground));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow:
+    inset 0 0 0 0.5px hsl(var(--border) / var(--glass-surface-border)),
+    inset 0 1px 0 rgb(var(--glass-highlight) / var(--glass-surface-highlight));
+}
+.nm-btn-apple-icon-sm.active,
+.nm-btn-apple-icon-sm[aria-pressed="true"] {
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+}
+
+/* ============================================================
+ * 毛笔化：按钮外勾一道「手绘墨线」（2026-09-15）
+ *
+ * 为什么不改形状：这些按钮的统一语言是 980px 胶囊（两端半圆）。
+ *   把圆角改成多值「手绘圆角」会直接把胶囊变成方圆形块 —— 形态破坏太大。
+ *   毛笔味的本质是「笔锋」而非「形状」，所以改为**在按钮外再勾一道微倾的墨线**，
+ *   像写完一个字又用笔尖轻轻描了一遍。
+ *
+ * 成本：纯 CSS 伪元素（1px 边框 + 0.5° 旋转），零滤镜、零重绘，
+ *   不像背景那套 feTurbulence 需要逐像素计算。
+ * ============================================================ */
+.nm-btn-apple,
+.nm-btn-apple-primary,
+.nm-btn-apple-secondary,
+.nm-btn-apple-ghost,
+.nm-btn-apple-destructive {
+  position: relative;
+}
+
+.nm-btn-apple::after,
+.nm-btn-apple-primary::after,
+.nm-btn-apple-secondary::after,
+.nm-btn-apple-ghost::after,
+.nm-btn-apple-destructive::after {
+  content: '';
+  position: absolute;
+  inset: -2.5px;
+  border-radius: inherit;
+  border: 1px solid hsl(var(--ink) / 0.2);
+  /* 微倾 + 四角半径本就均匀，所以观感是「歪了一点的手描线」而非机械外框 */
+  transform: rotate(-0.5deg);
+  pointer-events: none;
+  opacity: 0.8;
+  transition: opacity 0.3s ease, inset 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease;
+}
+
+/* hover：笔尖再描一遍 —— 墨线略扩、略深 */
+.nm-btn-apple-primary:hover:not(:disabled)::after,
+.nm-btn-apple-secondary:hover:not(:disabled)::after,
+.nm-btn-apple-ghost:hover:not(:disabled)::after,
+.nm-btn-apple-destructive:hover:not(:disabled)::after {
+  inset: -3.6px;
+  border-color: hsl(var(--ink) / 0.32);
+  opacity: 1;
+}
+
+/* active：落笔收紧，墨线贴近纸面 */
+.nm-btn-apple-primary:active:not(:disabled)::after,
+.nm-btn-apple-secondary:active:not(:disabled)::after,
+.nm-btn-apple-ghost:active:not(:disabled)::after,
+.nm-btn-apple-destructive:active:not(:disabled)::after {
+  inset: -1.4px;
+  opacity: 1;
+}
+
+.nm-btn-apple-primary:disabled::after,
+.nm-btn-apple-secondary:disabled::after,
+.nm-btn-apple-ghost:disabled::after,
+.nm-btn-apple-destructive:disabled::after {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nm-btn-apple::after,
+  .nm-btn-apple-primary::after,
+  .nm-btn-apple-secondary::after,
+  .nm-btn-apple-ghost::after,
+  .nm-btn-apple-destructive::after {
+    transition: none !important;
+  }
+}
+
+/* —— 兼容旧 .nm-glass-* 命名：已与新 .glass-* 类共用同一声明（见上方逗号分隔选择器）—— */
+
+/* ============================================================
+   编辑器页面专用玻璃容器（补齐缺失类定义）
+   复用 glass token，保持与设计系统一致
+   ============================================================ */
+
+/* 写作区宽度收口：整体收窄 30%（70% 宽）并水平居中，
+   让标题 / 伏笔警告 / 正文玻璃卡三处对齐（均使用 .nm-editor-responsive） */
+.nm-editor-responsive {
+  width: 68%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* 编辑器卡片容器 — 无框无底（2026-09-10 作者定稿：正文直接浮在氛围底上）：
+   卡片壳全部透明化，视觉只剩「书信纸横线」（.ProseMirror p 的行线仍在自身段落上）；
+   内边距归零，水平/垂直留白由 .nm-editor-scroll-host 的内联 clamp 提供 */
+.nm-editor-card {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+/* 编辑器顶部统计工具栏 — 透明，无边框线 */
+.nm-editor-toolbar {
+  background: transparent;
+  border-bottom: none;
+}
+
+/* 空状态容器 — 透明 */
+.nm-editor-empty {
+  background: transparent;
+}
+
+/* ════ 编辑器正文排版（全局常驻：普通视图与沉浸式写作共享同一套样式） ════ */
+.ProseMirror {
+  font-family: 'Noto Serif SC', serif !important;
+  font-size: clamp(15px, 1.6vw, 17px) !important;
+  font-weight: 600 !important;
+  line-height: 1.9 !important;
+  color: hsl(var(--ink)) !important;
+  padding: 0 !important;
+  outline: none !important;
+  /* 书信排版：每行文字居中坐在信纸横线上；写满自动折行（overflow-wrap/break-word 兜底） */
+  text-align: center !important;
+  min-height: 100%;
+}
+.ProseMirror p {
+  margin: 0 0 4px 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+/* 行宽收窄（E2，2026-09-16）：原实测 1210px ÷ 17px = 71 字/行，远超中文正文舒适区（25–40 字）。
+   收窄到 34em（≈34 字）并居中——居中取向保持不动（E3 是定稿设计，只收窄不改对齐）。
+   ⚠️ 必须同时约束段落本身：信纸横线画在 .ProseMirror p 上，只限制外层容器的话
+      横线仍会铺满 1210px，与文字宽度对不齐。
+   ⚠️ 用 max-width 而非固定 width：窄屏时自动退化为占满可用宽度。 */
+.ProseMirror > p,
+.ProseMirror > .is-empty {
+  max-width: 34em;
+  margin-left: auto;
+  margin-right: auto;
+}
+/* 书信纸：横线画在每个段落自身（em 基准随字号响应式缩放，与 1.9 行高逐行对齐），
+   段间 4px 空隙自然断线；空段落同样画线，保持信纸连续感 */
+.ProseMirror p, .ProseMirror .is-empty {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(1.9em - 1px),
+    hsl(var(--ink-pale) / 0.30) calc(1.9em - 1px),
+    hsl(var(--ink-pale) / 0.30) 1.9em
+  );
+}
+.ProseMirror:focus {
+  outline: none !important;
+}
+.ProseMirror .is-empty::before {
+  content: attr(data-placeholder);
+  color: hsl(var(--ink-pale));
+  pointer-events: none;
+}
+.ProseMirror mark {
+  background-color: transparent !important;
+  background-image: none !important;
+  border-bottom: none !important;
+  padding: 0;
+  border-radius: 0;
+}
+.ProseMirror mark[style] {
+  background-color: transparent !important;
+  background-image: none !important;
+  border-bottom: none !important;
+}
+/* 彻底隐藏分隔线：horizontalRule 节点已被禁用，但旧数据/缓存里若仍残留 <hr>，一律不显示 */
+.ProseMirror hr,
+.ProseMirror [data-type="horizontalRule"] {
+  display: none !important;
+  border: none !important;
+  height: 0 !important;
+  margin: 0 !important;
+}
+/* 正文滚动容器：内部独立滑动 + 克制的滚动条 */
+.nm-editor-scroll-host {
+  height: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--mountain-cyan) / 0.3) transparent;
+}
+.nm-editor-scroll-host::-webkit-scrollbar {
+  width: 6px;
+}
+.nm-editor-scroll-host::-webkit-scrollbar-track {
+  background: transparent;
+}
+.nm-editor-scroll-host::-webkit-scrollbar-thumb {
+  background: hsl(var(--mountain-cyan) / 0.25);
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+.nm-editor-scroll-host:hover::-webkit-scrollbar-thumb {
+  background: hsl(var(--mountain-cyan) / 0.45);
+}
+.nm-editor-scroll-host::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--mountain-cyan) / 0.6);
+}
+
+/* 空状态书本图标容器 — 山青渐变 + 高光 */
+.nm-book-cover {
+  background: linear-gradient(135deg, hsl(var(--mountain-cyan)) 0%, hsl(var(--mountain-deep)) 100%);
+  box-shadow:
+    0 8px 24px hsl(var(--mountain-cyan) / 0.35),
+    inset 0 1px 0 rgb(var(--glass-highlight) / 0.4),
+    inset 0 0 0 0.5px hsl(var(--mountain-light) / 0.3);
+}
+
+/* 雾色主按钮 — 编辑器空状态主 CTA */
+.nm-btn-mist-primary {
+  background: hsl(var(--mountain-cyan));
+  color: hsl(var(--primary-foreground));
+  border: 0.5px solid hsl(var(--mountain-deep) / 0.4);
+  box-shadow:
+    0 2px 8px hsl(var(--mountain-cyan) / 0.25),
+    inset 0 1px 0 rgb(var(--glass-highlight) / 0.25);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.nm-btn-mist-primary:hover:not(:disabled) {
+  background: hsl(var(--mountain-deep));
+  transform: translateY(-1px);
+  box-shadow:
+    0 6px 18px hsl(var(--mountain-cyan) / 0.40),
+    inset 0 1px 0 rgb(var(--glass-highlight) / 0.30);
+}
+.nm-btn-mist-primary:active:not(:disabled) {
+  transform: scale(0.97);
+  transition-duration: 0.08s;
+}
+
+/* 雾色软按钮 — 次要 CTA */
+.nm-btn-mist-soft {
+  background: rgb(var(--glass-tint) / var(--glass-surface-bg));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  color: hsl(var(--mountain-cyan));
+  border: 0.5px solid hsl(var(--border) / var(--glass-surface-border));
+  box-shadow: inset 0 1px 0 rgb(var(--glass-highlight) / var(--glass-surface-highlight));
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.nm-btn-mist-soft:hover:not(:disabled) {
+  background: rgb(var(--glass-tint) / var(--glass-strong-bg));
+  border-color: hsl(var(--mountain-cyan) / 0.4);
+  transform: translateY(-1px);
+}
+.nm-btn-mist-soft:active:not(:disabled) {
+  transform: scale(0.97);
+  transition-duration: 0.08s;
+}
+
+/* ============================================================
+   表单输入通用类 — 替代内联 style 的反模式
+   ============================================================ */
+
+.nm-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 16px;
+  font-size: 15px;
+  color: hsl(var(--ink));
+  background: rgb(var(--glass-tint) / 0.4);
+  border: 0.5px solid hsl(var(--border) / 0.6);
+  border-radius: var(--radius-md);
+  outline: none;
+  caret-color: hsl(var(--mountain-cyan));
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.nm-input::placeholder { color: hsl(var(--ink-light) / 0.5); }
+.nm-input:focus {
+  border-color: hsl(var(--mountain-cyan) / 0.5);
+  box-shadow: 0 0 0 3px hsl(var(--mountain-cyan) / 0.1);
+  background: rgb(var(--glass-tint) / 0.7);
+}
+
+.nm-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: hsl(var(--ink-light));
+  margin-bottom: 6px;
+}
+
+/* 主 CTA 按钮 — 山青实心胶囊 */
+.nm-btn-primary-pill {
+  width: 100%;
+  height: 44px;
+  font-size: 15px;
+  font-weight: 600;
+  color: hsl(var(--primary-foreground));
+  background: hsl(var(--mountain-cyan));
+  border: none;
+  border-radius: 980px;
+  cursor: pointer;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.nm-btn-primary-pill:hover:not(:disabled) {
+  background: hsl(var(--mountain-deep));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px hsl(var(--mountain-cyan) / 0.3);
+}
+.nm-btn-primary-pill:active:not(:disabled) {
+  transform: scale(0.98);
+  transition-duration: 0.08s;
+}
+.nm-btn-primary-pill:disabled { opacity: 0.7; }
+
+/* 次 CTA 按钮 — 山青描边胶囊 */
+.nm-btn-outline-pill {
+  width: 100%;
+  height: 44px;
+  font-size: 15px;
+  font-weight: 500;
+  color: hsl(var(--mountain-cyan));
+  background: transparent;
+  border: 0.5px solid hsl(var(--mountain-cyan) / 0.3);
+  border-radius: 980px;
+  cursor: pointer;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.nm-btn-outline-pill:hover {
+  background: hsl(var(--mountain-cyan) / 0.06);
+  border-color: hsl(var(--mountain-cyan) / 0.5);
+  transform: translateY(-1px);
+}
+
+/* 文字次链接 */
+.nm-link-quiet {
+  font-size: 12px;
+  color: hsl(var(--ink-light) / 0.7);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+.nm-link-quiet:hover { color: hsl(var(--ink-light)); }
+
+/* 设置页通用卡片 — 中等玻璃 + hover 边框响应 */
+.nm-card {
+  background: rgb(var(--glass-tint) / var(--glass-panel-bg));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 0.5px solid hsl(var(--border) / var(--glass-panel-border));
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 8px 32px hsl(var(--glass-shadow) / 0.08),
+    inset 0 1px 0 rgb(var(--glass-highlight) / var(--glass-panel-highlight));
+  transition: border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.nm-card:hover {
+  border-color: hsl(var(--mountain-cyan) / 0.4);
+}
+
+/* 设置页小标题 — uppercase 12px 山青色 */
+.nm-section-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: hsl(var(--mountain-deep));
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 1.25rem;
+}
+
+/* 设置页数字/文本输入 — 小尺寸 */
+.nm-input-sm {
+  background: rgb(var(--glass-tint) / 0.4);
+  border: 0.5px solid hsl(var(--border) / 0.6);
+  color: hsl(var(--ink));
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.nm-input-sm:focus {
+  border-color: hsl(var(--mountain-cyan) / 0.5);
+  box-shadow: 0 0 0 3px hsl(var(--mountain-cyan) / 0.1);
+}
+
+/* 危险描边按钮（清除/删除） */
+.nm-btn-danger-outline {
+  border: 0.5px solid hsl(var(--destructive) / 0.35);
+  color: hsl(var(--destructive) / 0.85);
+  background: transparent;
+  border-radius: var(--radius-md);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.nm-btn-danger-outline:hover {
+  background: hsl(var(--destructive) / 0.12);
+  border-color: hsl(var(--destructive) / 0.55);
+}
+
+/* ============================================================
+   登录/注册页 — 与液态背景呼应的 Hero + 卡片
+   ============================================================ */
+
+/* Logo 印章 — 山青渐变圆 + 水墨笔触感 */
+.nm-logo-seal {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Noto Serif SC", "Source Han Serif SC", serif;
+  font-weight: 700;
+  font-size: 28px;
+  color: hsl(var(--primary-foreground));
+  background: linear-gradient(135deg, hsl(var(--mountain-cyan)) 0%, hsl(var(--mountain-deep)) 100%);
+  box-shadow:
+    0 8px 24px hsl(var(--mountain-cyan) / 0.35),
+    inset 0 1px 0 rgb(var(--glass-highlight) / 0.5),
+    inset 0 -8px 16px hsl(var(--mountain-deep) / 0.4),
+    0 0 0 1px hsl(var(--mountain-light) / 0.2);
+  position: relative;
+  letter-spacing: -0.02em;
+}
+/* 印章外圈光晕 */
+.nm-logo-seal::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, hsl(var(--mountain-cyan) / 0.25) 0%, transparent 70%);
+  z-index: -1;
+  animation: nm-seal-glow 4s ease-in-out infinite;
+}
+@keyframes nm-seal-glow {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+/* Hero 标题 — 衬线 + 字间距收紧 */
+.nm-hero-title {
+  font-family: "Noto Serif SC", "Source Han Serif SC", serif;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: hsl(var(--ink));
+  line-height: 1.1;
+}
+
+/* Hero 引言 — 衬线 + 山青色 + 斜体感 */
+.nm-hero-quote {
+  font-family: "Noto Serif SC", "Source Han Serif SC", serif;
+  font-size: 13px;
+  font-weight: 400;
+  color: hsl(var(--mountain-deep) / 0.85);
+  letter-spacing: 0.08em;
+  position: relative;
+}
+.nm-hero-quote::before,
+.nm-hero-quote::after {
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 1px;
+  background: hsl(var(--mountain-cyan) / 0.4);
+  vertical-align: middle;
+  margin: 0 8px;
+}
+
+/* 强化卡片 — 渐变边框 + 顶部高光线 + 深阴影 */
+.nm-auth-card {
+  position: relative;
+  background: rgb(var(--glass-tint) / var(--glass-strong-bg));
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    0 24px 64px hsl(var(--glass-shadow) / 0.16),
+    0 8px 24px hsl(var(--glass-shadow) / 0.08),
+    inset 0 1px 0 rgb(var(--glass-highlight) / 0.6),
+    inset 0 -1px 0 hsl(var(--border) / 0.2);
+}
+/* 顶部高光线 */
+.nm-auth-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 20%;
+  right: 20%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, hsl(var(--mountain-cyan) / 0.5), transparent);
+  pointer-events: none;
+}
+/* 渐变边框（用 mask 实现透明边框光晕） */
+.nm-auth-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 0.5px;
+  background: linear-gradient(135deg, hsl(var(--mountain-cyan) / 0.4) 0%, hsl(var(--border) / 0.3) 50%, hsl(var(--ochre) / 0.2) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* 分隔线装饰 — 居中菱形 */
+.nm-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: hsl(var(--ink-light) / 0.5);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.nm-divider::before,
+.nm-divider::after {
+  content: '';
+  flex: 1;
+  height: 0.5px;
+  background: linear-gradient(90deg, transparent, hsl(var(--border) / 0.6), transparent);
+}
+.nm-divider-dot {
+  width: 4px;
+  height: 4px;
+  background: hsl(var(--mountain-cyan) / 0.5);
+  transform: rotate(45deg);
+}
+
+/* ============================================================
+   AmbientBackdrop — 全局环境背景（水墨作画层，2026-09-15 重制）
+   固定铺满视口、z-index:-1、pointer-events:none，由 App.tsx 全局挂载。
+   构成：宣纸基底 → 水墨作画（远山 / 竹枝 / 云气 / 飞白 / 溅墨，见组件内 SVG）
+         → 纸纹噪点。
+   ============================================================ */
+.ambient-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* 基底：宣纸色 + 两处大范围淡墨晕 —— 作画层之下的「底水」 */
+.ambient-base {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 62% 52% at 14% 10%, hsl(var(--ink) / 0.05), transparent 68%),
+    radial-gradient(ellipse 54% 46% at 88% 92%, hsl(var(--ink) / 0.042), transparent 70%),
+    linear-gradient(to bottom, hsl(var(--background)) 0%, hsl(var(--background)) 64%, hsl(var(--ink) / 0.035) 100%);
+}
+
+/* ★ 水墨作画层：铺满视口（slice 保证不留边）。
+   整张画是静态的，只做极缓慢横向漂移 —— 像人站在画前轻轻移步；
+   走 translate3d 交合成器，不触发重排/重绘。 */
+.ambient-ink-painting {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: translateZ(0);
+  will-change: transform;
+  animation: ambient-ink-drift 120s ease-in-out infinite alternate;
+}
+
+/* 竹枝极轻摇曳：幅度不到 1 度，几乎察觉不到，只为「活着」 */
+.ambient-ink-bamboo {
+  transform-origin: 40px 300px;
+  animation: ambient-bamboo-sway 14s ease-in-out infinite alternate;
+}
+
+@keyframes ambient-ink-drift {
+  from { transform: translate3d(-0.8%, 0, 0); }
+  to   { transform: translate3d(0.8%, 0, 0); }
+}
+
+@keyframes ambient-bamboo-sway {
+  from { transform: rotate(-0.35deg); }
+  to   { transform: rotate(0.35deg); }
+}
+
+/* 噪点纹理：极低透明度增加纸面质感 */
+.ambient-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* 系统偏好减少动态时关闭所有背景动画 */
+@media (prefers-reduced-motion: reduce) {
+  .ambient-ink-painting,
+  .ambient-ink-bamboo {
+    animation: none;
+  }
+}
+
+/* ★ 拖拽浮窗时暂停背景持续动画：逐帧变化会让所有玻璃面板的 backdrop-filter
+   缓存失效、逐帧重采样，与拖拽合成抢占 GPU
+   （竹叶雨效已在 JS 侧消费同一 class 暂停）。 */
+body.nm-dragging-active .ambient-ink-painting,
+body.nm-dragging-active .ambient-ink-bamboo {
+  animation-play-state: paused !important;
+}
+
+/* ════ 划词菜单 ════ */
+/* 外层负责定位 transform（translate(-50%,±100%)），内层只跑入场动效，避免 transform 冲突 */
+@keyframes selection-menu-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.selection-menu-pop {
+  animation: selection-menu-in 0.14s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .selection-menu-pop { animation: none; }
+}
+
+/* 划词菜单 — 定位壳（外层 transform 只做垂直翻转，动画在内层卡片上跑） */
+.selection-menu-anchor {
+  position: fixed;
+  z-index: 9999;
+}
+.selection-menu-card {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background-color: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 1px hsl(var(--foreground) / 0.05),
+    0 3px 6px hsl(var(--foreground) / 0.1),
+    0 9px 24px hsl(var(--foreground) / 0.2);
+}
+.selection-menu-card.is-form {
+  display: block;
+}
+.selection-menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 12px;
+  background-color: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+  transition: background-color 0.1s;
+}
+.selection-menu-btn:hover {
+  background-color: var(--menu-hover, hsl(var(--primary) / 0.1));
+}
+.selection-menu-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background-color: transparent;
+  cursor: pointer;
+  color: hsl(var(--foreground));
+  flex-shrink: 0;
+  transition: background-color 0.1s;
+}
+.selection-menu-icon-btn:hover {
+  background-color: hsl(var(--primary) / 0.1);
+}
+.selection-menu-divider {
+  width: 1px;
+  height: 20px;
+  background-color: hsl(var(--border));
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+.selection-menu-count {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  padding: 0 6px;
+  white-space: nowrap;
+  user-select: none;
+}
+/* 伏笔表单 */
+.selection-menu-form {
+  padding: 12px;
+  min-width: 264px;
+}
+.selection-menu-form-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: hsl(var(--foreground));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.selection-menu-form-hint {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 8px;
+  word-break: break-all;
+}
+.selection-menu-textarea {
+  width: 100%;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+  background-color: transparent;
+  resize: none;
+  margin-bottom: 8px;
+  color: hsl(var(--foreground));
+  outline: none;
+  font-family: inherit;
+}
+.selection-menu-textarea:focus {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.14);
+}
+.selection-menu-select {
+  width: 100%;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+  background-color: hsl(var(--card));
+  margin-bottom: 8px;
+  color: hsl(var(--foreground));
+  outline: none;
+}
+.selection-menu-actions {
+  display: flex;
+  gap: 6px;
+}
+.selection-menu-primary {
+  flex: 1;
+  font-size: 13px;
+  padding: 6px 12px;
+  background-color: hsl(var(--ring));
+  color: hsl(var(--primary-foreground));
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.selection-menu-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.selection-menu-secondary {
+  font-size: 13px;
+  padding: 6px 12px;
+  background-color: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+/* ════ 通用模态对话框（nm-modal-*，供书角标记 / 大纲填充 / 回收站等共用） ════ */
+@keyframes nm-modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes nm-modal-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.nm-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background-color: hsl(var(--foreground) / 0.4);
+  backdrop-filter: blur(4px);
+  animation: nm-modal-fade 0.16s ease-out both;
+}
+.nm-modal-card {
+  width: 100%;
+  max-width: 480px;
+  max-height: min(85vh, 720px);
+  display: flex;
+  flex-direction: column;
+  background-color: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 16px;
+  box-shadow:
+    0 0 0 1px hsl(var(--foreground) / 0.05),
+    0 4px 12px hsl(var(--foreground) / 0.12),
+    0 16px 48px hsl(var(--foreground) / 0.24);
+  animation: nm-modal-in 0.18s ease-out both;
+}
+.nm-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  border-bottom: 1px solid hsl(var(--border));
+  flex-shrink: 0;
+}
+.nm-modal-title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+.nm-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 10px;
+  background-color: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  transition: background-color 0.1s, color 0.1s;
+}
+.nm-modal-close:hover {
+  background-color: hsl(var(--accent) / 0.12);
+  color: hsl(var(--foreground));
+}
+.nm-modal-body {
+  padding: 18px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.nm-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid hsl(var(--border));
+  flex-shrink: 0;
+}
+.nm-modal-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 6px;
+}
+.nm-modal-input,
+.nm-modal-textarea,
+.nm-modal-select {
+  width: 100%;
+  font-size: 13px;
+  padding: 8px 10px;
+  background-color: transparent;
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  color: hsl(var(--foreground));
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.1s, box-shadow 0.1s;
+}
+.nm-modal-textarea {
+  resize: none;
+}
+.nm-modal-input:focus,
+.nm-modal-textarea:focus,
+.nm-modal-select:focus {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.14);
+}
+.nm-modal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 13px;
+  padding: 7px 14px;
+  background-color: transparent;
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  transition: background-color 0.1s, border-color 0.1s, color 0.1s;
+}
+.nm-modal-btn:hover {
+  background-color: hsl(var(--accent) / 0.12);
+}
+.nm-modal-btn.is-active {
+  background-color: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+.nm-modal-btn.is-active:hover {
+  background-color: hsl(var(--primary) / 0.9);
+}
+.nm-modal-btn-primary {
+  background-color: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+.nm-modal-btn-primary:hover {
+  background-color: hsl(var(--primary) / 0.9);
+}
+.nm-modal-item {
+  width: 100%;
+  text-align: left;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 12px;
+  background-color: transparent;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  transition: background-color 0.1s;
+}
+.nm-modal-item:hover {
+  background-color: hsl(var(--accent) / 0.12);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nm-modal-overlay, .nm-modal-card { animation: none; }
+}
+
+/* ════ 功能气泡 — 无序漂浮的玻璃球，点击破裂展开面板，关闭后复合继续漂 ════ */
+.nm-bubble-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 50; /* 最顶层：高于浮窗(z-30)与顶栏(z-40) */
+  pointer-events: none;
+}
+.nm-bubble {
+  position: absolute;
+  pointer-events: auto;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  background: transparent;
+  /* 有序波浪漂浮：统一节奏，相位差由 --bubble-delay 按序号错开 */
+  animation: nm-bubble-wave var(--bubble-dur, 4.2s) ease-in-out var(--bubble-delay, 0s) infinite;
+  will-change: transform;
+  transition: left 0.48s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.48s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.nm-bubble-core {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 26%, rgb(255 255 255 / 0.9), rgb(255 255 255 / 0.25) 42%, rgb(var(--glass-tint) / 0.18) 100%);
+  border: 0.5px solid rgb(255 255 255 / 0.65);
+  box-shadow:
+    0 4px 18px hsl(var(--foreground) / 0.13),
+    inset 0 1px 5px rgb(255 255 255 / 0.75);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: hsl(var(--ink) / 0.72);
+  animation: nm-bubble-reform 0.34s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  /* 悬停瞬间放大 70%：极短过渡保持“瞬间”手感 */
+  transition: transform 0.08s ease-out, box-shadow 0.15s ease;
+}
+.nm-bubble:hover .nm-bubble-core {
+  /* reform 动画的 fill:both 会用终帧 scale(1) 永久覆盖 transform，hover 时必须取消动画 */
+  animation: none;
+  transform: scale(1.7);
+  box-shadow:
+    0 8px 30px hsl(var(--foreground) / 0.22),
+    inset 0 1px 6px rgb(255 255 255 / 0.85);
+}
+.nm-bubble.is-dragging {
+  /* 拖动中：漂移暂停（偏移已吸收进 left/top 基准） */
+  animation: none;
+  cursor: grabbing;
+  z-index: 5;
+}
+.nm-bubble.is-dragging .nm-bubble-label {
+  opacity: 0;
+}
+.nm-bubble.is-bursting .nm-bubble-core {
+  animation: nm-bubble-burst 0.22s ease-out both;
+}
+.nm-bubble-label {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 4px;
+  font-size: 10px;
+  white-space: nowrap;
+  color: hsl(var(--ink) / 0.65);
+  background: rgb(var(--glass-tint) / 0.75);
+  backdrop-filter: blur(8px);
+  padding: 1px 7px;
+  border-radius: 999px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+.nm-bubble:hover .nm-bubble-label {
+  opacity: 1;
+}
+/* 有序波浪：横排气泡做上下轻浮，相位差形成波浪传递 */
+@keyframes nm-bubble-wave {
+  0%   { transform: translate(0, 0); }
+  50%  { transform: translate(var(--wx, 2px), -6px); }
+  100% { transform: translate(0, 0); }
+}
+/* 破裂：放大 + 消散 */
+@keyframes nm-bubble-burst {
+  0%   { transform: scale(1); opacity: 1; }
+  55%  { transform: scale(1.42); opacity: 0.85; filter: blur(0.5px); }
+  100% { transform: scale(1.75); opacity: 0; filter: blur(3px); }
+}
+/* 复合：从碎裂态缩回成球（挂载时自动播放） */
+@keyframes nm-bubble-reform {
+  0%   { transform: scale(0.3); opacity: 0; filter: blur(2px); }
+  70%  { transform: scale(1.12); opacity: 1; filter: blur(0); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nm-bubble, .nm-bubble-core { animation: none !important; }
+}
+
+/* ════ 快捷语椭圆气泡 — 居中固定 + 不规则漂移（模拟真实气泡） ════ */
+.nm-qbubble {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+  padding: 0 14px;
+  border-radius: 50%; /* 宽矩形 + 全圆角 = 椭圆 */
+  background:
+    radial-gradient(circle at 30% 24%, rgb(255 255 255 / 0.92), rgb(255 255 255 / 0.3) 45%, rgb(var(--glass-tint) / 0.28) 100%);
+  border: 1px solid rgb(255 255 255 / 0.55);
+  box-shadow:
+    0 4px 14px hsl(var(--foreground) / 0.12),
+    inset 0 1px 5px rgb(255 255 255 / 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: pointer;
+  font-size: 11px;
+  animation: nm-qbubble-drift var(--qb-dur, 9s) ease-in-out var(--qb-delay, 0s) infinite;
+  will-change: transform;
+  transition: box-shadow 0.15s ease;
+}
+.nm-qbubble:hover {
+  box-shadow:
+    0 6px 22px hsl(var(--primary) / 0.35),
+    inset 0 1px 6px rgb(255 255 255 / 0.85);
+  border-color: hsl(var(--primary) / 0.6);
+  z-index: 5;
+}
+.nm-qbubble-text {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 4px;
+  pointer-events: none;
+  user-select: none;
+}
+/* 不规则漂移：多向随机位移 + 轻微旋转（真实气泡在液体中的晃动感） */
+@keyframes nm-qbubble-drift {
+  0%   { transform: translate(-50%, -50%) rotate(0deg); }
+  22%  { transform: translate(calc(-50% + var(--dx1, 10px)), calc(-50% + var(--dy1, -8px))) rotate(var(--rot, 2deg)); }
+  47%  { transform: translate(calc(-50% + var(--dx2, -12px)), calc(-50% + var(--dy2, 10px))) rotate(calc(var(--rot, 2deg) * -1)); }
+  73%  { transform: translate(calc(-50% + var(--dx1, 10px) * -0.6), calc(-50% + var(--dy2, 10px) * 0.7)) rotate(calc(var(--rot, 2deg) * 0.5)); }
+  100% { transform: translate(-50%, -50%) rotate(0deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nm-qbubble { animation: none !important; }
+}
+
+/* 快捷短语触发按钮的轻漂移（0 基准，容器已做水平居中） */
+@keyframes nm-qbubble-drift-lite {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  25%  { transform: translate(3px, -4px) rotate(0.4deg); }
+  50%  { transform: translate(-4px, 3px) rotate(-0.4deg); }
+  75%  { transform: translate(2px, 5px) rotate(0.3deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+/* ════ 快捷短语触发气泡：双层复合漂移 + 水珠边缘蠕动 + 边缘光波 ════ */
+/* 漂移层 A（外层容器）：X 主导缓慢游移 */
+.nm-qp-blob-drift {
+  animation: nm-qp-drift-a 11.3s ease-in-out infinite;
+  will-change: transform;
+}
+/* 按钮层 B：Y 主导 + 轻旋（与 A 周期不同 → 复合轨迹不重复） */
+.nm-qp-blob-morph {
+  border: none;
+  animation:
+    nm-qp-drift-b 7.1s ease-in-out infinite,
+    nm-qp-blob-morph 5.7s ease-in-out infinite;
+  will-change: transform, border-radius;
+}
+/* 边缘水波：inset 光斑沿边缘晃动（水珠表面张力感） */
+.nm-qp-edge-wave {
+  animation:
+    nm-qp-drift-b 7.1s ease-in-out infinite,
+    nm-qp-blob-morph 5.7s ease-in-out infinite,
+    nm-qp-edge-wave 3.9s ease-in-out infinite;
+}
+@keyframes nm-qp-drift-a {
+  0%   { transform: translate(0, 0); }
+  23%  { transform: translate(7px, -5px); }
+  41%  { transform: translate(-6px, 4px); }
+  67%  { transform: translate(5px, 6px); }
+  82%  { transform: translate(-8px, -3px); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes nm-qp-drift-b {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  31%  { transform: translate(-4px, 6px) rotate(-0.6deg); }
+  58%  { transform: translate(5px, -4px) rotate(0.5deg); }
+  86%  { transform: translate(-3px, -6px) rotate(0.3deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+/* 水珠轮廓蠕动：不规则 border-radius 持续变形（椭圆↔近圆之间呼吸） */
+@keyframes nm-qp-blob-morph {
+  0%, 100% { border-radius: 48% 52% 55% 45% / 52% 46% 54% 48%; }
+  33%      { border-radius: 56% 44% 47% 53% / 44% 56% 44% 56%; }
+  66%      { border-radius: 44% 56% 53% 47% / 56% 43% 57% 44%; }
+}
+/* 边缘光波：inset 高光绕边缘游走 */
+@keyframes nm-qp-edge-wave {
+  0%, 100% { box-shadow: inset 3px 3px 7px rgb(255 255 255 / 0.8), inset -4px -5px 9px hsl(var(--mountain-cyan) / 0.16), 0 6px 22px hsl(var(--ink) / 0.14); }
+  33%      { box-shadow: inset -4px 3px 8px rgb(255 255 255 / 0.7), inset 4px -4px 10px hsl(var(--mountain-cyan) / 0.22), 0 7px 24px hsl(var(--ink) / 0.16); }
+  66%      { box-shadow: inset 2px -4px 8px rgb(255 255 255 / 0.75), inset -3px 4px 9px hsl(var(--mountain-cyan) / 0.19), 0 5px 20px hsl(var(--ink) / 0.12); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nm-qp-blob-drift, .nm-qp-blob-morph, .nm-qp-edge-wave { animation: none !important; }
+}
+
+/* ============================================================
+ * 毛笔手绘返回按钮（InkBackButton）—— 水墨化 2026-09-15
+ *
+ * 交互语言借自书法：
+ *   hover  → 墨落在纸上「晕开」（径向渐变 + blur 柔边自中心扩散）
+ *   active → 笔尖按下后墨点向外「化开」一圈墨环，笔身同时下沉左移
+ *   focus  → 墨环替代系统 outline（键盘可达）
+ * 全部动效尊重 prefers-reduced-motion。
+ * ============================================================ */
+.nm-ink-back {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 9999px;
+  background: transparent;
+  color: hsl(var(--ink-light));
+  cursor: pointer;
+  isolation: isolate;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.25s ease;
+}
+
+/* 墨迹晕开：自中心向外扩散 */
+.nm-ink-back::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at 50% 50%,
+    hsl(var(--ink) / 0.14) 0%,
+    hsl(var(--ink) / 0.07) 45%,
+    transparent 72%
+  );
+  filter: blur(3px);
+  opacity: 0;
+  transform: scale(0.35);
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+}
+
+/* 墨点扩散：按下时一圈墨环向外化开 */
+.nm-ink-back::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid hsl(var(--ink) / 0.38);
+  opacity: 0;
+  transform: scale(0.72);
+  pointer-events: none;
+}
+
+.nm-ink-back:hover {
+  color: hsl(var(--ink));
+}
+.nm-ink-back:hover::before {
+  opacity: 1;
+  transform: scale(1);
+}
+/* 起笔：笔锋先向左探出一点（返回的方向） */
+.nm-ink-back:hover .nm-ink-back-icon {
+  transform: translateX(-1.5px);
+}
+
+.nm-ink-back:active::before {
+  opacity: 0.92;
+  transform: scale(1.22);
+  transition-duration: 0.12s;
+}
+.nm-ink-back:active::after {
+  animation: nm-ink-ripple 0.62s cubic-bezier(0.16, 1, 0.3, 1);
+}
+/* 落笔：按下时笔身下沉并再向左一点 */
+.nm-ink-back:active .nm-ink-back-icon {
+  transform: translateX(-3px) scale(0.94);
+}
+
+/* 键盘可达：墨环替代 outline */
+.nm-ink-back:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring) / 0.5);
+}
+
+.nm-ink-back:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.nm-ink-back:disabled::before,
+.nm-ink-back:disabled::after {
+  display: none;
+}
+
+.nm-ink-back-icon {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: 50% 50%;
+}
+
+@keyframes nm-ink-ripple {
+  0%   { opacity: 0.55; transform: scale(0.72); }
+  100% { opacity: 0;    transform: scale(1.65); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nm-ink-back::before,
+  .nm-ink-back::after,
+  .nm-ink-back-icon { transition: none !important; animation: none !important; }
+}
+
+/* ============================================================
+ * 水墨质感层（2026-09-15）
+ *
+ * 三样东西，全部只用 background-image 实现（不引入图片、不用大面积
+ * filter / backdrop-filter，避免滚动掉帧）：
+ *   ① 纸纹     —— 两组不同角度的 1px 细线，模拟宣纸纤维
+ *   ② 墨晕     —— 两处大范围 radial-gradient，像纸上化开的淡墨
+ *   ③ 飞白分隔 —— .nm-ink-divider：中间浓两端淡，替代生硬的 1px 实线
+ * 明暗两套独立取值（暗底要把墨"反相"成亮痕，否则看不出纸性）。
+ * ============================================================ */
+@layer base {
+  body {
+    background-color: hsl(var(--background));
+    background-image:
+      /* ② 墨晕：左上、右下各一团淡墨 */
+      radial-gradient(ellipse 55% 45% at 16% 6%, hsl(var(--ink) / 0.030), transparent 68%),
+      radial-gradient(ellipse 45% 40% at 86% 94%, hsl(var(--ink) / 0.022), transparent 70%),
+      /* ① 纸纹：纵横两组细线 */
+      repeating-linear-gradient(0deg, hsl(var(--ink) / 0.013) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, hsl(var(--ink) / 0.009) 0 1px, transparent 1px 4px);
+  }
+
+  .dark body {
+    background-image:
+      radial-gradient(ellipse 55% 45% at 16% 6%, hsl(var(--foreground) / 0.045), transparent 68%),
+      radial-gradient(ellipse 45% 40% at 86% 94%, hsl(var(--foreground) / 0.036), transparent 70%),
+      repeating-linear-gradient(0deg, hsl(var(--foreground) / 0.015) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, hsl(var(--foreground) / 0.011) 0 1px, transparent 1px 4px);
+  }
+}
+
+@layer components {
+  /* ③ 飞白分隔线：中间浓、两端淡并渐隐，像毛笔一横的起收 */
+  .nm-ink-divider {
+    height: 1px;
+    border: 0;
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--ink) / 0.18) 10%,
+      hsl(var(--ink) / 0.34) 50%,
+      hsl(var(--ink) / 0.18) 90%,
+      transparent 100%
+    );
+  }
+
+  /* 题字式标题：衬线 + 微收字距，像落款。与 .nm-ink-divider 配套使用 */
+  .nm-ink-title {
+    font-family: 'Noto Serif SC', 'Source Han Serif SC', serif;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: hsl(var(--ink));
+  }
+
+  /* 笔触感的卡片悬停：抬升同时墨色略深，模拟纸张被拈起 */
+  .nm-ink-lift {
+    transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.32s ease;
+  }
+  .nm-ink-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 26px -12px hsl(var(--ink) / 0.24);
+  }
+
+  /* 只读图谱的节点手柄：**藏起来**。
+     流程/变动图是给人看的（不能拖出新边），节点边缘挂小圆点纯属噪音。
+     为什么写成 `.react-flow__handle.stage-handle` 双类：xyflow 自带的
+     `.react-flow__handle` 是单类选择器，而它的 style.css 与 globals.css
+     的相对注入顺序不确定 —— 靠提一级特异性取胜，不靠顺序。 */
+  .react-flow__handle.stage-handle {
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    min-width: 1px;
+    min-height: 1px;
+    border: none;
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nm-ink-lift { transition: none !important; }
+  .nm-ink-lift:hover { transform: none; }
+}
+
+/* ============================================================================
+   墨韵工艺层 · 工具类与组件类（2026-09-18）
+   —— 令牌见文件顶部 :root / .dark 里的「墨韵工艺层」小节。
+
+   本层只放**工具类表达不了的东西**：
+     · 展开/收起的 grid-template-rows 动画（无需固定高度）
+     · 状态信号三件套（文字 / 淡底 / 勾线）
+     · 排版地板
+   其余（纸面 / 墨线 / 圆角 / 投影 / 缓动 / 墨阶文字）已由 tailwind.config.js
+   暴露成 bg-paper / border-line / rounded-card / shadow-overlay / text-tone-2 /
+   ease-link 等工具类，直接写工具类即可，不要在这里再包一层。
+
+   ★ 本段刻意**不放进 @layer**：Tailwind 3 的 @layer 只是指令不是原生级联层，
+     所以整份 CSS 处于同一层级、由源序决定胜负。本段在文件末尾，
+     且选择器与 Tailwind 生成的工具类同为一个类（特异性 0,1,0）
+     → 源序靠后者胜。这是「排版地板」能一条规则盖住全站 296 处的前提。
+   ============================================================================ */
+
+/* —— 1. 排版地板 ——
+   2026-09-16 审计 D1 说"全站 text-[9px] / text-[10px] 共 294 处"。
+   ⚠️ 2026-09-18 实测更正：**text-[9px] 根本不存在（0 处）**，那 294 是审计脚本
+      把 .5 档也算进去的数。真实分布（本次实测）：
+        text-[11px]   336   ← 已经是事实上的地板，绝大多数小字已达标
+        text-[12px]    71
+        text-[11.5px]  24
+        text-[10.5px]  20   ← 需抬
+        text-[13px]    19
+        text-[12.5px]   5
+        text-[10px]     4   ← 需抬
+        text-[8px]      1   ← 需抬（此前漏网的）
+      也就是说 D1 **此前已被大规模修过**，剩下要抬的只有 25 处，不是 294 处。
+   所以这条规则是**兜底安全网**，不是主力手段；主力是把 11px 固化成
+   text-2xs 命名档位（见 tailwind.config.js fontSize），新代码不要再写 text-[11px]。
+   ⚠️ 显式退回：确实需要微观密度的装饰性刻度加 .text-micro。 */
+.text-\[8px\],
+.text-\[10px\] { font-size: 11px; line-height: 1.45; }
+.text-\[10\.5px\] { font-size: 11.5px; line-height: 1.45; }
+.text-micro { font-size: 10px; line-height: 1.4; }
+
+/* —— 2. 排版纪律 —— */
+/* 眉标：等宽小字，用于面板小标题 / 元信息标签（该库的签名手法） */
+.mc-eyebrow {
+  font-family: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: hsl(var(--tone-3));
+}
+/* 数字对齐：所有计数 / 百分比 / 章节号 —— 避免跳动 */
+.mc-num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1, 'lnum' 1; }
+
+/* —— 3. 展开 / 收起 ——
+   grid-template-rows 0fr → 1fr 的动画：内容自然高度，**不需要量高度、不需要 max-height 猜值**。
+   用法：外层 .mc-collapse[data-open="true"]，内层套一层 overflow:hidden 的 div。 */
+.mc-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0.4;
+  transition:
+    grid-template-rows 0.34s var(--ease-link),
+    opacity 0.24s var(--ease-out-strong);
+}
+.mc-collapse[data-open='true'] { grid-template-rows: 1fr; opacity: 1; }
+.mc-collapse > * { min-height: 0; overflow: hidden; }
+
+/* —— 4. 状态信号三件套 ——
+   唯一的彩色出口。只准用于：状态圆点 / 状态标签 / 极细的状态线。
+   禁止用于大面积填充、正文、面板边框。 */
+.mc-sig-run  { color: hsl(var(--sig-run)); }
+.mc-sig-done { color: hsl(var(--sig-done)); }
+.mc-sig-warn { color: hsl(var(--sig-warn)); }
+.mc-sig-stop { color: hsl(var(--sig-stop)); }
+
+.mc-sig-run-bg  { background-color: hsl(var(--sig-run-tint)); }
+.mc-sig-done-bg { background-color: hsl(var(--sig-done-tint)); }
+.mc-sig-warn-bg { background-color: hsl(var(--sig-warn-tint)); }
+.mc-sig-stop-bg { background-color: hsl(var(--sig-stop-tint)); }
+
+/* 状态圆点：含一圈同色淡晕，远看仍是墨点，近看才有颜色 */
+.mc-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background-color: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 16%, transparent);
+  flex: none;
+}
+
+/* 状态胶囊：极淡同色底 + 同色文字。文字实测过 AA。 */
+.mc-sig-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--radius-chip);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* —— 5. 思维链竖轨 ——
+   该库签名手法：左侧一根 1px 墨线 + 内缩 16px 的内容列。 */
+.mc-rail { position: relative; padding-left: 16px; }
+.mc-rail::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background-color: hsl(var(--paper-line));
+}
+/* 轨上的节点：正在跑的那个用信号色 */
+.mc-rail-node {
+  position: absolute;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background-color: hsl(var(--paper));
+  box-shadow: 0 0 0 1px hsl(var(--paper-line-strong));
+}
+
+/* —— 6. 流式光标 —— */
+.mc-caret {
+  display: inline-block;
+  width: 2px;
+  height: 0.9em;
+  vertical-align: -0.1em;
+  margin-left: 1px;
+  border-radius: 9999px;
+  background-color: hsl(var(--tone));
+  animation: mc-caret-blink 1.1s steps(2, start) infinite;
+}
+@keyframes mc-caret-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.15; }
+}
+
+/* 尾部光标 —— 挂在**容器**上，光标自动贴到最后一块内容的结尾。
+   为什么不用在 JSX 里插 <span>：Markdown 渲染出来的是一个 <div>，
+   插在它后面的 span 会掉到下一行，光标孤零零悬在段落外。
+   用 :last-child::after 则永远贴在最后一个内联内容之后，换行也对。
+
+   ⚠️ 刻意不用 :has()，也不写成逗号选择器列表 ——
+      CSS 里逗号列表中任一选择器无效会**整条规则被丢弃**，
+      老浏览器不支持 :has() 时会把这条基础规则一起废掉。 */
+.mc-caret-tail > :last-child::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 0.9em;
+  vertical-align: -0.1em;
+  margin-left: 2px;
+  border-radius: 9999px;
+  background-color: hsl(var(--tone));
+  animation: mc-caret-blink 1.1s steps(2, start) infinite;
+}
+
+/* —— 7. 交互反馈 —— */
+/* 按压：该库统一 active:scale-[0.96]，比"变暗"更有实体感 */
+.mc-press { transition: transform 0.15s var(--ease-out-strong); }
+.mc-press:active { transform: scale(0.96); }
+.mc-press-strong:active { transform: scale(0.94); }
+
+/* 焦点环：只用墨线，不用彩色 ring —— 与水墨基调一致 */
+.mc-focus:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--paper-canvas)), 0 0 0 4px hsl(var(--paper-line-strong));
+}
+
+/* —— 8. 骨架 / 加载 ——
+   该库的像素网格加载器：3×3 方格交错呼吸。比转圈更"有工序感"。 */
+.mc-pixels {
+  display: grid;
+  grid-template-columns: repeat(3, 4px);
+  gap: 1.5px;
+}
+.mc-pixels > i {
+  display: block;
+  width: 4px;
+  height: 4px;
+  border-radius: 1px;
+  background-color: hsl(var(--tone));
+  animation: mc-pixel-breathe 1.05s ease-in-out infinite;
+}
+.mc-pixels > i:nth-child(1) { animation-delay: 0s; }
+.mc-pixels > i:nth-child(2) { animation-delay: 0.1s; }
+.mc-pixels > i:nth-child(3) { animation-delay: 0.2s; }
+.mc-pixels > i:nth-child(4) { animation-delay: 0.1s; }
+.mc-pixels > i:nth-child(5) { animation-delay: 0.2s; }
+.mc-pixels > i:nth-child(6) { animation-delay: 0.3s; }
+.mc-pixels > i:nth-child(7) { animation-delay: 0.2s; }
+.mc-pixels > i:nth-child(8) { animation-delay: 0.3s; }
+.mc-pixels > i:nth-child(9) { animation-delay: 0.4s; }
+@keyframes mc-pixel-breathe {
+  0%, 100% { opacity: 0.14; }
+  50% { opacity: 1; }
+}
+
+/* 流式文字尾部的微光扫过（只在生成中挂，生成完摘掉） */
+.mc-shimmer-text {
+  background-image: linear-gradient(
+    90deg,
+    hsl(var(--tone-3)) 0%,
+    hsl(var(--tone)) 45%,
+    hsl(var(--tone-3)) 90%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: mc-shimmer-sweep 2.4s linear infinite;
+}
+@keyframes mc-shimmer-sweep {
+  0% { background-position: 130% 0; }
+  100% { background-position: -30% 0; }
+}
+
+/* —— 9. 细滚动条 ——
+   该库面板内的滚动条极细，默认浏览器滚动条太抢眼。 */
+.mc-scroll { scrollbar-width: thin; scrollbar-color: hsl(var(--paper-line-strong)) transparent; }
+.mc-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.mc-scroll::-webkit-scrollbar-track { background: transparent; }
+.mc-scroll::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--paper-line));
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.mc-scroll::-webkit-scrollbar-thumb:hover { background-color: hsl(var(--paper-line-strong)); }
+
+/* —— 10. 顶面高光 ——
+   主按钮上沿一道 1px 高光，是"实体按键"的关键一笔（该库 signature）。 */
+.mc-sheen { box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.14); }
+
+/* —— 降级：动效敏感用户一律静态 —— */
+@media (prefers-reduced-motion: reduce) {
+  .mc-collapse { transition: none; }
+  .mc-caret,
+  .mc-pixels > i,
+  .mc-shimmer-text { animation: none; }
+  .mc-press:active,
+  .mc-press-strong:active { transform: none; }
+  .mc-shimmer-text { color: hsl(var(--tone-2)); -webkit-text-fill-color: currentColor; background: none; }
+}

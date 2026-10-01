@@ -1,0 +1,65 @@
+{
+  "name": "@novel-plugins/manual-workbench",
+  "version": "0.1.0",
+  "private": true,
+  "description": "手写台大模块（manual）：编辑器 / 知识库 / 时间线 / 伏笔 / 大纲与笔记 / 统计 / 导出 / 参考书。大类子插件以 web/<大类>/ 目录体现（D1：一模块一包）。",
+  "type": "module",
+  "main": "web/index.tsx",
+  "types": "web/index.tsx",
+  "exports": {
+    ".": {
+      "types": "./web/index.tsx",
+      "import": "./web/index.tsx",
+      "default": "./web/index.tsx"
+    },
+    "./web": {
+      "types": "./web/index.tsx",
+      "import": "./web/index.tsx",
+      "default": "./web/index.tsx"
+    },
+    "./stores": {
+      "types": "./stores/index.ts",
+      "import": "./stores/index.ts",
+      "default": "./stores/index.ts"
+    }
+  },
+  "novelMuse": {
+    "id": "novel.manual.workbench",
+    "name": "手写台",
+    "description": "手写台大模块：12 个内置面板 + 章节编辑器（modes: ['manual']）",
+    "version": "0.1.0",
+    "modes": ["manual"],
+    "dependsOn": [],
+    "permissions": [],
+    "web": {
+      "inject": ["projectPanels", "builtinBubble"]
+    }
+  },
+  "dependencies": {
+    "@novel-plugins/data-core": "workspace:*",
+    "@novel-plugins/ui-graph": "workspace:*",
+    "@novel-plugins/ui-kit": "workspace:*",
+    "@novel/core": "workspace:*",
+    "@novel/shared": "workspace:*",
+    "@tiptap/core": "^2.11.0",
+    "@tiptap/extension-character-count": "^2.11.0",
+    "@tiptap/extension-highlight": "^2.11.0",
+    "@tiptap/extension-placeholder": "^2.11.0",
+    "@tiptap/extension-underline": "^2.11.0",
+    "@tiptap/pm": "^2.11.0",
+    "@tiptap/react": "^2.11.0",
+    "@tiptap/starter-kit": "^2.11.0",
+    "@xyflow/react": "^12.10.2",
+    "date-fns": "^4.1.0",
+    "dompurify": "^3.4.13",
+    "d3-force": "^3.0.0",
+    "d3-force-3d": "^3.0.6",
+    "html-to-image": "^1.11.0",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^0.468.0",
+    "nanoid": "^5.1.16",
+    "react": "^19.0.0",
+    "three": "^0.185.1",
+    "zustand": "^5.0.0"
+  }
+}

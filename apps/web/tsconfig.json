@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "types": ["vite/client", "node", "vitest/globals"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "baseUrl": ".",
+    "paths": {
+      // ⚠️ 同步提醒：@ 别名也在 vite.config.ts 和 vitest.config.ts 中定义，修改请保持三处一致
+      "@/*": ["./src/*"],
+      // 三层拆分：共享包直连源码（与 vite/vitest 三处一致）。
+      // 同时给出「包名」与「包名/*」两种映射，使桶入口与子路径
+      // （如 `@novel-plugins/data-core/stores`、`@novel-plugins/ui-graph/GraphShell`）都可用。
+      "@novel-plugins/ui-graph": ["../../apps/plugins/shared/ui-graph/src"],
+      "@novel-plugins/ui-graph/*": ["../../apps/plugins/shared/ui-graph/src/*"],
+      "@novel-plugins/ui-kit": ["../../apps/plugins/shared/ui-kit/src"],
+      "@novel-plugins/ui-kit/*": ["../../apps/plugins/shared/ui-kit/src/*"],
+      "@novel-plugins/data-core": ["../../apps/plugins/shared/data-core/src"],
+      "@novel-plugins/data-core/*": ["../../apps/plugins/shared/data-core/src/*"],
+      "@novel-plugins/auto-workbench/web": ["../../apps/plugins/auto/workbench/web/index.tsx"],
+      "@novel-plugins/auto-workbench/stores": ["../../apps/plugins/auto/workbench/stores/index.ts"],
+      "@novel-plugins/manual-workbench/web": ["../../apps/plugins/manual/workbench/web/index.tsx"],
+      "@novel-plugins/manual-workbench/stores": ["../../apps/plugins/manual/workbench/stores/index.ts"],
+      "@novel-plugins/auto-workbench/*": ["../../apps/plugins/auto/workbench/*"],
+      "@novel-plugins/auto-workbench": ["../../apps/plugins/auto/workbench/web/index.tsx"],
+      "@novel-plugins/manual-workbench/*": ["../../apps/plugins/manual/workbench/*"],
+      "@novel-plugins/manual-workbench": ["../../apps/plugins/manual/workbench/web/index.tsx"]
+    }
+  },
+  "include": ["src"]
+}

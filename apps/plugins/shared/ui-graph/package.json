@@ -1,0 +1,62 @@
+{
+  "name": "@novel-plugins/ui-graph",
+  "version": "0.1.0",
+  "private": true,
+  "description": "共享图元语：GraphShell / 节点 / 力导向布局 / 3D 图谱（无业务状态，manual 与 auto 两侧皆可用）",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./GraphShell": {
+      "types": "./src/GraphShell.tsx",
+      "import": "./src/GraphShell.tsx",
+      "default": "./src/GraphShell.tsx"
+    },
+    "./StageNode": {
+      "types": "./src/StageNode.tsx",
+      "import": "./src/StageNode.tsx",
+      "default": "./src/StageNode.tsx"
+    },
+    "./EntityNode": {
+      "types": "./src/EntityNode.tsx",
+      "import": "./src/EntityNode.tsx",
+      "default": "./src/EntityNode.tsx"
+    },
+    "./BubbleNode": {
+      "types": "./src/BubbleNode.tsx",
+      "import": "./src/BubbleNode.tsx",
+      "default": "./src/BubbleNode.tsx"
+    },
+    "./enhancedEdges": {
+      "types": "./src/enhancedEdges.tsx",
+      "import": "./src/enhancedEdges.tsx",
+      "default": "./src/enhancedEdges.tsx"
+    },
+    "./Graph3D": {
+      "types": "./src/Graph3D.tsx",
+      "import": "./src/Graph3D.tsx",
+      "default": "./src/Graph3D.tsx"
+    },
+    "./useForceLayout": {
+      "types": "./src/useForceLayout.ts",
+      "import": "./src/useForceLayout.ts",
+      "default": "./src/useForceLayout.ts"
+    }
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.10.2",
+    "d3-force": "^3.0.0",
+    "d3-force-3d": "^3.0.6",
+    "html-to-image": "^1.11.0",
+    "lucide-react": "^0.468.0",
+    "three": "^0.185.1"
+  }
+}

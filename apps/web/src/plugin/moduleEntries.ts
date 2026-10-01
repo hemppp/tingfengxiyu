@@ -1,0 +1,77 @@
+// ============================================================
+// 模块入口解析（kernel 侧）—— 经 **构建期 glob** 而非硬编码说明符
+//
+// ★ D44：kernel 曾直接写 `import('@novel-plugins/manual-workbench/web')` /
+//   `import('@novel-plugins/auto-workbench/web')`。那是 vite **静态可解析**的模块入口
+//   字面量：模块目录缺席时，vite 在 `load-fallback` 阶段就 ENOENT 硬失败
+//   （`[vite:load-fallback] Could not load …/web/index.tsx`），build exit 1 ——
+//   与「任一模块缺席另一模块仍可用」直接冲突。
+//
+//   本文件复用 `main.tsx` 已在用的同一机制（`import.meta.glob`）：
+//   **构建期静态收集 + 目录缺席时静默为空**，不产生悬空 import。
+//
+//   与 main.tsx 的分工：
+//     · main.tsx 的 glob —— 收集模块入口用于 **挂载插件**（apply(ctx) 注册扩展点）；
+//     · 本文件的 glob —— 解析模块**公开导出的组件**（如 ChapterEditor），供 kernel
+//       的惰性路由使用。二者**用途不同、模式不同**（见下）。
+//
+// ★ 模式必须**精确到 `workbench`**，不得用 `manual/*/web/index.tsx` 通配：
+//   同目录下还有 `novel.bookscan` / `novel.autowrite` 等**独立插件包**（设计 L152/L164），
+//   它们的 `web/index.tsx` 同样会被通配模式匹配。实测 tinyglobby 的键顺序为
+//   `auto/novel.autowrite` → `auto/workbench` → `manual/novel.bookscan` → `manual/workbench`，
+//   故 `find(k => k.includes('/plugins/manual/'))` 会**错误命中 `novel.bookscan`**：
+//     · `loadModuleComponent('manual','ChapterEditor')` 取不到导出 → 运行时报错；
+//     · `hasModule()` 恒为 true（兄弟插件总在）→ **「模块缺席检测」彻底失效**，
+//       D44 的优雅降级会退化为空转。
+//   精确到 `workbench` 后，键与 `MODULE_DIRS`（门禁）口径一致，且模块目录缺席即不出现。
+// ============================================================
+
+/** 模块目录名（D1：一模块一包，目录即模式事实来源） */
+export type ModuleDir = 'manual' | 'auto';
+
+/** 模块入口的仓库相对后缀 —— 与 `scripts/verify/verify-workbench-isolation.mjs` 的 `MODULE_DIRS` 同口径 */
+const ENTRY_SUFFIX: Record<ModuleDir, string> = {
+  manual: '/plugins/manual/workbench/web/index.tsx',
+  auto: '/plugins/auto/workbench/web/index.tsx',
+};
+
+/**
+ * 构建期收集的两模块入口（精确路径，不通配兄弟插件包）。
+ * 目录缺席 ⇒ 该条目不出现 ⇒ 下面的 getter 返回 null（优雅降级，无 ENOENT）。
+ */
+const MODULE_ENTRIES: Record<string, () => Promise<unknown>> = import.meta.glob([
+  '../../../plugins/manual/workbench/web/index.tsx',
+  '../../../plugins/auto/workbench/web/index.tsx',
+]);
+
+/** 解析某模块入口的加载器；模块缺席返回 null */
+export function getModuleEntryLoader(dir: ModuleDir): (() => Promise<unknown>) | null {
+  const suffix = ENTRY_SUFFIX[dir];
+  const key = Object.keys(MODULE_ENTRIES).find((k) => k.endsWith(suffix));
+  return key ? MODULE_ENTRIES[key] ?? null : null;
+}
+
+/** 该模块是否在场（构建期事实；模块目录缺席 ⇒ false） */
+export function hasModule(dir: ModuleDir): boolean {
+  return getModuleEntryLoader(dir) !== null;
+}
+
+/**
+ * 取模块公开导出的某个组件，包成 React.lazy 可用的 loader。
+ * 模块缺席 / 导出不存在 ⇒ 返回 null（调用方据此**不渲染**，不得伪造兜底实现）。
+ */
+export function loadModuleComponent<T>(
+  dir: ModuleDir,
+  exportName: string,
+): (() => Promise<{ default: T }>) | null {
+  const load = getModuleEntryLoader(dir);
+  if (!load) return null;
+  return () =>
+    load().then((mod) => {
+      const comp = (mod as Record<string, unknown>)[exportName];
+      if (!comp) {
+        throw new Error(`模块 ${dir} 的公开入口未导出 ${exportName}`);
+      }
+      return { default: comp as T };
+    });
+}

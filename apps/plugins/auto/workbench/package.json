@@ -1,0 +1,60 @@
+{
+  "name": "@novel-plugins/auto-workbench",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI 写作台大模块（auto）：对话 / 流水线 / 记忆 / 技能 / 实体。大类子插件以 web/<大类>/ 目录体现（D1：一模块一包）。",
+  "type": "module",
+  "main": "web/index.tsx",
+  "types": "web/index.tsx",
+  "exports": {
+    ".": {
+      "types": "./web/index.tsx",
+      "import": "./web/index.tsx",
+      "default": "./web/index.tsx"
+    },
+    "./web": {
+      "types": "./web/index.tsx",
+      "import": "./web/index.tsx",
+      "default": "./web/index.tsx"
+    },
+    "./stores": {
+      "types": "./stores/index.ts",
+      "import": "./stores/index.ts",
+      "default": "./stores/index.ts"
+    }
+  },
+  "novelMuse": {
+    "id": "novel.auto.workbench",
+    "name": "AI 写作台",
+    "description": "AI 写作台大模块：对话面板 + chatRail + 自动写作工作台（modes: ['auto']）",
+    "version": "0.1.0",
+    "modes": [
+      "auto"
+    ],
+    "dependsOn": [],
+    "permissions": [],
+    "web": {
+      "inject": [
+        "projectPanels",
+        "builtinBubble",
+        "chatRail",
+        "workbench",
+        "settings",
+        "capability"
+      ]
+    }
+  },
+  "dependencies": {
+    "@novel-plugins/data-core": "workspace:*",
+    "@novel-plugins/ui-graph": "workspace:*",
+    "@novel-plugins/ui-kit": "workspace:*",
+    "@novel/core": "workspace:*",
+    "@novel/shared": "workspace:*",
+    "@xyflow/react": "^12.10.2",
+    "d3-force": "^3.0.0",
+    "lucide-react": "^0.468.0",
+    "nanoid": "^5.1.16",
+    "react": "^19.0.0",
+    "zustand": "^5.0.0"
+  }
+}

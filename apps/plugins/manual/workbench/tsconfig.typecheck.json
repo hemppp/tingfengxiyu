@@ -1,0 +1,78 @@
+{
+  // ============================================================
+  // apps/plugins/manual/workbench/tsconfig.typecheck.json
+  //
+  // ★ t29 / 验收 (a2)：**模块内部专用**类型检查配置（与 auto 侧对称）。
+  //
+  // 为什么需要它：`pnpm --filter @novel/web type-check` = `tsc --noEmit` +
+  //   `apps/web/tsconfig.json` 的 `include: ["src"]`，实测 `--listFiles` 中
+  //   `plugins/{auto,manual}/workbench` 命中 **0** 个文件
+  //   ⇒ 那一步只覆盖 kernel + shared，**模块内部的死导入 / 悬空引用它看不见**。
+  //
+  // 用法（**在模块移除态下也要能跑**，这是可分离性的一部分）：
+  //   pnpm exec tsc -p apps/plugins/manual/workbench/tsconfig.typecheck.json --noEmit
+  //
+  // ★ 必须 exclude 测试文件：本仓 `apps/web/tsconfig.json` 的 `types` 未含
+  //   `@testing-library/jest-dom`，纳入测试文件会冒出
+  //   `TS2339: Property 'toBeInTheDocument' does not exist` 噪声 ——
+  //   既有配置缺口、非真缺陷，故排除，使本配置只反映**源码**内部问题。
+  //
+  // ★ 本图对 kernel **源码**零依赖；唯一纳入的 kernel 树文件是
+  //   `apps/web/src/types/d3-force-3d.d.ts` —— 第三方库的最小环境声明
+  //   （`d3-force-3d` 无 `@types` 包），非 kernel 业务代码。
+  //   manual 侧经 ui-graph 的图元（`LocationGraph`/`RelationGraph`/`ItemGraph`）用到它。
+  // ============================================================
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "types": ["vite/client", "node"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["../../../web/src/*"],
+      "@novel-plugins/ui-graph": ["../../shared/ui-graph/src"],
+      "@novel-plugins/ui-graph/*": ["../../shared/ui-graph/src/*"],
+      "@novel-plugins/ui-kit": ["../../shared/ui-kit/src"],
+      "@novel-plugins/ui-kit/*": ["../../shared/ui-kit/src/*"],
+      "@novel-plugins/data-core": ["../../shared/data-core/src"],
+      "@novel-plugins/data-core/*": ["../../shared/data-core/src/*"],
+      "@novel-plugins/manual-workbench": ["./web/index.tsx"],
+      "@novel-plugins/manual-workbench/*": ["./*"]
+    }
+  },
+  //   ★ t32 / 验收第 ⑦ 条：`include` 必须覆盖 **`server/**/*`**。
+  //   本模块自 t32 起有了 server 面入口（`server/index.ts`，兑现 D32-Q6 / G1 结构门：
+  //   `serverEntry` 缺省 `./server/index.ts`，`existsSync` 必须为真）。
+  //   若不加进来，就会重演 D48 的盲区 —— **模块内文件不进 tsc 图** ⇒ 死导入/类型错误无人发现。
+  //
+  //   ★ 实测坑（已由队长修掉根因，留档防回退）：server 面用根 barrel `@novel/core` 导入
+  //   `ServerPluginContext` 时，会把 `packages/core/src/loader.ts` 拖进本程序；该文件原
+  //   有 4 条**既存**死导入（`satisfiesMinVersion`/`DisposerBag`/`EventBus`/`HookBus`），
+  //   本配置的 `noUnusedLocals: true` 曾报 4 条 TS6133 ⇒ (a2) exit 2（模块自身 0 条错误）。
+  //   根因已删（`loader.ts` 头注释有完整成因链），现两模块 (a2) 均 exit 0。
+  //   要点：**不要**为此改用 `@novel/core/web` 绕行 —— 那是 Server 面语义错位，
+  //   且 `PluginModule['apply']` 的 `ctx` 是 `never`（`context.ts:71`），将来写
+  //   `ctx.routes.register(...)` 会类型层面写不出来。另：`exclude` **无法**阻断依赖解析。
+  "include": ["web/**/*", "stores/**/*", "server/**/*", "../../../web/src/types/d3-force-3d.d.ts"],
+  "exclude": [
+    "node_modules",
+    "**/__tests__/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx"
+  ]
+}

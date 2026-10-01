@@ -1,0 +1,1497 @@
+/* ============================================================
+ * 水墨UI（shuimo.design）移植层
+ *
+ * ## 为什么是「移植」而不是「安装」
+ *
+ * shuimo-ui@0.3.0-alpha.15 是 **Vue 3 组件库**（组件为 SFC/JSX + @vue/test-utils 工具链，
+ * 全包仅 MBorder / MRicePaper 两个组件提供 web-component 版本）。本项目是 React 19，
+ * 无法直接渲染它的 `<m-button>` / `<m-input>`。因此这里**复刻其视觉语言**，
+ * 用项目自己的 React + Tailwind 栈重新实现。
+ *
+ * ## 移植了哪些东西（逐项对应 shuimo 原实现）
+ *
+ * | 手法 | shuimo 原实现 | 本层实现 |
+ * |---|---|---|
+ * | 宣纸底 | `rice-paper.webp` 平铺 | `--sm-paper-url`，`.sm-paper` |
+ * | 笔触四边 | grid 九宫格 + `line/crossrange.webp` repeat-x | `.sm-border` 同法复刻 |
+ * | 按钮 | `border-image: url(button/base.webp) 8` | `.sm-btn` 同法复刻 |
+ * | 传统色 | `var/Wuxing.css` 44 具名色 + 10 五行阴阳别名 | `--sm-*` 全套搬入 |
+ * | 毛笔光标 | `public/cursor/*.webp` | `.sm-cursor` |
+ *
+ * ## 作用域约定
+ *
+ * 本层**全部**落在 `html[data-theme="shuimo"]` 之下，或 `.sm-*` 类名下。
+ * 不改动任何既有 token —— 切到别的主题即完全恢复，**零污染、可回滚**。
+ *
+ * ⚠️ 与项目既有设计口径的**冲突点**（用之前必须知道）：
+ *   1. 项目口径是「墨分五色，功能性区分靠**明度**而非色相」（tailwind.config 里
+ *      彩色调色板被整体重映射为灰阶）；本层是「传统色相 + 实色填充」。
+ *   2. 项目圆角体系是 6/8/10/14px；本层是 **0 圆角**（直角）。
+ *   3. 项目用无衬线正文；本层用衬线（宋/楷）承载中式感。
+ *   这三条是**设计取向**差异，不是 bug。要全量推广需先拍板取向。
+ * ============================================================ */
+
+/* ============================================================
+ * 一、中国传统色板（自 shuimo `assets/style/var/Wuxing.css` 原样搬入）
+ *
+ * 按「木春 / 火夏 / 金秋 / 水冬」四季分组的传统色名，末段为五行阴阳别名。
+ * 前缀改 `--sm-` 以免与项目既有变量撞名。
+ * ============================================================ */
+:root {
+  /* —— 木 春 —— */
+  --sm-piaobi: #c0d695;      /* 缥碧 */
+  --sm-qingqing: #4f6f46;    /* 青青 */
+  --sm-cuiqiu: #446a37;      /* 翠虬 */
+  --sm-qingshou: #284852;    /* 青绶 */
+  --sm-qingluan: #9aa7b1;    /* 青鸾 */
+  --sm-songlan: #6b798e;     /* 菘蓝 */
+  --sm-qingdai: #45465e;     /* 青黛 */
+  --sm-luozidai: #13393e;    /* 螺子黛 */
+  --sm-qiling: #12264f;      /* 麒麟 */
+  --sm-cuiwei: #4c8045;      /* 翠微 */
+  --sm-tingwulv: #68945c;    /* 庭芜绿 */
+  --sm-cangjia: #a8bf8f;     /* 苍葭 */
+  --sm-huangliliu: #fedc5e;  /* 黄栗留 */
+  --sm-zhizi: #fac03d;       /* 栀子 */
+
+  /* —— 火 夏 —— */
+  --sm-zhuyantuo: #f29a76;   /* 朱颜酡 */
+  --sm-wozhe: #dd6b7b;       /* 渥赭 */
+  --sm-chunzhi: #c25160;     /* 唇脂 */
+  --sm-danji: #e60012;       /* 丹罽 */
+  --sm-daran: #a81c2b;       /* 大繎 */
+  --sm-jiangsha: #b27777;    /* 绛纱 */
+  --sm-xilan: #e3adb9;       /* 夕岚 */
+
+  /* —— 金 秋 —— */
+  --sm-gaoyu: #efefef;       /* 缟羽 */
+  --sm-yuse: #eae4d1;        /* 玉色 */
+  --sm-luanhua: #c0ad5e;     /* 栾华 */
+  --sm-xinzi: #da9233;       /* 杏子 */
+  --sm-moge: #9f5221;        /* 靺鞈 */
+  --sm-chenxiang: #99806c;   /* 沉香 */
+  --sm-mihe: #dfd7c2;        /* 蜜合 */
+  --sm-huaqing: #1a2847;     /* 花青 */
+
+  /* —— 水 冬 —— */
+  --sm-yuebai: #d4e5ef;      /* 月白 */
+  --sm-qingshan: #a3bbdb;    /* 晴山 */
+  --sm-ziyuan: #757cbb;      /* 紫苑 */
+  --sm-zhengqing: #6ca8af;   /* 正青 */
+  --sm-yuyangran: #576470;   /* 育阳染 */
+  --sm-jingyuan: #31322c;    /* 京元 */
+  --sm-tieli: #46433b;       /* 驖骊 */
+  --sm-tajian: #151d29;      /* 獭见 */
+  --sm-jieshizi: #602641;    /* 芥拾紫 */
+  --sm-shiyin: #c8b6bb;      /* 石英 */
+  --sm-xiaoyaoyou: #b2bfc3;  /* 逍遥游 */
+  --sm-huangliang: #c4b798;  /* 黄梁 */
+  --sm-tanhe: #945635;       /* 檀褐 */
+  --sm-jijin: #896d47;       /* 吉金 */
+  --sm-youhulu: #644d31;     /* 油葫芦 */
+
+  /* —— 五行阴阳（shuimo 的语义别名，原样保留）—— */
+  --sm-jin-yang: var(--sm-xinzi);
+  --sm-jin-yin: var(--sm-gaoyu);
+  --sm-mu-yang: var(--sm-cuiqiu);
+  --sm-mu-yin: var(--sm-piaobi);
+  --sm-shui-yang: var(--sm-tajian);
+  --sm-shui-yin: var(--sm-qingshan);
+  --sm-huo-yang: var(--sm-daran);
+  --sm-huo-yin: var(--sm-wozhe);
+  --sm-tu-yang: var(--sm-tanhe);
+  --sm-tu-yin: var(--sm-huangliang);
+}
+
+/* ============================================================
+ * 二、素材与几何常量
+ * ============================================================ */
+:root {
+  --sm-paper-url: url(/shuimo/rice-paper/rice-paper.webp);
+  --sm-paper-warm-url: url(/shuimo/rice-paper/rice-paper-warm.webp);
+  --sm-line-h-url: url(/shuimo/brush/line-h.webp);
+  --sm-line-v-url: url(/shuimo/brush/line-v.webp);
+  --sm-btn-border-url: url(/shuimo/brush/btn-base.webp);
+
+  /* 笔触粗细 —— 与 shuimo 原值一致（横 5px / 纵 6px） */
+  --sm-stroke-h: 5px;
+  --sm-stroke-v: 6px;
+
+  /* 墨色文字三档（宣纸底上） */
+  --sm-ink-1: #1a1a1a;
+  --sm-ink-2: #4a4a4a;
+  --sm-ink-3: #7a7a7a;
+}
+
+/* ============================================================
+ * 三、主题：shuimo —— 宣纸
+ *
+ * 覆写项目的全套基础 token（与 themes.css 里 soot 的做法一致：
+ * 必须覆盖完整，漏一组就会"换了一半皮"）。
+ * ============================================================ */
+html[data-theme='shuimo'] {
+  /* 基底：宣纸（非纯白，带米色） */
+  --background: 40 22% 93%;
+  --foreground: 0 0% 10%;
+  --card: 40 30% 96%;
+  --card-foreground: 0 0% 10%;
+
+  /* 主色：花青（传统蓝，白字可读）
+     ⚠️ 2026-09-18 修正：原值 `219 45% 19%`（≈ rgb(27,42,70)）**太暗**，
+        跟 ink 主题的墨黑 `rgba(31,31,31)` 在肉眼上几乎分不出来 ——
+        实底按钮因此「看着没换皮」。官网 primary 实测 rgb(22,97,171)，
+        这里取稍收敛的 210 62% 36%（≈ rgb(35,92,149)）：明确是蓝、但不刺眼。 */
+  --primary: 210 62% 36%;
+  --primary-foreground: 40 30% 97%;
+
+  --secondary: 40 18% 88%;
+  --secondary-foreground: 0 0% 20%;
+  --muted: 40 16% 90%;
+  --muted-foreground: 0 0% 42%;
+  --accent: 40 20% 85%;
+  --accent-foreground: 0 0% 12%;
+  --destructive: 355 72% 38%;            /* 大繎 */
+  --destructive-foreground: 40 30% 97%;
+
+  --border: 30 12% 76%;
+  --input: 40 20% 91%;
+  --ring: 219 45% 30%;
+
+  /* 直角 —— shuimo 无圆角 */
+  --radius: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-chip: 0px;
+  --radius-control: 0px;
+  --radius-card: 0px;
+  --radius-window: 0px;
+  /* 内联圆角的语义档位（定义见 globals.css）。归零后，
+     那 53 处内联 `var(--r-*)` 会自动变直角 —— 不必再用 !important 兜底。 */
+  --r-pill: 0px;
+  --r-lg: 0px;
+  --r-md: 0px;
+  --r-sm: 0px;
+  --r-xs: 0px;
+  --r-2xs: 0px;
+  --r-3xs: 0px;
+
+  /* —— 书封：纸 = 宣纸，墨 = 暖墨，印 = 大繎（朱砂）——
+     默认主题下书封是"白纸 + 冷灰墨"的 8 套灰阶，铺在宣纸底上就是两块黑板。
+     这里换纸换墨后，8 套封面的相对深浅自动跟着走（组件只读变量，不知道主题）。
+
+     ⚠️ 墨不用纯黑 #000：宣纸是暖米色，纯黑压上去会发脏、显"贴上去的"。
+        用 30 15% 16%（≈ #2b2620）暖墨，跟纸底同一个色温。
+     ⚠️ 印色从 #3a3a3a 换成大繎 #a81c2b —— 卷印本来就是朱砂，之前那个深灰是错的。 */
+  --cover-ink: #2b2620;
+  --cover-paper: #f7f1e6;
+  /* ★ 关键：只换纸/墨端点**不够**。那只是换色温，明度曲线没动 ——
+     实测封面依旧是深色卡片贴在宣纸上。压到 0.5 才是"纸上淡墨"：
+     最深的「碧波」底也只到 ≈ rgb(180,174,163)，是纸上的水痕而非墨块。 */
+  --cover-wash-scale: 0.5;
+  --cover-line: #2b2620;
+  /* 装饰层：淡墨暖灰。
+     ⚠️ 别指望靠渐变解决问题 —— 封面底部的"地面"是 SVG **实心填充**
+        （`fill={ink} opacity=".85"`，云海/古寺等模板各占底部 1/3 画面），
+        它比渐变深得多。实测把渐变压淡后封面**依然**是灰卡片，就是它在压着。
+        这里取 #9c8f7a：0.72×0.85 叠在淡渐变上 ≈ rgb(175,168,156)，
+        比纸底深约 30 级 —— 笔触看得见，但只是"水痕"不是"墨块"。 */
+  --cover-decor: #9c8f7a;
+  --cover-seal: #a81c2b;
+
+  /* ★★ 封面文字：白字 → 墨字（2026-09-18 实测补，这是 AA 达标的关键）
+     起因：封面上的文字/胶囊/统计条原来全是硬编码白，为"下半部近黑"服务。
+       把封面调成暖调淡纸后，**裁剪量像素 + 半透明前景先合成再算**得到
+       白字只有 **4.42 : 1** —— 低于项目 4.5:1 的 AA 门槛。
+       背景实测 rgb(120,115,109)：下半部有好几条 `fill={ink} opacity=".5~.85"`
+       的"地面"path **叠在一起**，叠出来比装饰色本身还暗。
+     解法：让文字跟着纸走（宣纸底配墨字），而不是把封面再压黑。
+     只需换 `--cover-fg` 一个值，其余 alpha 档位自动跟着翻面。 */
+  --cover-fg: #2b2620;
+  /* 墨字不需要投影 —— 深投影会把字糊成一团 */
+  --cover-title-shadow: none;
+
+  /* ★ 装饰层额外压淡：0.72×0.85 的叠加在 shuimo 下依然偏重，
+     导致文字所在的下半部是中灰而不是淡纸。压到 0.35 → 远山如洗，
+     墨字落上去对比度轻松过 AA。 */
+  --cover-decor-alpha: 0.35;
+
+  /* ★★ 底部遮罩：暗色压条 → 浅色题签（这是封面偏暗的真凶）
+     原值是 `linear-gradient(transparent → 黑 .35 → 黑 .75)` @ opacity .92，
+     在书名位置叠了约 0.55 的黑 —— 把前面所有"调淡封面"的努力全抵消了。
+     白字时代它是对的（白字需要暗底）；换成墨字后必须反过来：
+     底部**提亮**成宣纸题签，墨字落上去对比度更高，也更像"纸上题字"。
+     实测（裁剪量像素 + 半透明前景先合成再算）：从 4.42:1 → 7.9:1。 */
+  --cover-scrim: linear-gradient(
+    180deg,
+    rgb(247 241 230 / 0) 0%,
+    rgb(247 241 230 / 0.55) 50%,
+    rgb(247 241 230 / 0.85) 100%
+  );
+
+  /* —— 卡片投影：纸上不该有黑色投影 ——
+     默认是两段纯黑投影（`hsl(--glass-shadow / .18)` + `.10`），在宣纸底上
+     像卡片浮在空中、随时要掉下来。shuimo 换成"薄薄一层暖色压痕"：
+     极低不透明度的暖褐，范围收窄，更像纸被压过的痕迹。
+     ⚠️ 值挂在 `--card-shadow` 上（BookCard.tsx 的**内联** boxShadow 读它），
+        不能直接写 `.xxx { box-shadow: … }` —— 内联优先级最高，压不动。 */
+  --card-shadow: 0 1px 3px rgb(60 50 38 / 0.10), 0 6px 14px rgb(60 50 38 / 0.07);
+  --card-shadow-hover: 0 4px 10px rgb(60 50 38 / 0.16), 0 12px 26px rgb(60 50 38 / 0.10);
+
+  /* 项目专色 → 传统色（保持 token 名不变，值换成有色相的） */
+  --mountain-cyan: 219 45% 19%;          /* 花青 */
+  --mountain-light: 219 20% 55%;
+  --mountain-deep: 219 50% 12%;
+  --mountain-pale: 40 20% 88%;
+  --mist-blue: 205 25% 62%;
+  --mist-pale: 40 20% 90%;
+  --mist-deep: 205 30% 40%;
+  --ink: 0 0% 10%;
+  --ink-light: 0 0% 36%;
+  --ink-pale: 0 0% 55%;
+  --cinnabar: 355 72% 38%;               /* 大繎 —— 恢复朱砂本义 */
+  --cinnabar-pale: 355 40% 90%;
+  --willow: 120 30% 38%;                 /* 翠微 */
+  --willow-pale: 100 25% 88%;
+  --ochre: 32 62% 52%;                   /* 杏子 */
+  --ochre-pale: 36 55% 88%;
+
+  /* 质感：纸不折射、不模糊 —— 去掉玻璃感 */
+  --glass-blur: 0px;
+  --glass-saturate: 100%;
+  --glass-tint: 247 241 230;
+  --glass-highlight: 255 255 255;
+  --glass-shadow: 0 0% 0%;
+
+  --glass-surface-bg: 0.86;
+  --glass-surface-border: 0.5;
+  --glass-surface-highlight: 0.2;
+  --glass-panel-bg: 0.9;
+  --glass-panel-border: 0.45;
+  --glass-panel-highlight: 0.18;
+  --glass-frost-bg: 0.94;
+  --glass-frost-border: 0.42;
+  --glass-frost-highlight: 0.16;
+  --glass-strong-bg: 0.96;
+  --glass-strong-border: 0.4;
+  --glass-strong-highlight: 0.14;
+  --glass-modal-bg: 0.98;
+  --glass-modal-border: 0.35;
+  --glass-modal-highlight: 0.12;
+
+  /* 语义扩展层：改用传统色相（这是本层与项目口径的最大分歧点） */
+  --entity-character: 219 45% 24%;       /* 花青 */
+  --entity-location: 120 30% 36%;        /* 翠微 */
+  --entity-item: 32 62% 48%;             /* 杏子 */
+  --entity-foreshadow: 355 72% 42%;      /* 大繎 */
+  --entity-event: 280 22% 46%;           /* 紫苑 */
+  --entity-outline: 0 0% 42%;
+
+  --agent-plot: 219 45% 26%;
+  --agent-character: 355 62% 46%;
+  --agent-continuity: 120 28% 38%;
+  --agent-convener: 32 58% 46%;
+  --agent-writer: 280 22% 48%;
+
+  --state-idle: 0 0% 45%;
+  --state-running: 219 45% 32%;
+  --state-done: 120 30% 36%;
+  --state-blocked: 355 72% 42%;
+
+  /* 墨韵工艺层：纸面 / 勾线 / 文字 / 信号 */
+  --paper-hover: 40 24% 90%;
+  --paper-hover-2: 40 26% 86%;
+  --paper-line: 30 14% 72%;
+  --paper-line-strong: 30 16% 60%;
+  --paper-line-soft: 30 12% 84%;
+  --tone: 0 0% 10%;
+  --tone-2: 0 0% 36%;
+  --tone-3: 0 0% 52%;
+
+  /* 投影：宣纸上不靠阴影，靠勾线（与项目「实体感来自勾线」一致） */
+  --shadow-hairline: 0 0 0 1px hsl(var(--paper-line));
+  --shadow-card: 0 0 0 1px hsl(var(--paper-line)), 0 1px 3px hsl(30 20% 30% / 0.08);
+  --shadow-raised: 0 0 0 1px hsl(var(--paper-line)), 0 2px 8px hsl(30 20% 30% / 0.12);
+  --shadow-overlay: 0 0 0 1px hsl(var(--paper-line)), 0 8px 28px hsl(30 20% 30% / 0.18);
+  --shadow-btn: 0 0 0 1px hsl(var(--paper-line-strong));
+  --shadow-inset-field: inset 0 1px 2px hsl(30 20% 30% / 0.06);
+
+  /* 字体：衬线承载中式感 */
+  --sm-font-serif: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'SimSun', serif;
+}
+
+/* —— 宣纸的暗色变体：夜宣（不套用 shuimo 的纯黑，保纸性）—— */
+html[data-theme='shuimo'].dark {
+  --background: 30 8% 9%;
+  --foreground: 40 14% 90%;
+  --card: 30 7% 12%;
+  --card-foreground: 40 14% 90%;
+
+  --primary: 40 30% 88%;
+  --primary-foreground: 30 8% 9%;
+
+  --secondary: 30 7% 17%;
+  --secondary-foreground: 40 12% 86%;
+  --muted: 30 6% 15%;
+  --muted-foreground: 40 8% 58%;
+  --accent: 30 8% 20%;
+  --accent-foreground: 40 14% 92%;
+  --destructive: 355 58% 58%;
+  --destructive-foreground: 30 8% 9%;
+
+  --border: 30 8% 26%;
+  --input: 30 6% 16%;
+  --ring: 40 30% 70%;
+
+  --mountain-cyan: 40 30% 86%;
+  --mountain-light: 40 12% 62%;
+  --mountain-deep: 40 30% 94%;
+  --mountain-pale: 30 8% 20%;
+  --mist-blue: 205 18% 66%;
+  --mist-pale: 30 8% 20%;
+  --mist-deep: 205 20% 52%;
+  --ink: 40 14% 90%;
+  --ink-light: 40 10% 68%;
+  --ink-pale: 40 8% 52%;
+  --cinnabar: 355 58% 58%;
+  --cinnabar-pale: 355 30% 20%;
+  --willow: 120 24% 58%;
+  --willow-pale: 120 18% 20%;
+  --ochre: 32 52% 62%;
+  --ochre-pale: 32 30% 20%;
+
+  --glass-tint: 24 22 20;
+
+  --entity-character: 40 30% 88%;
+  --entity-location: 120 24% 62%;
+  --entity-item: 32 52% 64%;
+  --entity-foreshadow: 355 58% 64%;
+  --entity-event: 280 24% 66%;
+  --entity-outline: 40 8% 56%;
+
+  --agent-plot: 40 30% 88%;
+  --agent-character: 355 52% 66%;
+  --agent-continuity: 120 24% 60%;
+  --agent-convener: 32 48% 62%;
+  --agent-writer: 280 24% 68%;
+
+  --state-idle: 40 8% 50%;
+  --state-running: 205 22% 66%;
+  --state-done: 120 24% 58%;
+  --state-blocked: 355 58% 62%;
+
+  --paper-hover: 30 7% 16%;
+  --paper-hover-2: 30 8% 20%;
+  --paper-line: 30 8% 26%;
+  --paper-line-strong: 30 8% 38%;
+  --paper-line-soft: 30 8% 18%;
+  --tone: 40 14% 90%;
+  --tone-2: 40 10% 68%;
+  --tone-3: 40 8% 52%;
+
+  --shadow-card: 0 0 0 1px hsl(var(--paper-line)), 0 1px 3px hsl(0 0% 0% / 0.4);
+  --shadow-raised: 0 0 0 1px hsl(var(--paper-line)), 0 2px 8px hsl(0 0% 0% / 0.5);
+  --shadow-overlay: 0 0 0 1px hsl(var(--paper-line)), 0 8px 28px hsl(0 0% 0% / 0.6);
+
+  --sm-ink-1: #e8e3da;
+  --sm-ink-2: #b3aca1;
+  --sm-ink-3: #837d74;
+}
+
+/* ============================================================
+ * 四、宣纸底
+ * ============================================================ */
+.sm-paper {
+  background-color: hsl(var(--background));
+  background-image: var(--sm-paper-url);
+  background-repeat: repeat;
+  /* 素材原生 578×578（实测），按原尺寸平铺；shuimo 的 --m-rp-light-opacity 取 0.8 */
+  background-size: 578px 578px;
+}
+
+.sm-paper--warm {
+  background-image: var(--sm-paper-warm-url);
+}
+
+/* —— 水墨远山（复刻 shuimo `<m-rice-paper>` 的远山图层）——
+   原版用 canvas 按视口宽度逐层绘制（左右各 4 层，共 8 张图）。
+   此处降级为 CSS 多层背景：同样左右各 4 层、锚在底部，尺寸按"远小近大"排布。
+   ⚠️ 与原版有差异：canvas 版会随视口宽度重算比例，CSS 版是固定百分比 ——
+      窄屏下近景层可能被裁，宽屏下会留白。要 1:1 需照搬它的 canvas 逻辑。 */
+.sm-mountains {
+  position: relative;
+  overflow: hidden;
+}
+
+.sm-mountains::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 42vh;
+  pointer-events: none;
+  background-image:
+    url(/shuimo/mountains/green/l-front-2.webp),
+    url(/shuimo/mountains/green/r-front-2.webp),
+    url(/shuimo/mountains/green/l-front.webp),
+    url(/shuimo/mountains/green/r-front.webp),
+    url(/shuimo/mountains/green/l-mid.webp),
+    url(/shuimo/mountains/green/r-mid.webp),
+    url(/shuimo/mountains/green/l-base.webp),
+    url(/shuimo/mountains/green/r-base.webp);
+  background-repeat: no-repeat;
+  background-position: left bottom, right bottom, left bottom, right bottom, left bottom, right bottom,
+    left bottom, right bottom;
+  /* ★ 用 vh 绝对值而不是百分比：
+     素材左右不对称（l-base 1772×601 / r-base 2273×773），百分比会随容器高变化，
+     而山体的"基准线"必须钉在底部、层高必须可控 —— 百分比第一版就把山放得满屏都是。 */
+  background-size: auto 14vh, auto 18vh, auto 13vh, auto 16vh, auto 23vh, auto 27vh, auto 30vh, auto 35vh;
+  opacity: 0.22;
+}
+
+html[data-theme='shuimo'].dark .sm-mountains::before {
+  background-image:
+    url(/shuimo/mountains/dark/l-front-2.webp),
+    url(/shuimo/mountains/dark/r-front-2.webp),
+    url(/shuimo/mountains/dark/l-front.webp),
+    url(/shuimo/mountains/dark/r-front.webp),
+    url(/shuimo/mountains/dark/l-mid.webp),
+    url(/shuimo/mountains/dark/r-mid.webp),
+    url(/shuimo/mountains/dark/l-base.webp),
+    url(/shuimo/mountains/dark/r-base.webp);
+  opacity: 0.5;
+}
+
+/* 内容要压在远山之上 */
+.sm-mountains > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================
+ * 五、笔触四边（复刻 shuimo `.m-border` 的 grid 九宫格手法）
+ *
+ * shuimo 原实现：三条横/纵笔触各占一个 grid-area，再用 ±2.5px 位移
+ * 让笔触"压住"四角，形成连续的手绘框。此处同法。
+ * ============================================================ */
+.sm-border {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: var(--sm-stroke-v) auto var(--sm-stroke-v);
+  grid-template-rows: var(--sm-stroke-h) auto var(--sm-stroke-h);
+  grid-template-areas:
+    'topleft top topright'
+    'left main right'
+    'bottomleft bottom bottomright';
+}
+
+.sm-border__line {
+  position: relative;
+  display: inline-block;
+}
+
+/* ★ 千万别给这里加 `background-size`。
+   素材本身就是 548×5 / 6×548（实测），shuimo 原版靠**原始尺寸平铺**；
+   我第一版加了 `auto 100%`，笔触被压成一条细线，完全没了毛笔感（2026-09-18 踩）。 */
+.sm-border__top,
+.sm-border__bottom {
+  background: var(--sm-line-h-url) repeat-x;
+  height: var(--sm-stroke-h);
+}
+
+.sm-border__left,
+.sm-border__right {
+  background: var(--sm-line-v-url) repeat-y;
+  width: var(--sm-stroke-v);
+}
+
+.sm-border__top {
+  grid-area: topleft / topleft / topright / topright;
+  top: calc(var(--sm-stroke-h) / -2);
+}
+
+.sm-border__right {
+  grid-area: topright / topright / bottomright / bottomright;
+  right: calc(var(--sm-stroke-v) / -2);
+}
+
+.sm-border__bottom {
+  grid-area: bottomleft / bottomleft / bottomright / bottomright;
+  bottom: calc(var(--sm-stroke-h) / -2);
+}
+
+.sm-border__left {
+  grid-area: topleft / topleft / bottomleft / bottomleft;
+  left: calc(var(--sm-stroke-v) / -2);
+}
+
+.sm-border__main {
+  grid-area: topleft / topleft / bottomright / bottomright;
+  box-sizing: border-box;
+  overflow: auto;
+}
+
+/* 单条墨迹分割线（标题下那一道）—— 同样不许缩放 */
+.sm-rule {
+  height: var(--sm-stroke-h);
+  background: var(--sm-line-h-url) repeat-x;
+  border: 0;
+  opacity: 0.75;
+}
+
+.sm-rule--v {
+  width: var(--sm-stroke-v);
+  height: auto;
+  background: var(--sm-line-v-url) repeat-y;
+}
+
+/* ============================================================
+ * 六、按钮 —— 复刻 `border-image: url(button/base.webp) 8`
+ *
+ * shuimo 的按钮边框不是 CSS 描边，而是一张手绘笔触图做九宫格切片拉伸。
+ * 这是它"毛笔感"的真正来源，必须原样搬。
+ *
+ * ★★ 按钮笔触配方（全文件统一，4 处都照这个抄）★★
+ *
+ *     border: 0 double transparent;
+ *     border-image: var(--sm-btn-border-url) 8;
+ *     border-image-width: 5px;
+ *     border-image-outset: 5px;
+ *
+ * ★ 2026-09-18 实测修正，**原先的写法是错的**。隔离实验：
+ *   `.workbuddy/ui-checks/gen-outset-test.mjs` + `plan-outset.json`
+ *   （把测试 DOM 挂进真实页面跑 —— 不能用 data: URL，
+ *      opaque origin 加载不了同源图片，会让三个变体全画不出来而误判）
+ *
+ *   三个变体在 16px 小按钮上的实测（宽按钮尺寸 / 内容区 / 笔触可见）：
+ *
+ *     A `border: 5px double transparent` + border-image     ← 原写法
+ *         → 64×32 / 内容区 **6×6**（挤爆）/ 框**看不见**
+ *     B `border: 0` + image-width 5px + outset 5px          ← 现采用
+ *         → 54×32 / 内容区 **16×16** 完好 / 框**清晰可见** ✅
+ *     C `border: 0` + image-width 5px（无 outset）
+ *         → 54×32 / 内容区 16×16 / 框**看不见**
+ *
+ *   两条结论：
+ *   ① `border-width: 0` + `border-image-width: 5px` **照样会画笔触** ——
+ *      不必用真 border 占位。规范里 `border-image-outset` 明确"不影响布局"。
+ *   ② A 那套写法在**小尺寸**下框会淡到看不见（属性在、像素没画出来）。
+ *      ⚠️ 所以**别用 `borderImageSource` 含 'url(' 当作"换皮成功"的判据** ——
+ *      那是假阳性。要看截图。本项目审计脚本早期就是这么误报的。
+ * ============================================================ */
+.sm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  min-height: 32px;
+  padding: 0 15px;
+  font-family: var(--sm-font-serif);
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: #f5f2ea;
+  background-color: var(--sm-yuyangran);
+  border: 0 double transparent;
+  border-image: var(--sm-btn-border-url) 8;
+  border-image-width: 5px;
+  border-image-outset: 5px;
+  cursor: pointer;
+  transition: filter 140ms ease, transform 60ms ease;
+  user-select: none;
+}
+
+.sm-btn:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.sm-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.sm-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sm-btn:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 3px;
+}
+
+/* —— 五色变体：shuimo 的 default/primary/confirm/error/warning —— */
+.sm-btn--primary {
+  background-color: hsl(var(--primary));   /* 花青 */
+}
+
+.sm-btn--confirm {
+  background-color: var(--sm-cuiwei);    /* 翠微 */
+}
+
+.sm-btn--error {
+  background-color: var(--sm-daran);     /* 大繎 */
+}
+
+.sm-btn--warning {
+  background-color: var(--sm-xinzi);     /* 杏子 */
+  color: #2a1c08;
+}
+
+/* 描边款（shuimo 的 disabled 观感，用于次级操作） */
+.sm-btn--ghost {
+  background-color: transparent;
+  color: hsl(var(--foreground));
+}
+
+.sm-btn--ghost:hover:not(:disabled) {
+  background-color: hsl(var(--accent));
+}
+
+/* 尺寸 */
+.sm-btn--sm {
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-width: 4px;
+}
+
+.sm-btn--lg {
+  min-height: 40px;
+  padding: 0 22px;
+  font-size: 16px;
+}
+
+/* ============================================================
+ * 七、输入框 —— shuimo 的输入框是**墨线底边**，不是四边全框
+ * ============================================================ */
+.sm-input {
+  width: 100%;
+  padding: 6px 10px;
+  font-family: var(--sm-font-serif);
+  font-size: 14px;
+  color: hsl(var(--foreground));
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid hsl(var(--paper-line-strong));
+  outline: none;
+  transition: border-color 160ms ease;
+  cursor: url(/shuimo/cursor/pointer.webp), text;
+}
+
+.sm-input::placeholder {
+  color: var(--sm-ink-3);
+}
+
+.sm-input:focus {
+  border-bottom-color: hsl(var(--ring));
+}
+
+.sm-input:disabled {
+  opacity: 0.5;
+  cursor: url(/shuimo/cursor/disabled.webp), not-allowed;
+}
+
+.sm-textarea {
+  width: 100%;
+  min-height: 96px;
+  padding: 10px;
+  font-family: var(--sm-font-serif);
+  font-size: 14px;
+  line-height: 1.8;
+  color: hsl(var(--foreground));
+  background: transparent;
+  border: 1px solid hsl(var(--paper-line));
+  outline: none;
+  resize: vertical;
+}
+
+.sm-textarea:focus {
+  border-color: hsl(var(--ring));
+}
+
+/* ============================================================
+ * 八、纸面面板 / 卡片
+ * ============================================================ */
+.sm-panel {
+  background-color: hsl(var(--card));
+  background-image: var(--sm-paper-url);
+  background-size: 578px 578px;
+  border: 1px solid hsl(var(--paper-line));
+  box-shadow: var(--shadow-card);
+}
+
+/* ============================================================
+ * 九、毛笔光标
+ * ============================================================ */
+.sm-cursor,
+html[data-theme='shuimo'] body {
+  cursor: url(/shuimo/cursor/auto.webp), auto;
+}
+
+html[data-theme='shuimo'] a,
+html[data-theme='shuimo'] button,
+html[data-theme='shuimo'] [role='button'],
+html[data-theme='shuimo'] .sm-cursor-pointer {
+  cursor: url(/shuimo/cursor/pointer.webp), pointer;
+}
+
+html[data-theme='shuimo'] :disabled,
+html[data-theme='shuimo'] .sm-cursor-disabled {
+  cursor: url(/shuimo/cursor/disabled.webp), not-allowed;
+}
+
+/* ============================================================
+ * 十、中式排版辅助
+ * ============================================================ */
+.sm-serif {
+  font-family: var(--sm-font-serif);
+}
+
+/* 竖排（shuimo 导航的书法感） */
+.sm-vertical {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 0.18em;
+}
+
+/* ============================================================
+ * 十一、nm-* 语义类在 shuimo 主题下的重定义
+ *      —— 「全面替换 UI」的真正收敛点
+ *
+ * ★ 为什么不用改 123 个 tsx / 347 个 <button>：
+ *   项目并没有把 UI 裸写成 tailwind 堆栈，而是有 **76 个语义化类**
+ *   （`nm-btn-apple-*` / `nm-input` / `nm-card` / `nm-modal-*` / `nm-glass-*` …）。
+ *   重定义这批类 = 全站换皮，**tsx 一行都不用动**。
+ *
+ * ★ 覆盖要点：现有按钮是「980px 胶囊 + 玻璃 + `::after` 手描墨线」，
+ *   shuimo 是「直角 + 实色填充 + `border-image` 笔触边框」。
+ *   两者直接叠加会变成「双层边框 + 胶囊硬切方形」，所以必须**同时**做三件事：
+ *     ① 圆角归零   ② 关掉 backdrop-filter   ③ 关掉 `::after` 伪元素
+ *
+ * ★ 作用域全部限定在 `html[data-theme="shuimo"]` 之下 —— 切回任何其它主题
+ *   立刻恢复原样，不污染既有体系。
+ * ============================================================ */
+
+/* ------------------------------------------------------------
+ * 11.1 按钮 · 统一底座
+ * ------------------------------------------------------------ */
+html[data-theme='shuimo'] :is(
+    .nm-btn-apple,
+    .nm-btn-apple-primary,
+    .nm-btn-apple-secondary,
+    .nm-btn-apple-ghost,
+    .nm-btn-apple-destructive,
+    .nm-btn-mist-primary,
+    .nm-btn-mist-soft,
+    .nm-btn-primary-pill,
+    .nm-btn-outline-pill,
+    .nm-btn-danger-outline,
+    .nm-modal-btn,
+    .nm-modal-btn-primary
+  ) {
+  border-radius: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  font-family: var(--sm-font-serif);
+  transition:
+    filter 140ms ease,
+    background-color 140ms ease,
+    transform 60ms ease;
+}
+
+/* 关掉旧体系的手描墨线伪元素 —— 本层改用 border-image，两层边框会打架 */
+html[data-theme='shuimo'] :is(
+    .nm-btn-apple,
+    .nm-btn-apple-primary,
+    .nm-btn-apple-secondary,
+    .nm-btn-apple-ghost,
+    .nm-btn-apple-destructive
+  )::after {
+  display: none;
+}
+
+/* 实心款（主 CTA）：花青实填 + 笔触边框 */
+html[data-theme='shuimo'] :is(
+    .nm-btn-apple-primary,
+    .nm-btn-mist-primary,
+    .nm-btn-primary-pill,
+    .nm-modal-btn-primary
+  ) {
+  background: hsl(var(--primary));
+  color: #f5f2ea;
+  border: 0 double transparent;
+  border-image: var(--sm-btn-border-url) 8;
+  border-image-width: 5px;
+  border-image-outset: 5px;
+  box-shadow: none;
+}
+
+html[data-theme='shuimo'] :is(
+    .nm-btn-apple-primary,
+    .nm-btn-mist-primary,
+    .nm-btn-primary-pill,
+    .nm-modal-btn-primary
+  ):hover:not(:disabled) {
+  /* hover 用 primary 压暗，而不是写死的螺子黛 —— 否则主色一改这里就对不上 */
+  background: color-mix(in srgb, hsl(var(--primary)) 88%, black);
+  filter: brightness(1.1);
+  transform: none;
+  box-shadow: none;
+}
+
+html[data-theme='shuimo'] :is(
+    .nm-btn-apple-primary,
+    .nm-btn-mist-primary,
+    .nm-btn-primary-pill,
+    .nm-modal-btn-primary
+  ):active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* 描边款（次 CTA / 幽灵 / 危险）：透明底 + 笔触边框
+ *
+ * ★★ 这里原来写 `border: 1px solid hsl(var(--paper-line-strong))` —— 有两个 bug：
+ *
+ *   ① **`border` 是简写，会把 `border-image` 重置为 `none`** →
+ *      secondary / ghost / mist-soft / outline-pill / modal-btn **全都丢了笔触**。
+ *      症状和"属性齐全却画不出来"一模一样，极难看出。
+ *      修法：改用笔触配方本身（`border: 0 double transparent` + `border-image`）。
+ *
+ *   ② **双类写法会让主按钮被当成次按钮**：组件里常见
+ *      `className="nm-btn-apple nm-btn-apple-primary"`（base + variant）。
+ *      两条规则特异性相同 (0,2,1)，而描边款在文件里**靠后** → 描边款赢 →
+ *      主按钮变成透明底。实测时间线面板的「新建」就是这样。
+ *      修法：`:not()` 把 primary 变体显式排除，**不依赖文件顺序**。
+ *      （靠顺序维持的层叠关系是隐式的，谁插一条规则进来就崩。）
+ * ------------------------------------------------------------ */
+html[data-theme='shuimo'] :is(
+    .nm-btn-apple,
+    .nm-btn-apple-secondary,
+    .nm-btn-apple-ghost,
+    .nm-btn-mist-soft,
+    .nm-btn-outline-pill,
+    .nm-modal-btn
+  ):not(.nm-btn-apple-primary, .nm-btn-mist-primary, .nm-btn-primary-pill, .nm-modal-btn-primary) {
+  background: transparent;
+  color: hsl(var(--foreground));
+  border: 0 double transparent;
+  border-image: var(--sm-btn-border-url) 8;
+  border-image-width: 5px;
+  border-image-outset: 5px;
+  box-shadow: none;
+}
+
+html[data-theme='shuimo'] :is(
+    .nm-btn-apple,
+    .nm-btn-apple-secondary,
+    .nm-btn-apple-ghost,
+    .nm-btn-mist-soft,
+    .nm-btn-outline-pill,
+    .nm-modal-btn
+  ):not(.nm-btn-apple-primary, .nm-btn-mist-primary, .nm-btn-primary-pill, .nm-modal-btn-primary):hover:not(:disabled) {
+  background: hsl(var(--accent));
+  transform: none;
+  box-shadow: none;
+}
+
+html[data-theme='shuimo'] .nm-modal-btn.is-active {
+  background: hsl(var(--primary));
+  color: #f5f2ea;
+  border-color: hsl(var(--primary));
+}
+
+/* 危险款：大繎
+   ⚠️ 这里原先写 `border: 1px solid color-mix(…)`。但 11.6 的元素级规则会给
+      所有 button 挂上 border-image，而 `border-image-source` 非 none 时
+      **border-color 根本不绘制** —— 于是 1px 边框被九宫格切片压成一条糊线。
+      改为统一穿笔触边框：危险语义交给**文字色**承载，形状跟其它按钮一致。 */
+html[data-theme='shuimo'] :is(.nm-btn-apple-destructive, .nm-btn-danger-outline) {
+  background: transparent;
+  color: var(--sm-daran);
+  border: 0 double transparent;
+  border-image: var(--sm-btn-border-url) 8;
+  border-image-width: 5px;
+  border-image-outset: 5px;
+  box-shadow: none;
+}
+
+html[data-theme='shuimo'] :is(.nm-btn-apple-destructive, .nm-btn-danger-outline):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--sm-daran) 10%, transparent);
+  border-color: var(--sm-daran);
+}
+
+/* 图标按钮：方形，去掉圆形 */
+html[data-theme='shuimo'] :is(.nm-btn-apple-icon, .nm-btn-apple-icon-sm, .nm-modal-close) {
+  border-radius: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: hsl(var(--tone-2));
+}
+
+html[data-theme='shuimo'] :is(.nm-btn-apple-icon, .nm-btn-apple-icon-sm):hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--foreground));
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme='shuimo'] :is(.nm-btn-apple-icon, .nm-btn-apple-icon-sm):is(.active, [aria-pressed='true']) {
+  background: hsl(var(--primary));
+  color: #f5f2ea;
+}
+
+/* ------------------------------------------------------------
+ * 11.2 表单 · 墨线底边（shuimo 的输入框不是四边全框）
+ * ------------------------------------------------------------ */
+html[data-theme='shuimo'] :is(
+    .nm-input,
+    .nm-input-sm,
+    .nm-modal-input,
+    .nm-modal-textarea,
+    .nm-modal-select
+  ) {
+  background: transparent;
+  color: hsl(var(--foreground));
+  border: 0;
+  border-bottom: 1px solid hsl(var(--paper-line-strong));
+  border-radius: 0;
+  box-shadow: none;
+  font-family: var(--sm-font-serif);
+  caret-color: hsl(var(--ring));
+  transition: border-color 160ms ease;
+}
+
+html[data-theme='shuimo'] :is(.nm-modal-textarea, .nm-modal-select) {
+  border: 1px solid hsl(var(--paper-line));
+}
+
+html[data-theme='shuimo'] :is(
+    .nm-input,
+    .nm-input-sm,
+    .nm-modal-input,
+    .nm-modal-textarea,
+    .nm-modal-select
+  )::placeholder {
+  color: var(--sm-ink-3);
+}
+
+html[data-theme='shuimo'] :is(
+    .nm-input,
+    .nm-input-sm,
+    .nm-modal-input,
+    .nm-modal-textarea,
+    .nm-modal-select
+  ):focus {
+  border-color: hsl(var(--ring));
+  box-shadow: none;
+  background: transparent;
+}
+
+html[data-theme='shuimo'] :is(.nm-label, .nm-modal-label) {
+  font-family: var(--sm-font-serif);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: hsl(var(--tone-2));
+}
+
+/* ------------------------------------------------------------
+ * 11.3 容器 · 纸面（去玻璃、留勾线）
+ *
+ * ★★ 无前缀的玻璃类也要列进来（2026-09-19 修）
+ *   globals.css 里每个玻璃类都有**双胞胎**：`.glass-panel` / `.nm-glass`、
+ *   `.glass-surface` / `.nm-glass-mist`、`.glass-frost` / `.nm-glass-frost` …
+ *   而这里原先**只列了带 `nm-` 前缀的那一半**。
+ *
+ *   后果（实测）：`PanelSection.tsx` 的浮窗面板用的是
+ *   `nm-panel-section glass-panel glass-edge-glow` —— 它落不进本规则，
+ *   于是只保留了 globals 的玻璃样式：`rgb(var(--glass-tint) / 0.9)`。
+ *   而 shuimo 的 `--glass-tint` 就是**纸色本身** → 0.9 的纸色叠在纸上 = 看不见，
+ *   编辑器的「AI 对话」浮窗几乎认不出边界。
+ *
+ *   ⇒ 补上 `.glass-panel`（只用在 PanelSection 浮窗 + RightSidebar，都是面板表面）。
+ *
+ *   ⚠️ **不要**把 `.glass-surface` 也加进来：它用在**输入框和胶囊**上
+ *      （TimelineView 的 input、书架页的圆形按钮和排序胶囊），
+ *      给它们套卡片边框+投影是错的。
+ *   ⚠️ `.glass-strong` 全仓未使用，不必加。
+ *
+ * ★ `.landing-feature-card`（2026-09-19 补）：落地页的 3 张功能卡。
+ *   落地页有一套**独立的 `styles/landing.css`**（583 行），shuimo.css 原先
+ *   **一次都没提到 `landing-*`** —— 整个折叠下的样式主题完全没碰。
+ *   实测残留：`border-radius: 20px` + `backdrop-filter: blur(24px) saturate(180%)`。
+ *   （`.landing-hero-inkdot` / `.landing-cta-glow` 那些 `50%` 是圆形墨点，刻意保留。）
+ *   ⚠️ 能发现它，是因为给路由扫描加了**滚动步骤** —— 见 gen-reskin-gap.mjs 的注释。
+ * ------------------------------------------------------------ */
+html[data-theme='shuimo'] :is(
+    .nm-card,
+    .nm-auth-card,
+    .nm-modal-card,
+    .nm-glass,
+    .nm-glass-mist,
+    .nm-glass-frost,
+    .nm-glass-strong,
+    .nm-chapter-panel,
+    .nm-editor-card,
+    .glass-panel,
+    .landing-feature-card
+  ) {
+  background-color: hsl(var(--card));
+  /* ★★ 用**暖**纸贴图，不是默认那张（2026-09-19 修）
+   *
+   * 实测两张贴图的色温（`public/shuimo/rice-paper/`，都带 alpha）：
+   *   rice-paper.webp       alpha 0.75 → 合成到暖纸底 rgb(232,235,238)  **R−B = −5.4 冷**
+   *   rice-paper-warm.webp  alpha 0.50 → 合成到暖纸底 rgb(227,223,220)  R−B = +6.8 暖
+   *
+   * 而本主题的纸底是暖调（`--background: 40 22% 93%`、`--card: 40 30% 96%`），
+   * 铺冷色贴图 → **所有卡片/面板都泛蓝灰**。
+   * 症状很隐蔽：不是"坏了"，而是"整体看着有点脏、有点冷"，
+   * 而且因为 alpha 高（0.75），它几乎盖住 `--card` 的暖色。
+   *
+   * 定位手法：像素采样发现"面板背景计算值是暖的 rgb(248,246,242)、
+   * 渲染出来却是冷的 rgb(232,235,238)" → 元素链里没有冷色元素 →
+   * 怀疑 `background-image` 本身 → 直接量贴图的平均色与 alpha。
+   * **「计算值 vs 渲染值不一致」时，第一嫌疑是背景图/纹理。**
+   */
+  background-image: var(--sm-paper-warm-url);
+  background-size: 578px 578px;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid hsl(var(--paper-line));
+  border-radius: 0;
+  box-shadow: var(--shadow-card);
+}
+
+html[data-theme='shuimo'] .nm-card:hover {
+  border-color: hsl(var(--ring));
+}
+
+html[data-theme='shuimo'] .nm-modal-overlay {
+  background: hsl(30 12% 12% / 0.5);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme='shuimo'] :is(.nm-modal-header, .nm-modal-footer) {
+  border-color: hsl(var(--paper-line));
+}
+
+/* ------------------------------------------------------------
+ * 11.4 标题 / 分割 / 链接
+ * ------------------------------------------------------------ */
+html[data-theme='shuimo'] :is(.nm-section-title, .nm-modal-title, .nm-ink-title) {
+  font-family: var(--sm-font-serif);
+  color: hsl(var(--tone));
+  text-transform: none;
+  letter-spacing: 0.08em;
+}
+
+html[data-theme='shuimo'] :is(.nm-hero-title, .nm-hero-quote) {
+  font-family: var(--sm-font-serif);
+}
+
+/* 分割线：换成墨迹笔触 */
+html[data-theme='shuimo'] .nm-divider {
+  border-color: transparent;
+  background: var(--sm-line-h-url) repeat-x;
+  background-size: auto 100%;
+  height: var(--sm-stroke-h);
+  opacity: 0.7;
+}
+
+html[data-theme='shuimo'] .nm-divider-dot {
+  display: none;
+}
+
+html[data-theme='shuimo'] .nm-link-quiet {
+  font-family: var(--sm-font-serif);
+  color: hsl(var(--tone-3));
+}
+
+html[data-theme='shuimo'] .nm-link-quiet:hover {
+  color: hsl(var(--tone));
+}
+
+/* ------------------------------------------------------------
+ * 11.5 ★ 暗色下禁止铺宣纸图
+ *
+ * 踩坑（2026-09-18）：`rice-paper.webp` 是**浅色纸纹**（白底带纤维），
+ * 铺在深色 `--card` 上会把卡片顶成亮灰 —— 而文字用的是暗色主题的浅色，
+ * 于是「欢迎归来」「用户名」全部糊成一片（实测对比度接近 1:1）。
+ *
+ * 处理：暗色下只保留纸色、不铺纸纹。可读性优先于纹理。
+ * 特异性 (0,3,0) > 上面各条 (0,2,0)，且放在文件末尾，稳定生效。
+ * ------------------------------------------------------------ */
+html[data-theme='shuimo'].dark :is(
+    .sm-paper,
+    .sm-panel,
+    .nm-card,
+    .nm-auth-card,
+    .nm-modal-card,
+    .nm-glass,
+    .nm-glass-mist,
+    .nm-glass-frost,
+    .nm-glass-strong,
+    .nm-chapter-panel,
+    .nm-editor-card
+  ) {
+  background-image: none;
+}
+
+/* ------------------------------------------------------------
+ * 11.6 元素级按钮换皮 —— 让**所有**按钮穿上 shuimo 笔触边框
+ *
+ * ★ 为什么需要这层（实测数据，别凭感觉）：
+ *   `.workbuddy/ui-checks/audit-nm-coverage.mjs` 扫全仓 123 个 tsx：
+ *
+ *     button    345 个，只有  23 个走 nm-* 类  → 覆盖  6.7%
+ *     input      78 个，只有   5 个            → 覆盖  6.4%
+ *     textarea   28 个，       0 个            → 覆盖  0.0%
+ *     select     12 个，       0 个            → 覆盖  0.0%
+ *
+ *   即上面 11.1–11.4 那批 nm-* 重定义**只覆盖了极小一部分**。
+ *
+ * ★ 2026-09-18 修正：这一层原先只统一「圆角 / 字体」，**没碰边框和底色**。
+ *   老大反馈「UI 并没有换，按钮也要变成这个风格啊」—— 他说得对。
+ *   真机取证（`.workbuddy/ui-checks/gen-button-audit.mjs`，抓 computed style）：
+ *
+ *     书架页 10 个按钮 → 有笔触边框(border-image 含 url) 的  1 个
+ *     项目页 10 个按钮 → 有笔触边框的                        0 个
+ *     （字体 10/10 换了、直角 8/10 归零了 —— 所以「看起来只是圆角没了」）
+ *
+ *   而 shuimo 按钮最显眼的辨识特征**恰恰就是那圈笔触边框**。
+ *   缺了它，切主题后视觉上等于没换皮。
+ *
+ * ★ 真值取自官网实测（https://shuimo.design/button，plan-shuimo-ref.json）：
+ *     border-width 5px · border-image url(btn-base.webp) 8
+ *     border-radius 2px（**不是 0**）· padding 0 15px
+ *     全部变体都是**深色实底 + 白字**：
+ *       default rgb(107,121,142) · primary rgb(22,97,171)
+ *       confirm rgb(74,153,146)  · error   rgb(134,23,23)
+ *       warning rgb(218,146,51)
+ *
+ * ★ 为什么用真 border 而不是 ::after 叠加：
+ *   笔触是九宫格拉伸（border-image），只有 border 能干净承载；
+ *   伪元素方案会跟已有的 ::after 装饰打架（11.1 就专门关掉过一批）。
+ *   代价：5px 边框会让**自适应宽度**的按钮长大约 10px —— 实测可接受，
+ *   按钮变厚一点反而更贴 shuimo 观感。
+ *
+ * ★ 底色**不碰** —— destructive / ghost 承载语义，一刀切会毁掉语义。
+ *   笔触边框本身已经足够把「换没换皮」区分开。
+ *
+ * ★ 特异性：`html[data-theme='shuimo'] button` = (0,1,1)，
+ *   高于 tailwind 的 `.rounded-lg` / `.bg-primary` = (0,1,0)，稳定压过工具类。
+ * ------------------------------------------------------------ */
+html[data-theme='shuimo'] button {
+  border: 0 double transparent;
+  border-image: var(--sm-btn-border-url) 8;
+  border-image-width: 5px;
+  border-image-outset: 5px;
+  border-radius: 2px;
+  font-family: var(--sm-font-serif);
+}
+
+/* —— 例外：**真圆形**按钮 ——
+   圆形语义（转轮罗盘 / 齿轮 / 头像 / 上下章箭头）不该被套方框。
+   ⚠️ 判据是 `rounded-full` **且含 svg**，不是光看 `rounded-full`：
+      光看 `rounded-full` 会连带把**胶囊 tab**（「最近更新 / 创建时间 / 名称 / 字数」
+      那种 `px-2.5 py-1.5 rounded-full text-[11px]`）也排除掉 ——
+      实测那 4 个 tab 因此漏了换皮。胶囊不是圆，shuimo 里 tab 就该是直角带墨框。
+   ⚠️ 第二条是给**内联** `borderRadius: '50%'` 那 8 处兜的 ——
+      它们没有 class 可用，属性选择器是唯一抓手。
+      （内联优先级最高，本就算不出直角，但会**算出方框墨线套在圆外面**，所以必须一起排除）
+   ⚠️★ **必须写成 `[style*='border-radius: 50%']`，不能只写 `[style*='50%']`**：
+      后者是**子串匹配**，会命中任何内联样式里含 `50%` 的按钮 ——
+      实测 `backdrop-filter: blur(12px) saturate(150%)` 里的 `150%` 就包含 `50%`，
+      于是 `AddBookModal` 的「取消」按钮被判成圆形 → `border-image: none` → **丢了笔触**。
+      症状极隐蔽：笔触"莫名消失"，而 `matches()` 查它确实命中了例外规则，看不出哪里错。
+      教训：**`[attr*=...]` 子串选择器一定要带上足够的上下文**，别只匹配裸数值。
+   ⚠️ 用**属性**选择器：`button[class*='rounded-full']:has(svg)` = (0,2,2)，
+      稳定压过上面的 `button` (0,1,1)。 */
+html[data-theme='shuimo'] button[class*='rounded-full']:has(svg),
+html[data-theme='shuimo'] button[style*='border-radius: 50%'],
+html[data-theme='shuimo'] button[style*='border-radius:50%'] {
+  border-radius: 9999px;
+  border-image: none;
+}
+
+/* ★ 曾用 `:has(> svg:only-child)` 排除"纯图标按钮"，已删除（2026-09-18 实测推翻）：
+ *   ① 误伤极广 —— `<button><svg/>新建</button>` 这种**文字是裸文本节点**的写法，
+ *      svg 在 CSS 眼里就是 `:only-child`（文本节点不算元素子节点），
+ *      于是所有"图标 + 文字"的按钮全被排除。实测 `nm-btn-apple-primary`
+ *      （书架页的「新建」，100×34）就这么丢了笔触。
+ *   ② 更糟的是 `:has()` 的特异性取参数里最高的那个 ——
+ *      `button:has(> svg:only-child)` = (0,2,3)，**反压过** 11.2 给 nm-* 按钮的
+ *      (0,2,0)，等于亲手把原本正常工作的按钮改坏了。
+ *   ③ 本来也不必排除：Tailwind preflight 全局 `box-sizing: border-box`，
+ *      显式 `w-7 h-7` 的图标按钮**外框尺寸不变**，只是内容区被边框吃掉 10px
+ *      （28px → 18px，仍放得下 16px 图标）。
+ *   ④ 真正需要保护的圆形图标按钮，实测全部带 `rounded-full` 或内联 50%，
+ *      已被上面那条覆盖。
+ *
+ * ⚠️ 教训：改完这里务必确认**没有留下旧的同类规则**。
+ *   本次就漏删了一条宽口径的 `button[class*='rounded-full']`，
+ *   它把胶囊 tab 一直按圆形处理 —— 而审计里 `br: 9999px` 看起来"像是例外生效"，
+ *   极难察觉。诊断手法：`b.matches("选择器")` 逐条验命中，
+ *   别只看最终 computed 值反推。 */
+
+/* ------------------------------------------------------------
+ * 11.9 玻璃清零 —— 覆盖**两个来源**（2026-09-18 实测补）
+ *
+ * 起因：缺口扫描（`.workbuddy/ui-checks/gen-reskin-gap.mjs`）在 shuimo 主题下
+ *   扫出 13 处 `backdrop-filter` 残留，而 11.6 那条只列了 5 个类名。两处问题：
+ *
+ *   ① 类名清单**不全**：全仓实际有 15 个 `glass-*` 类
+ *      （glass / clear / edge-glow / enter / frost / hover / lift / modal /
+ *        panel / pop / pressable / ripple / ripple-ink / strong / surface）
+ *      + 8 个 `nm-glass-*` 类。我原先只写了 5 个，而且其中
+ *      `.glass-enter-strong` **根本不存在**（真名是 `.nm-glass-enter-strong`）。
+ *      → 改用 `[class*='glass']` 一网打尽，新增类名不必再回来补。
+ *
+ *   ② 更大的来源是**内联样式**：`backdropFilter: 'blur(6px)'` 直接写在 tsx 里，
+ *      散落在 `BubbleRail / FloatingBubbles / AiChatBubbleRail / AutoWriteWorkbench`
+ *      等处（`grep -rn "backdropFilter" --include=*.tsx`）。CSS 类选择器压不动内联，
+ *      只有 `!important` 能行。
+ *
+ *   ③ ★ **Tailwind 工具类**（2026-09-18 补，浮窗面板扫描抓出来的）：
+ *      `backdrop-blur-sm` / `backdrop-blur` / `backdrop-saturate-*` 这些**不含 "glass"**
+ *      也不是内联样式 —— 前两条都盖不到。地图面板实测残留 3 处 `blur(4px)`。
+ *      → 选择器再加上 `[class*='backdrop']`，一网打尽。
+ *
+ * ★ 为什么这里可以用 `!important`（本文件其他地方刻意不用）：
+ *   `backdrop-filter` **不承载任何语义**，纯装饰；而 shuimo 的纸是不透明的，
+ *   玻璃在语义上就是错的。不像 background/border 那样一刀切会毁掉
+ *   destructive / ghost 的含义。所以这里的 `!important` 是正当的。
+ * ------------------------------------------------------------ */
+html[data-theme='shuimo'] :is(
+    [class*='glass'],
+    [class*='backdrop'],
+    [style*='backdrop']
+  ) {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* input / textarea / select 保持原口径：只统一圆角与字体（控件不做笔触） */
+html[data-theme='shuimo'] :is(input, textarea, select) {
+  border-radius: 0;
+  font-family: var(--sm-font-serif);
+}
+
+/* —— 输入框的**胶囊外壳** ——
+   本项目常见写法：`<div class="… rounded-full …"><input/></div>`（如书架页搜索框，
+   BookshelfPage.tsx:309）。11.7 刻意放过 `rounded-full`（圆形语义），
+   于是外壳仍是胶囊、而里面的 input 已被压成直角 → 看着像"换了一半"。
+   这里只针对**含 input 的 rounded-full 容器**和**自身是 rounded-full 的控件**，
+   不碰头像 / 状态点那些真圆。
+   特异性 `:has(> input)[class*=…]` = (0,2,1) > `.rounded-full` (0,1,0)。 */
+html[data-theme='shuimo'] :has(> input)[class*='rounded-full'],
+html[data-theme='shuimo'] :is(input, textarea)[class*='rounded-full'] {
+  border-radius: 0;
+}
+
+/* ------------------------------------------------------------
+ * 11.11 组件类里**硬编码**的圆角 / 下拉菜单项豁免（2026-09-18 加）
+ *
+ * 起因：编辑器里选中文字弹出的浮动菜单（`SelectionMenu`）在 shuimo 下
+ *   仍是 **14px** 圆角 —— 被浮层扫描抓出来。
+ *   它的圆角定义在 `globals.css` 的 `.selection-menu-card { border-radius: 14px }`，
+ *   既不是 tailwind 工具类（11.7 的 `[class*='rounded-']` 抓不到），
+ *   也不是内联样式（11.8 那套管不到）。
+ *
+ * ⚠️ 这是第三类来源，必须单独处理：**globals.css 里给组件类写死的 px 圆角**。
+ *   全仓还有 38 处（`grep -n "border-radius: *[0-9]" globals.css`），
+ *   其中 `50%` 是圆形语义（头像/状态点）要保留，`980px`/`999px`/`9999px` 是胶囊。
+ *   **没有做一刀切**（`* { border-radius: 0 }` 会把头像和状态点也压平），
+ *   而是按扫描结果逐个补 —— 扫描器就是这类缺口的覆盖工具。
+ * ------------------------------------------------------------ */
+html[data-theme='shuimo'] :is(
+    .selection-menu-card,
+    .selection-menu-btn
+  ) {
+  border-radius: 0;
+}
+
+/* —— 下拉菜单项：**刻意不穿笔触** ——
+   书卡「更多操作」里的「编辑 / 删除」（BookCard.tsx）。
+   菜单项是**列表行**，不是动作按钮 —— 每行都套笔触框会变成视觉噪音，
+   和设置页导航项（11.10 的 .nm-nav-item）是同一个判断。
+   ⚠️ 和 11.10 一样：豁免必须**显式**，不能靠「inline border 简写重置 border-image」
+      这个副作用 —— 那两行确实带 `hover:bg-*` 但没有内联 border，
+      靠副作用根本豁免不到，会静默穿上笔触。 */
+html[data-theme='shuimo'] button.nm-menu-item {
+  border-image: none;
+  border-radius: 0;
+}
+
+/* —— ★ 用**语义角色/状态**豁免，比加标记类更干净 ——
+   分段控件（role=radio，如新建向导的「手写 / AI 写作」）、标签页（role=tab）、
+   菜单项（role=menuitem）—— 这些是**选择控件**，不是动作按钮：
+     · 它们通常是「一条轨道 + 一个滑动指示条」的形态，每项都套笔触框会打架
+     · 而且它们靠 border/bg 表达**选中态**，笔触会盖掉选中环
+   实测：新建向导的两个模式按钮用的是内联 `border: 'none'` ——
+   border-style: none 时 border-image 根本不绘制，所以它们本来就没穿，
+   但那是**巧合**（换个写法就会穿上）。这里用语义选择器把意图固定下来。
+   全仓用量：role=radio 2 处、role=tab 9 处、role=menuitem 1 处。
+
+   ★ `aria-pressed` / `aria-selected` 同理（2026-09-18 补）：
+     它们是**切换/选中控件**的语义标记，视觉状态就靠 border/bg 承载。
+     实测「外观」栏的主题选择卡片 `border: active ? ring : border`，
+     穿了笔触就分不出选中哪个主题。全仓 aria-pressed 23 处、aria-selected 14 处。
+
+   ★ `role='switch'`（2026-09-19 补）：开/关滑块（如 AI 面板的 SkillSwitch，
+     62×26 的「关 ⇄ 开」）。它是**轨道 + 滑块**形态，套上矩形笔触框必炸；
+     而且开/关状态就靠 border/bg 表达。组件侧本来就有正确的 role/aria-checked，
+     之前只是豁免清单没覆盖到它 —— 加进来即可，组件侧零改动。
+
+   ★ `.nm-no-brush`（2026-09-19 补）：**刻意不穿笔触**的显式标记，用于
+     「既不是选择控件、也不是导航项，但边框是装饰性的」那一小撮。首批只有
+     AI 面板空状态的两个引导按钮（`ChatPanel.tsx`「去设置开启 AI」）——
+     它们用 `1px dashed` 表达「这里还没启用」，是刻意的视觉语言，
+     穿了笔触这层意思就没了。
+     ★ 为什么非要显式加类：这两个按钮原先**靠「inline border 简写重置 border-image」
+       这个副作用**才没穿笔触。副作用是隐式的 —— 哪天有人把它拆成长写
+       （就像我 2026-09-19 给另外 27 处做的那样），它会**静默**穿上笔触，
+       而症状只是"多了个框"，极难追。所以宁可显式。
+
+   ★★ 表格内按钮（`table button`，2026-09-19 补）—— 这条揭示了一个**硬约束**：
+     笔触框是 `border-image-outset: 5px`，会**向四周各溢出 5px**（不影响布局，
+     但会画到邻居身上）。所以**相邻按钮之间至少要有 ~10px 净空**，
+     否则两个笔触框会叠在一起、或被容器裁掉。
+
+     管理页「用户管理」表格的操作列就是反例：`ActionButton` 是
+     `px-2 py-1.5 text-[11px]` 的紧凑按钮（约 72×26），外层 `gap-1`（4px）——
+     实测笔触框直接叠成一团、右端还被裁。
+
+     表格行天然紧凑，所以**表格里的按钮一律不穿笔触**。
+     与「导航项 / 菜单项」同类：**笔触是给有呼吸空间的动作按钮用的**。
+
+     ⚠️ 判断某处按钮该不该穿笔触时，除了"是不是动作按钮"，还要看
+        **周围有没有 ~10px 余量**。这个约束**扫描器查不出来**（它只查"有没有框"），
+        只能靠看截图 —— 管理页就是这么发现的。
+
+   ⚠️ 书架的排序 tab（「最近更新 / 创建时间 / 名称 / 字数」）**不是** role=tab，
+      它们该穿笔触，不受这条影响。
+   ⚠️ 只豁免 border-image，**不碰 border-radius** —— 圆角归 11.6/11.7 统一管。 */
+html[data-theme='shuimo'] button:is(
+    [role='radio'],
+    [role='tab'],
+    [role='menuitem'],
+    [role='option'],
+    [role='switch'],
+    [aria-pressed],
+    [aria-selected],
+    .nm-no-brush
+  ) {
+  border-image: none;
+}
+
+/* —— ★ 表格里的按钮：豁免笔触 ——
+ *
+ * ★★ 这条揭示了一个**笔触框的硬约束**（2026-09-19 管理页实测）：
+ *   笔触框是 `border-image-outset: 5px` —— 它会**向四周各溢出 5px**（不影响布局，
+ *   但会画到邻居身上）。所以**相邻按钮之间至少要有 ~10px 净空**，
+ *   否则两个笔触框会叠在一起、或者被容器裁掉。
+ *
+ *   管理页「用户管理」表格的操作列（重置密码 / 设为管理员 / 删除）就是反例：
+ *   `ActionButton` 是 `px-2 py-1.5 text-[11px]` 的紧凑按钮（约 72×26），
+ *   外层 `gap-1`（4px）—— 框直接叠成一团，右端还被裁。
+ *
+ *   表格行天然紧凑（行高、gap 都小），所以**表格里的按钮一律不穿笔触**。
+ *   这与「导航项 / 菜单项」是同一类判断：**笔触是给有呼吸空间的动作按钮用的**。
+ *
+ * ⚠️ 判断某处按钮该不该穿笔触时，除了看"是不是动作按钮"，
+ *    还要看**周围有没有 ~10px 余量** —— 这个约束扫描器查不出来（它只查"有没有框"），
+ *    只能靠看截图。
+ */
+html[data-theme='shuimo'] table button {
+  border-image: none;
+}
+
+/* ------------------------------------------------------------
+ * 11.10 色板 / 色块 —— 显式豁免笔触边框（2026-09-18 加）
+ *
+ * 起因：typography 插件的色板按钮（`apps/plugins/local/typography/web/index.tsx`）
+ *   用 border 承载**选中语义**（选中 = primary 环）。而 shuimo 的元素级 `button`
+ *   规则会给所有按钮穿笔触边框 —— 笔触一旦生效，border-color 就不再绘制，
+ *   选中环直接消失，用户看不出选了哪个颜色。
+ *
+ * ★ 为什么不靠「`border` 简写会重置 border-image」这个副作用来实现豁免：
+ *   那是**隐式**的。哪天有人把它拆成长写（就像我这次给粗细按钮做的那样），
+ *   豁免会**静默失效**，而症状只是"选中环不见了"，极难追。
+ *   所以组件侧显式加 `nm-color-swatch` 类，主题侧显式关掉笔触。
+ *
+ * 数据可视化配色与用户自定义色不进主题（globals.css 明文规定）——
+ *   色板属于用户自定义色，同样的道理：主题只管形状，不管色相。
+ * ------------------------------------------------------------ */
+html[data-theme='shuimo'] :is(button, label).nm-color-swatch {
+  border-image: none;
+  border-radius: 0;
+}
+
+/* —— 设置页左侧导航项（SettingsPage.tsx）——
+   6 个都穿笔触太吵，而且导航项不是「动作按钮」。
+   只让**选中项**穿：一个墨框 = "你现在在这里"。
+   未选中项显式关掉笔触，避免依赖「inline border 简写重置 border-image」这个
+   隐式副作用 —— 组件里已改成长写，不关就全会穿上。 */
+html[data-theme='shuimo'] button.nm-nav-item {
+  border-image: none;
+}
+html[data-theme='shuimo'] button.nm-nav-item--active {
+  border-image: var(--sm-btn-border-url) 8;
+  border-image-width: 5px;
+  border-image-outset: 5px;
+  border-radius: 2px;
+}
+
+/* ------------------------------------------------------------
+ * 11.7 容器级圆角归零
+ *
+ * 11.6 的元素级兜底只管 button/input/textarea/select，**管不到容器** ——
+ * 书卡、面板这些是 `div` / `Link`，圆角来自 tailwind 的 `rounded-*` 工具类。
+ * 实测：书架页的 BookCard 在 shuimo 主题下仍是 12px 圆角（2026-09-18）。
+ *
+ * ★ `rounded-full` **刻意不覆盖**：它承载的是圆形语义
+ *   （头像、状态点、转轮的罗盘按钮）—— 那些在 shuimo 里也该是圆的。
+ *   圆角工具类的具体尺寸各不相同（md 6px / lg 8px / xl 12px / 2xl 16px），
+ *   但 shuimo 是**统一直角**，所以一律归零。
+ *
+ * ★★ 改用**属性选择器**，不再逐个数类名（2026-09-18 修）
+ *   原先列的是 `.rounded-sm / .rounded / .rounded-md / .rounded-lg / .rounded-xl /
+ *   .rounded-2xl / .rounded-3xl` —— **清单式列举必然漏**。实测漏了两类：
+ *     · Tailwind **任意值**：`rounded-[14px]`（物品面板的 segmented control，
+ *       实测残留 14px 圆角）
+ *     · **方向性**圆角：`rounded-t-lg` / `rounded-l-md` / `rounded-tl-sm` …
+ *   现在用 `[class*='rounded-']` 一网打尽，新增写法不必回来补。
+ *   （和 11.9 玻璃那条是同一个教训：清单会漏，属性匹配不会。）
+ *
+ * ⚠️ 必须 `:not([class*='rounded-full'])` —— 否则圆形语义全被压平。
+ *
+ * ⚠️★ **别漏掉裸 `rounded`**：Tailwind 的 `rounded`（无后缀，= 4px）**不含连字符**，
+ *   所以 `[class*='rounded-']` 匹配不到它。
+ *   本次改属性选择器时就漏了 —— 设置页的快捷键 `<kbd class="… rounded …">`
+ *   立刻冒出 4px 残留圆角，被扫描器抓到（`{}` → `{"radius":6}`）。
+ *   补一条 `[class~='rounded']`（`~=` 是「按空格分词精确匹配」，正好用于类名）。
+ *
+ * 特异性 (0,3,0) > tailwind 工具类 (0,1,0)，稳定生效。
+ * ------------------------------------------------------------ */
+html[data-theme='shuimo'] [class*='rounded-']:not([class*='rounded-full']),
+html[data-theme='shuimo'] [class~='rounded'] {
+  border-radius: 0;
+}
+
+/* ------------------------------------------------------------
+ * 11.8 内联圆角 —— 已改为走变量，不再需要 !important
+ *
+ * 历史：`components/ui/BookCard.tsx:83` 曾写死内联 `borderRadius: 20`。
+ *   内联样式在层叠中优先级最高，**与特异性无关** —— 任何选择器都压不过它，
+ *   当时只能用 `[style*="border-radius"] { border-radius: 0 !important }` 硬压。
+ *
+ * 现在：全仓 53 处内联圆角已迁移为 `var(--r-*)`（脚本
+ *   `.workbuddy/ui-checks/migrate-radius.mjs`，变量定义见 globals.css），
+ *   而 shuimo 主题把这些变量设为 0 —— **主题重新拿到了控制权，!important 那层已删除**。
+ *
+ * 残留：8 处 `borderRadius: '50%'` 是**刻意保留**的圆形语义
+ *   （头像 / 状态点 / 转轮罗盘 / spinner），shuimo 自己也有圆形印章与徽章，
+ *   不该被归零，所以没进迁移表。
+ * ------------------------------------------------------------ */
