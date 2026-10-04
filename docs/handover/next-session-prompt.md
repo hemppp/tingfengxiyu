@@ -4,6 +4,7 @@
 > 本文件此前的全部内容是 2026-09-28 一条**已过期任务线**（用 desktop-control MCP 操控浏览器把小说「空山雨后」写到第 30 章）的自我包含任务书。
 > 那段原文**未删除**，整体移到文末「附录 A」保留作现场记录；**新会话请从下面的入口读起。**
 > 本次只更新本文件与新增 `dock-and-desktop-handover-2026-10-04.md`，未改动 `ai-writing-handover.md`、`UNFINISHED-pipeline-blocked.md`，也未改源码。
+> **2026-10-04 收盘（提交后二次同步 · 散列已按重建后的提交链更正）**：四条工作线已分 **4 个内容提交**入库 —— `3e3754e`（Dock 重构 + 删 shuimo 主题，52 files, +4844/−4575）/ `b567758`（插件侧对接停靠协议，11 files）/ `c97d03f`（Electron 桌面端 `apps/desktop/`，30 files）/ `79f7e32`（三份 ADR + 五份报告 + 本目录文档，11 files）；**本文件与交接文档的这次同步构成第 5 个提交**（散列无法自述）。本地 `main` **领先 `origin/main` 5 个提交、未 push**，工作区/索引双干净。提交链于同日经**两轮 plumbing 修正**定稿：第二轮重建 C2/C3/C4 的树，消除 `apps/web/src/components/shell/DockShell.tsx` 的抖动，该修复归 `3e3754e`。下面第二节已同步；提交前写过「都还没入库」的地方以本节为准。
 
 ---
 
@@ -17,14 +18,14 @@
 
 ---
 
-## 二、30 秒现状（2026-10-04 实测）
+## 二、30 秒现状（2026-10-04 提交后实测）
 
-- 仓库只有 **2 个 commit**，HEAD = `a0e1db0`（2026-10-01 20:56:49），分支 `main`；工作区 `git status --porcelain` = **68 项**。
-- **2026-10-01 之后四条工作线的产物几乎都没进 git**：`apps/desktop/`（整个桌面端）未被跟踪，三份 ADR（`dock-protocol-adr.md` / `dock-refactor-final.md` / `desktop-packaging-adr.md`）与五份报告（`docs/reports/dock-refactor-{verification,closeout}.md`、`desktop-{e2e-verification,packaging-closeout,shell-audit}.md`）全部是未跟踪文件。
-- **接手第一件事**：先决定怎么锁住当前状态（提交/建分支），再照交接文档 §6.1 跑一遍基线。
+- 仓库共 **7 个 commit**，**HEAD = 本文件所属的第 5 个提交**（2026-10-04，主题 `docs(handover): 交接文档同步入库后现状`；其散列无法写入它自己的内容，**其父 = `79f7e32`**），分支 `main`；`origin/main` 仍是 `a0e1db0`，**本地领先 5 个提交、未 push**；工作区与索引**双干净**。
+- **2026-10-01 之后四条工作线的产物已全部入库**，按 4 个内容提交拆分：`3e3754e` Dock 重构 + 删除 shuimo 主题（52 files, +4844/−4575）、`b567758` 插件侧对接停靠协议 D9（11 files）、`c97d03f` Electron 桌面端 `apps/desktop/` 整目录（30 files, +6775）、`79f7e32` 三份 ADR + 五份报告 + `docs/handover/**`（11 files, +5529）；**第 5 个提交就是本文件与交接文档的这次同步**。逐文件归属见交接文档 §6.2；提交前那批「68 项未跟踪/未提交」的描述已完成历史。
+- **接手第一件事**：决定**何时 `git push`**（5 个提交只在本地），再照交接文档 §6.1 跑一遍基线。
 - **两个立刻会绊倒人的点**：
   - 桌面端打包会把仓库 `node_modules/better-sqlite3` 就地改成 Electron ABI 149；**打包后不 `pnpm install` 恢复 ABI 137，`pnpm dev` / `pnpm test` 全红**。
-  - 磁盘上的 `release/desktop/` 安装包是 2026-10-03 21:11–21:13 的**重新打包产物**，SHA256 与两份报告记录的 19:13 产物**不一致**——报告里的哈希 attestation 只对旧那轮成立。
+  - 磁盘上的 `release/desktop/` 安装包是 2026-10-03 21:11–21:13 的**重新打包产物**，SHA256 与两份报告记录的 19:13 产物**不一致**——报告 §1.1 的哈希 attestation 只对旧那轮成立。**当前发布校验请以 `docs/reports/desktop-packaging-closeout.md` §A.1（215–255 行，2026-10-04 增补）为准**。
 
 ---
 
