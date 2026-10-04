@@ -85,6 +85,21 @@ apps/web/.tmp-build/
 .s1.js
 .tmp-*.txt
 .tmp-*.json
+# 2026-10-04 补：编辑器「另存备份 / 崩溃恢复」会在源码旁留下 `.tmp_<hash>_<Name>.tsx`
+#   这类**下划线**分隔的备份（实例：apps/web/src/components/shell/.tmp_b410e32_ProjectLayout.tsx，
+#   曾长期挂在 git status 里当噪声）。上面两条 `.tmp-*` 是连字符 ⇒ 匹配不到，故补这条。
+#   覆盖面：仓库任意层级下以 `.tmp_` 开头的文件或目录；实测无任何已入库文件命中。
+.tmp_*
+
+# 现场证据目录（.ps-smoke/ 与 .verify-scratch/）
+# 二者是 PowerShell 冒烟夹具与桌面端验证的现场产物、非源码，被以下报告作为证据路径引用：
+#   docs/reports/desktop-e2e-verification.md
+#   docs/reports/dock-refactor-closeout.md
+#   docs/reports/dock-refactor-verification.md
+# 因此忽略入库但保留磁盘实体 —— 删除会证伪已有报告里的证据引用，勿删。
+# 2026-10-04 补：此前未忽略，导致 git status 长期挂着两组无关噪声。
+.ps-smoke/
+.verify-scratch/
 
 # Current session logs (live, in-use by dev server)
 # .dev-server.log and .dev-web.log are added here
@@ -131,3 +146,11 @@ security_best_practices_report.md
 
 # Agent Teams（二号插件）会话状态：规划/收件箱，非源码，2026-10-01 开源前排除
 .agent-teams/
+
+# 桌面端第二份锁文件（2026-10-04）
+# 本仓库的依赖权威是根 pnpm-lock.yaml，且其中**已包含** apps/desktop 的依赖块
+#   （electron / electron-builder 等，见 pnpm-lock.yaml importers."apps/desktop"）。
+# apps/desktop/package-lock.json 是 npm 在该目录另生成的第二份锁文件，
+#   提交它会造成双重真源漂移（两套解析结果可能不一致，且 CI 无法同时校验）。
+# 故禁止入库；文件**保留在磁盘上**（.gitignore 只影响索引，不等于删除）。
+apps/desktop/package-lock.json

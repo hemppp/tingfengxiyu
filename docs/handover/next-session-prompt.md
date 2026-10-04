@@ -1,3 +1,53 @@
+# 新会话入口 · NovelMuse 接手交接
+
+> **2026-10-04 更新（团队一号 `handover-scribe`）**
+> 本文件此前的全部内容是 2026-09-28 一条**已过期任务线**（用 desktop-control MCP 操控浏览器把小说「空山雨后」写到第 30 章）的自我包含任务书。
+> 那段原文**未删除**，整体移到文末「附录 A」保留作现场记录；**新会话请从下面的入口读起。**
+> 本次只更新本文件与新增 `dock-and-desktop-handover-2026-10-04.md`，未改动 `ai-writing-handover.md`、`UNFINISHED-pipeline-blocked.md`，也未改源码。
+
+---
+
+## 一、先读什么（按顺序）
+
+1. **`docs/handover/dock-and-desktop-handover-2026-10-04.md`** —— 2026-10-01 之后**四条工作线**的接手交接：
+   停靠（Dock）重构 + 主题单一真源（ADR-0007）、插件按创作模式物理拆分、Electron 桌面端（ADR-0008）。
+   含：工作区/git 现状、验收基线、残余风险、**9 项「不得视为通过」的未验证项**、打包后 ABI 纪律、本机两处坑，以及一张「转述 vs 原报告」勘误表。
+2. `docs/handover/ai-writing-handover.md` —— AI 写作模块「现在什么能用」的口径（**注意其 §0 基线数字已过期**，见第三节）。
+3. `docs/handover/UNFINISHED-pipeline-blocked.md` —— 多代理流水线卡死的故障现场（**问题早已修复**，且其中引用的源码路径已失效，见第三节）。
+
+---
+
+## 二、30 秒现状（2026-10-04 实测）
+
+- 仓库只有 **2 个 commit**，HEAD = `a0e1db0`（2026-10-01 20:56:49），分支 `main`；工作区 `git status --porcelain` = **68 项**。
+- **2026-10-01 之后四条工作线的产物几乎都没进 git**：`apps/desktop/`（整个桌面端）未被跟踪，三份 ADR（`dock-protocol-adr.md` / `dock-refactor-final.md` / `desktop-packaging-adr.md`）与五份报告（`docs/reports/dock-refactor-{verification,closeout}.md`、`desktop-{e2e-verification,packaging-closeout,shell-audit}.md`）全部是未跟踪文件。
+- **接手第一件事**：先决定怎么锁住当前状态（提交/建分支），再照交接文档 §6.1 跑一遍基线。
+- **两个立刻会绊倒人的点**：
+  - 桌面端打包会把仓库 `node_modules/better-sqlite3` 就地改成 Electron ABI 149；**打包后不 `pnpm install` 恢复 ABI 137，`pnpm dev` / `pnpm test` 全红**。
+  - 磁盘上的 `release/desktop/` 安装包是 2026-10-03 21:11–21:13 的**重新打包产物**，SHA256 与两份报告记录的 19:13 产物**不一致**——报告里的哈希 attestation 只对旧那轮成立。
+
+---
+
+## 三、历史文档的过期之处（只在此指出，不改那两个文件）
+
+| 文档 | 过期点 |
+|---|---|
+| `ai-writing-handover.md`（最后更新 2026-09-12） | §0 写 `pnpm type-check`「**8 个包**必须全绿」——当前 workspace 是 **15 个项目**（含根 package）；server 单测基线写「16 文件 / 213 用例（2026-09-17 实测）」——当前是 **7 files / 63 passed**；web 侧当前是 **12 files / 153 passed**。 |
+| `UNFINISHED-pipeline-blocked.md`（标题已是「✅ 已修复」） | 修法 1 引用的 `apps/plugins/local/novel.autowrite/server/pipeline/roles-phase.ts` **路径与文件都已不存在**：引擎整包移出仓库到 `F:\new1.2-detached\ai-autowrite-module\`（含 `novel.autowrite/`、`workbench/`、`MANIFEST.json`、`PLUG-BACK.md`），仓库内只剩 4 个骨架文件（`plugin.json`、`package.json`、`tsconfig.json`、`server/index.ts`）。装回方式见 `PLUG-BACK.md`。 |
+| 附录 A（2026-09-28 旧任务书） | 整条任务线的前提已变：`mode=auto` 的 AI 自动写作模块处于**剥离态**（打开 `mode=auto` 项目会显示「AI 写作台未安装 —— 该创作模式对应的模块未启用」，属预期行为）。其中引用的界面坐标、`scripts/run-chapters.mjs` 续跑命令等**未在本轮复核**，标注为未验证。 |
+
+---
+
+## 四、本文件（`next-session-prompt.md`）的定位
+
+它曾经是「把一段自包含任务书发给新会话」的载体。现在改成**接手入口 + 现状导航**：新会话从这里出发，按第一节的顺序读。若将来又出现需要「整段粘贴给新会话」的独立任务书，建议另建独立文件（如 `docs/handover/<主题>-prompt-<日期>.md`），不要再覆盖本入口。
+
+---
+
+## 附录 A：2026-09-28 旧任务书原文（另一条工作线，已过期，保留作现场记录）
+
+> 以下为 2026-09-28 的原文件内容，**逐字保留**，未做修改。除排版外不表任何新结论。
+
 # 新会话任务：用 MCP 操控浏览器，把「空山雨后」写到第 30 章
 
 > 把下面 `===` 之间的内容整段发给新会话即可（新会话看不到上一轮上下文，所以是自包含的）。
