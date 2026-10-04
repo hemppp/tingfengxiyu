@@ -1,0 +1,7 @@
+# apps/desktop 构建中间产物
+# 注意：图标与构建资源目录叫 build-resources/（不是 build/），见 ADR-0008 D2 约束 3
+#   —— .gitignore:12 的 `build/` 会忽略任意层级同名目录，所以不能放 build/。
+dist/
+payload/
+node_modules/
+*.log

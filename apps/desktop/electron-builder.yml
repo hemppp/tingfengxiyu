@@ -1,0 +1,92 @@
+# electron-builder 配置（ADR-0008 D16.2 冻结配置块的镜像文件）
+#
+# ⚠ 权威源是 apps/desktop/package.json 的 "build" 块（D16.1 冻结为内嵌形态）。
+#   本文件是同一配置的 YAML 镜像，仅用于人工审阅与 `electron-builder --config` 覆盖。
+#
+# ★ 实测优先级（2026-10-03 captain 读源码坐实，勿凭直觉推断）：
+#     apps/desktop/package.json 里**存在 "build" 键** ⇒ 不带 --config 时
+#     **package.json 的 build 块直接胜出，本文件完全不参与**。
+#     依据 node_modules/app-builder-lib/out/util/config/load.js:73-81：
+#         const data = packageMetadata == null ? null : packageMetadata[request.packageKey];
+#         return data == null ? findAndReadConfig(request) : { result: data, configFile: null };
+#     （packageKey = "build"，configFilename = "electron-builder"）。
+#     只有显式 `--config electron-builder.yml` 才会读本文件（getConfig 的 configPath 分支）。
+#     ⇒ 因此**任何改动必须两边同步**；正式打包命令不带 --config，走 package.json 的 build 块。
+#     ⇒ 只改本文件 = 没改；只改 package.json = 两份配置漂移。日志里应出现
+#       `loaded configuration { file: 'package.json ("build" field)' }` 作为实证。
+#
+# 目标平台：仅 Windows x64（D1）。分发形态：NSIS 安装版 + 便携版。
+# 不做：macOS / Linux / arm64 / Squirrel / MSI / AppX / 代码签名 / electron-updater。
+
+appId: com.novelmuse.desktop
+productName: NovelMuse
+copyright: Copyright © 2026 NovelMuse
+
+directories:
+  # 产物输出目录（D1 冻结：F:\new1.2\release\desktop；/release/ 已在 .gitignore:28）
+  output: ../../release/desktop
+  # 构建资源目录必须叫 build-resources/ 而不是 build/（D2 约束 3：.gitignore:12 忽略任意层级 build/）
+  buildResources: build-resources
+
+# asar 内只放壳代码；server 负载走 extraResources（Mode B，D4.2）
+# D16.2 退路已启用：**不得**在此处加回 "!node_modules/**/*"。
+# 该排除项会被 getNodeModuleFileMatcher（fileMatcher.js:193-198 只收 "!" 模式）收下，
+# 再由 appFileCopier.js:156 作为每个依赖 matcher 的 patterns；
+# 而 NodeModuleCopyHelper.js:105 会先给 stat 挂 moduleFullFilePath（形如
+# node_modules/better-sqlite3/LICENSE），filter.js:24 优先用它当 relative ⇒
+# 该排除项真的匹配上，导致 40 个依赖全部 filesCount=0、asar 内零 node_modules、
+# asarUnpack 三项全部落空（R2 失败）。详见 task-8 output 的 R7 结论。
+files:
+  - dist/**/*
+  - package.json
+
+asar: true
+
+# D16.3：better-sqlite3 通过 bindings 定位 .node，bindings 又依赖 file-uri-to-path；
+# asar 内动态 require 裸说明符会失败 ⇒ 三者必须一起解包；原生 .node 无法从 asar 内 dlopen。
+asarUnpack:
+  - node_modules/better-sqlite3/**/*
+  - node_modules/bindings/**/*
+  - node_modules/file-uri-to-path/**/*
+
+# D4.2 / D7.2 冻结的资源布局
+# DEV-10 修复（D20-R2 认可的「换投递根名」退路）：extraResources 的 from 根目录下
+# 一级名为 node_modules 的目录会被 fileMatcher.createFilter 过滤掉
+# （out/util/filter.js:43-45 `if (relative === "node_modules") return false;`），
+# 因此 {from: payload/app-server, to: app-server} 永远投不出 app-server/node_modules ⇒
+# 首启播种后 tsx 无法解析、server 子进程起不来、白屏。
+# 追加下面一条：此时 matcher 的 src 本身就是 …/node_modules（src === file ⇒ return true），
+# 其子项相对路径不再等于 "node_modules"，故不被过滤。
+extraResources:
+  - from: payload/app-server
+    to: app-server
+  - from: payload/app-server/node_modules
+    to: app-server/node_modules
+  - from: ../../apps/web/dist
+    to: web-dist
+  - from: payload/seed-plugins
+    to: seed-plugins
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  icon: build-resources/icon.ico
+  artifactName: NovelMuse-${version}-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 听风细雨
+  artifactName: NovelMuse-Setup-${version}-${arch}.${ext}
+  deleteAppDataOnUninstall: false
+
+portable:
+  artifactName: NovelMuse-Portable-${version}-${arch}.${ext}

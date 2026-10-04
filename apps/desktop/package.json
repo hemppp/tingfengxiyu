@@ -1,0 +1,76 @@
+{
+  "name": "@novel/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NovelMuse 桌面端（Electron 主进程 + 内嵌 server 子进程）",
+  "author": "NovelMuse",
+  "license": "Apache-2.0",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "icon": "python scripts/gen-icon.py",
+    "payload": "node scripts/build-server-payload.mjs",
+    "bundle": "node scripts/bundle-shell.mjs",
+    "dev": "node scripts/bundle-shell.mjs && electron .",
+    "build": "node scripts/build-server-payload.mjs && node scripts/bundle-shell.mjs",
+    "type-check": "tsc --noEmit",
+    "dist:dir": "node scripts/build-server-payload.mjs && node scripts/bundle-shell.mjs && electron-builder --win dir --x64",
+    "dist": "node scripts/build-server-payload.mjs && node scripts/bundle-shell.mjs && electron-builder --win nsis portable --x64"
+  },
+  "dependencies": {
+    "better-sqlite3": "12.11.1",
+    "yauzl": "^3.4.0"
+  },
+  "devDependencies": {
+    "adm-zip": "^0.5.16",
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.7.0"
+  },
+  "build": {
+    "appId": "com.novelmuse.desktop",
+    "productName": "NovelMuse",
+    "copyright": "Copyright © 2026 NovelMuse",
+    "directories": {
+      "output": "../../release/desktop",
+      "buildResources": "build-resources"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/bindings/**/*",
+      "node_modules/file-uri-to-path/**/*"
+    ],
+    "extraResources": [
+      { "from": "payload/app-server", "to": "app-server" },
+      { "from": "payload/app-server/node_modules", "to": "app-server/node_modules" },
+      { "from": "../../apps/web/dist", "to": "web-dist" },
+      { "from": "payload/seed-plugins", "to": "seed-plugins" }
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "build-resources/icon.ico",
+      "artifactName": "NovelMuse-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "听风细雨",
+      "artifactName": "NovelMuse-Setup-${version}-${arch}.${ext}",
+      "deleteAppDataOnUninstall": false
+    },
+    "portable": {
+      "artifactName": "NovelMuse-Portable-${version}-${arch}.${ext}"
+    }
+  }
+}

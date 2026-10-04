@@ -247,6 +247,39 @@ console.warn(`[Server] HOST_MODE=${hostMode}${process.env.HOST_MODE && hostMode 
   process.on('SIGTERM', () => void closeGracefully('SIGTERM'));
   process.on('uncaughtException', (err) => void handleFatal(err, 'uncaughtException'));
   process.on('unhandledRejection', (reason) => { console.error('[Server] 未处理的 Promise 拒绝（已忽略，不影响服务）:', reason); });
+
+  // ---- stdin 控制通道（桌面端优雅关闭，ADR-0008 D13.3）----
+  // 背景：Windows 上 Node 的 child.kill('SIGTERM'/'SIGINT') 走 TerminateProcess，
+  //   子进程的信号处理器根本不会执行 ⇒ 上面两条 SIGINT/SIGTERM 注册在 Windows 桌面端不可用。
+  // 协议：父进程（Electron 主进程）向子进程 stdin 写入一行 `novelmuse:shutdown\n`，
+  //   本进程按行切分匹配后调用**既有** closeGracefully（语义与实现均不改动）。
+  // 为什么必须保留：sql.js 回退引擎下数据库仅在内存，只有 closeDatabase() 才落盘
+  //   ⇒ 若只能强杀，sql.js 引擎下会丢数据。
+  // 边界：仅在 stdin 不是 TTY（即桌面端 spawn 的 stdio[0]='pipe'）时启用，
+  //   以免改变 `pnpm dev` 等终端交互场景的既有行为；匹配字面量不命中时不做任何事。
+  if (process.stdin.isTTY !== true) {
+    const SHUTDOWN_TOKEN = 'novelmuse:shutdown';
+    let stdinBuf = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk: string) => {
+      stdinBuf += chunk;
+      let nl = stdinBuf.indexOf('\n');
+      while (nl !== -1) {
+        const line = stdinBuf.slice(0, nl).trim();
+        stdinBuf = stdinBuf.slice(nl + 1);
+        if (line === SHUTDOWN_TOKEN) {
+          void closeGracefully('stdin');
+          return;
+        }
+        nl = stdinBuf.indexOf('\n');
+      }
+      // 防御：单行过长时丢弃缓冲，避免无界增长
+      if (stdinBuf.length > 4096) stdinBuf = '';
+    });
+    // stdin 提前关闭（父进程退出）不影响服务运行
+    process.stdin.on('error', () => { /* 忽略 */ });
+    process.stdin.resume();
+  }
 })();
 
 // 兼容导出：宿主实例（测试/工具可访问）
