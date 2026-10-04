@@ -249,7 +249,7 @@ export function OutlineManager() {
         <button
           onClick={handleResetToDefault}
           className="text-xs rounded-xl px-2.5 py-1.5 flex items-center gap-1.5 transition-colors text-muted-foreground hover:bg-muted/60"
-          // ★ 拆长写：`border` 简写会重置 border-image → shuimo 的笔触边框画不出来。
+          // ★ 拆长写：`border` 简写会重置 border-image 相关长写属性。
           //   （2026-09-18 由浮窗面板扫描抓出；全仓同类还有约 59 处，见
           //    .workbuddy/ui-checks/count-inline-borders.mjs 的统计）
           style={{

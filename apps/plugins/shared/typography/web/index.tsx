@@ -161,8 +161,8 @@ function TypographyPanel() {
                 fontWeight: w.value,
                 padding: '8px 4px',
                 // ★ 内联样式优先级最高、与特异性无关 —— 主题里的
-                //   `html[data-theme='shuimo'] button { border-radius: 2px }` 压不过它。
-                //   所以走变量引用 + 原值 fallback：默认主题逐像素不变，shuimo 下归 0。
+                //   外层主题层的 `button { border-radius: … }` 压不过它。
+                //   所以走变量引用 + 原值 fallback：未定义该变量时保持原圆角。
                 borderRadius: 'var(--r-2xs, 8px)',
                 // ★ 必须拆成 longhand！`border: '0.5px solid'` 是**简写**，
                 //   按规范会把 border-image 重置为 none —— 笔触边框就画不出来了。
@@ -194,9 +194,9 @@ function TypographyPanel() {
               onClick={() => update({ ...settings, color: c.value })}
               /* ★ `nm-color-swatch` 是给主题的**显式钩子**：
                  色板的 border 承载「选中」语义（选中 = primary 环），
-                 所以它刻意**不**穿 shuimo 的笔触边框 —— 笔触会盖掉选中环。
+                 所以它刻意**不**加装饰性外框 —— 外框会盖掉选中环。
                  不要依赖 `border` 简写重置 border-image 这个副作用来表达意图，
-                 那是隐式的，改成长写就会静默失效。见 shuimo.css 11.10。 */
+                 那是隐式的，改成长写就会静默失效。 */
               className="nm-color-swatch"
               style={{
                 width: 30,
@@ -253,7 +253,7 @@ function TypographyPanel() {
           <button
             onClick={reset}
             className="flex items-center gap-1 px-2 py-1 text-xs rounded"
-            // ★ 拆长写：`border` 简写会重置 border-image → shuimo 笔触边框画不出来。
+            // ★ 拆长写：`border` 简写会重置 border-image 相关长写属性。
             //   ⚠️ 本文件里「恢复默认」有**两处**（面板一处、设置区一处），
             //   第一轮只改了设置区那个，面板这个漏了 —— 被浮窗面板扫描抓出来。
             //   以后改这种"同款按钮出现多次"的地方，务必 grep 全文数一遍。
@@ -356,7 +356,7 @@ function TypographySettingsSection() {
             persist({ ...DEFAULT_SETTINGS });
           }}
           className="flex items-center gap-1 px-2 py-1 text-xs rounded"
-          // 拆长写：`border` 简写会重置 border-image → shuimo 笔触边框画不出来
+          // 拆长写：`border` 简写会重置 border-image 相关长写属性
           style={{ borderWidth: '0.5px', borderStyle: 'solid', borderColor: 'hsl(var(--border) / 0.6)', color: 'hsl(var(--ink-light))', cursor: 'pointer' }}
         >
           <RotateCcw size={11} /> 恢复默认

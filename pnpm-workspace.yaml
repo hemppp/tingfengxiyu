@@ -17,6 +17,9 @@ blockExoticSubdeps: false
 allowBuilds:
   better-sqlite3: true
   electron: true
+  # 桌面端只用 nsis / portable / dir 目标，不用 squirrel ⇒ 该构建脚本无需运行。
+  # 显式 false（而非省略）是为了消除 ERR_PNPM_IGNORED_BUILDS 预检失败。
+  electron-winstaller: false
   esbuild: true
 onlyBuiltDependencies:
   - better-sqlite3
@@ -54,3 +57,12 @@ overrides:
   esbuild: ^0.28.1
   "@babel/core": ^7.29.7
   postcss>nanoid: ^3.3.18
+  # ★ 2026-10-02 桌面端打包（ADR-0008 D3.3）：app-builder-lib 内嵌的 @electron/get 3.0.0
+  #   缺少 ElectronDownloadCacheMode 导出 ⇒ electron-builder 启动即崩溃。
+  #   唯一有效修复是 overrides（--config.resolutionMode=highest 无效；pnpm 11.8.0 拒绝 --resolution-mode）。
+  "@electron/get": ^3.1.0
+
+minimumReleaseAgeExclude:
+  - dockview-core@8.4.0
+  - dockview@8.4.0
+  - dockview-react@8.4.0

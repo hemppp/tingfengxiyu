@@ -2,10 +2,10 @@
 // CDP 端到端：插件层的「模式分离」在浏览器里真实可见
 //
 // 断言（两种项目模式互斥的 UI 表现）：
-//   · manual 项目 → 工作台出现手写台 UI（功能转轮 + 「角色」面板气泡），
+//   · manual 项目 → 工作台出现手写台**停靠外壳** UI（面板菜单 + 活动栏），
 //                   且**不出现** AI 写作专属 UI（状态栏 / 智能体对话 / 看板）
 //   · auto   项目 → 出现 AutoWriteWorkbench（三栏 / 世界状态仪表盘：状态栏 + 智能体对话 + 看板），
-//                   且**不出现**手写知识面板（功能转轮 / 「角色」气泡）
+//                   且**不出现**手写台停靠外壳（面板菜单 / 活动栏）
 //
 // 为什么必须浏览器级验证：单测只证明「注册表按 mode 过滤」这个纯函数，
 //   证明不了「ProjectLayout 真的在 auto 下不渲染手写气泡、在 manual 下不渲染 AutoWriteWorkbench」。
@@ -40,9 +40,15 @@ const USER = process.env.E2E_USER || 'admin';
 const PASS = process.env.E2E_PASS || 'Admin1234!';
 
 // ---- DOM 标记（与源码一一对应，均已确认全局唯一）----
-// 手写台：ProjectLayout（components/shell/）→ FloatingBubbles（aria-label="功能转轮"）
-//   + WheelBubble（aria-label="打开角色面板"；源码为 `打开${label}面板` 模板拼接）
-const MANUAL_MARKERS = { '功能转轮': '[aria-label="功能转轮"]', '角色气泡': '[aria-label="打开角色面板"]' };
+// 手写台（★ t2 修正 F2）：气泡体系（「功能转轮」+ 卫星气泡）已按 ADR §0.3 / D15 整体退役，
+//   取代形态是**活动栏 / 侧边栏 / 面板菜单**三入口。旧选择器
+//   `[aria-label="功能转轮"]` / `[aria-label="打开角色面板"]` 已不存在于源码 ⇒ 断言恒假。
+//   现改为新外壳的**常驻**标记（两处均经 grep 确认全仓唯一，且只在 manual 分支渲染）：
+//     · 面板菜单 `apps/web/src/components/shell/PanelMenu.tsx:90`（顶栏右侧下拉入口）
+//     · 活动栏   `apps/web/src/components/shell/DockShell.tsx:202`（最左窄条）
+//   为何用这两个而非某个具体面板：它们由 DockShell/PanelMenu **外壳骨架**常驻渲染，
+//   不依赖任何面板被打开；「角色」等面板本体需先经入口打开才存在，不适合当挂载标记。
+const MANUAL_MARKERS = { '面板菜单': '[aria-label="面板菜单"]', '活动栏': '[aria-label="活动栏"]' };
 // AI 写作：AutoWriteWorkbench（aria-label="状态栏"/"智能体对话"/"编辑器标签"）
 // ★ 为什么用「编辑器标签」而不是「看板」：AutoWriteWorkbench 的看板是**标签切换**面板
 //   （正文/看板互斥，见 TabBar variant='unified'），aria-label="看板" 只在**选中看板标签**时才渲染，
@@ -190,12 +196,12 @@ try {
   if (manualId) {
     await send(ws, 'Page.navigate', { url: `${BASE}/project/${manualId}` });
     await sleep(4500);
-    await waitFor(`!!document.querySelector('[aria-label="功能转轮"]')`, 12000);
+    await waitFor(`!!document.querySelector('[aria-label="面板菜单"]')`, 12000);
     const m = await evalJs(markerExpr(MANUAL_MARKERS));
     const a = await evalJs(markerExpr(AUTO_MARKERS));
     console.log('  manual markers:', JSON.stringify(m));
     console.log('  auto   markers:', JSON.stringify(a));
-    check('manual 项目出现手写台标记（功能转轮 + 角色气泡）', countTrue(m) === Object.keys(MANUAL_MARKERS).length,
+    check('manual 项目出现手写台停靠外壳标记（面板菜单 + 活动栏）', countTrue(m) === Object.keys(MANUAL_MARKERS).length,
       `命中 ${countTrue(m)}/${Object.keys(MANUAL_MARKERS).length}: ${JSON.stringify(m)}`);
     check('manual 项目**不出现** AI 写作 UI（状态栏/智能体对话/编辑器标签）', countTrue(a) === 0,
       `误现 ${countTrue(a)} 个: ${JSON.stringify(a)}`);
@@ -225,7 +231,7 @@ try {
     console.log('  manual markers:', JSON.stringify(m));
     check('auto 项目**不出现** AutoWriteWorkbench 标记（实现已移出，0/3）', countTrue(a) === 0,
       `命中 ${countTrue(a)}/${Object.keys(AUTO_MARKERS).length}: ${JSON.stringify(a)}`);
-    check('auto 项目**不出现**手写知识面板（功能转轮/角色气泡）', countTrue(m) === 0,
+    check('auto 项目**不出现**手写台停靠外壳（面板菜单/活动栏）', countTrue(m) === 0,
       `误现 ${countTrue(m)} 个: ${JSON.stringify(m)}`);
   }
 
@@ -257,8 +263,8 @@ if (failed === 0) {
 } else {
   console.log(`❌ e2e-mode-separation：${failed} 项失败`);
   for (const r of results.filter((x) => !x.ok)) console.log(`   · ${r.label} — ${r.detail}`);
-  console.log('   定位：manual 出现 AI UI / auto 出现手写面板 → apps/web/src/components/shell/ProjectLayout.tsx'
-    + '（mode 分流：workbench / chatRail / floatingPanels 三处按 mode 过滤）'
+  console.log('   定位：manual 出现 AI UI / auto 出现手写外壳 → apps/web/src/components/shell/ProjectLayout.tsx'
+    + '（mode 分流：workbench 槽 + 候选池按 mode 过滤）'
     + '、apps/web/src/plugin/registry.ts（条目 modes 标注与 filterByProjectMode）'
     + '、apps/web/src/plugin/moduleEntries.ts（模块入口构建期 glob；模块缺席 ⇒ 不渲染）'
     + '、apps/web/src/plugin/host.ts（ctx 扩展点注册）');

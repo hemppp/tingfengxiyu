@@ -177,7 +177,7 @@ export function BookScanDirectory({ onGoLibrary }: { onGoLibrary: () => void }) 
             <button
               key={b.key}
               onClick={() => setBoard(b.key)}
-              // ★ 选择控件（板块切换），选中态靠 border/bg 表达 → 加 aria-pressed 让 shuimo 显式豁免笔触
+              // ★ 选择控件（板块切换），选中态靠 border/bg 表达 → 加 aria-pressed 让选中态语义显式可读
               aria-pressed={board === b.key}
               className="px-2 py-0.5 rounded-full text-[11px] transition-colors"
               style={board === b.key

@@ -3,7 +3,7 @@
 //
 // 覆盖 7 项核心闭环：
 //   1. 登录 → 进入书架
-//   2. manual 项目 → 打开 → 手写台标记出现（[aria-label="功能转轮"]）
+//   2. manual 项目 → 打开 → 手写台停靠外壳标记出现（[aria-label="面板菜单"] + [aria-label="活动栏"]）
 //   3. auto   项目 → 打开 → AutoWriteWorkbench 标记出现
 //   4. 项目内 创建章节 → 写入正文 → 保存 → **刷新页面 → 正文仍在**（真持久化）
 //   5. 角色/知识库面板可打开并渲染数据（面板渲染 + 无 console error）
@@ -50,8 +50,15 @@ const PASS = process.env.E2E_PASS || 'Admin1234!';
 const TIMEOUT_MS = Number(process.env.E2E_TIMEOUT_MS) || 20000;
 
 // ---- DOM 标记（与源码一一对应，均已确认全局唯一）----
-// 手写台：FloatingBubbles（aria-label="功能转轮"）+ WheelBubble（`打开${label}面板`）
-const MANUAL_MARKERS = { '功能转轮': '[aria-label="功能转轮"]', '角色气泡': '[aria-label="打开角色面板"]' };
+// 手写台（★ t2 修正 F2）：气泡体系（「功能转轮」+ 卫星气泡）已按 ADR §0.3 / D15 整体退役，
+//   取代形态是**活动栏 / 侧边栏 / 面板菜单**三入口。旧选择器
+//   `[aria-label="功能转轮"]` / `[aria-label="打开角色面板"]` 已不存在于源码 ⇒ 断言恒假。
+//   现改为新外壳的**常驻**标记（两处均经 grep 确认全仓唯一，且只在 manual 分支渲染）：
+//     · 面板菜单 `apps/web/src/components/shell/PanelMenu.tsx:90`（顶栏右侧下拉入口）
+//     · 活动栏   `apps/web/src/components/shell/DockShell.tsx:202`（最左窄条）
+//   为何用这两个而非某个具体面板：它们由 DockShell/PanelMenu **外壳骨架**常驻渲染，
+//   不依赖任何面板被打开；「角色」等面板本体需先经入口打开才存在，不适合当挂载标记。
+const MANUAL_MARKERS = { '面板菜单': '[aria-label="面板菜单"]', '活动栏': '[aria-label="活动栏"]' };
 // AI 写作：AutoWriteWorkbench（aria-label="状态栏"/"智能体对话"/"编辑器标签"）
 // ★ 用「编辑器标签」而非「看板」：看板是标签切换面板（默认显示正文时不存在），
 //   而 unified 标签栏的 aria-label="编辑器标签" 是 auto 独有且**常驻**（全仓仅一处 variant='unified'）。
@@ -352,18 +359,18 @@ try {
   if (manualId) created.projects.push(manualId);
   if (autoId) created.projects.push(autoId);
 
-  // ---- 3) manual 项目 → 手写台标记 ----
-  console.log('\n===== 3) manual 项目 → 手写台 =====');
+  // ---- 3) manual 项目 → 手写台停靠外壳标记 ----
+  console.log('\n===== 3) manual 项目 → 手写台停靠外壳 =====');
   if (manualId) {
     await send(ws, 'Page.navigate', { url: `${BASE}/project/${manualId}` });
     await sleep(4000);
-    await waitFor(`!!document.querySelector('[aria-label="功能转轮"]')`, 'manual 功能转轮');
+    await waitFor(`!!document.querySelector('[aria-label="面板菜单"]')`, 'manual 面板菜单');
     const m = await evalJs(markerExpr(MANUAL_MARKERS));
     const a = await evalJs(markerExpr(AUTO_MARKERS));
     console.log('  manual markers:', JSON.stringify(m));
     console.log('  auto   markers:', JSON.stringify(a));
-    check('manual 项目出现手写台标记 [aria-label="功能转轮"]', m?.['功能转轮'] === true, JSON.stringify(m));
-    check('manual 项目出现手写台全部标记（功能转轮 + 角色气泡）',
+    check('manual 项目出现手写台停靠外壳标记 [aria-label="面板菜单"]', m?.['面板菜单'] === true, JSON.stringify(m));
+    check('manual 项目出现手写台全部标记（面板菜单 + 活动栏）',
       countTrue(m) === Object.keys(MANUAL_MARKERS).length,
       `命中 ${countTrue(m)}/${Object.keys(MANUAL_MARKERS).length}: ${JSON.stringify(m)}`);
     check('manual 项目**不出现** AI 写作 UI（模式互斥无泄漏）', countTrue(a) === 0,
@@ -403,7 +410,7 @@ try {
       `命中 ${countTrue(a)}/${Object.keys(AUTO_MARKERS).length}: ${JSON.stringify(a)}`);
     // 4d) 模式互斥仍然成立：不出现手写知识面板
     const m = await evalJs(markerExpr(MANUAL_MARKERS));
-    check('auto 项目**不出现**手写知识面板（模式互斥无泄漏）', countTrue(m) === 0,
+    check('auto 项目**不出现**手写台停靠外壳（模式互斥无泄漏）', countTrue(m) === 0,
       `误现 ${countTrue(m)} 个: ${JSON.stringify(m)}`);
     // 注：console error 断言**已由本脚本末尾的全局断言覆盖**（见 `全流程 console 错误为 0`
     //     一条收集 consoleAPICalled(type=error)+exceptionThrown）。本段刻意不重复添加，
@@ -521,32 +528,33 @@ try {
     //   「造数据的路径」与「断言的读取源」必须是同一条链，否则断言毫无意义。
     const charName = `端到端角色-${stamp}`;
 
-    // 打开功能转轮 → 点「角色」气泡
+    // 打开「角色」面板（★ t2 修正 F2）：旧路径「展开功能转轮 → 点角色气泡」已随气泡体系退役。
+    //   新外壳有两个等价入口，本脚本走**活动栏**（一步到位，最稳）：
+    //     · 活动栏按钮：`DockShell.tsx:212` 渲染 `aria-label={it.label}`，角色面板即 `aria-label="角色"`；
+    //       点击经 `onActivitySelect` → `api.openPanel(key)`（DockShell.tsx:501-513）直接开面板。
+    //     · 面板菜单：先点 `[aria-label="面板菜单"]`，再点 `.panel-menu-item-label` 文本为「角色」的项。
+    //   此处先断言活动栏按钮存在（= 候选池确实按 mode 供给了角色面板），再点它。
     const hub = await evalJs(`(() => {
-      const b = document.querySelector('[aria-label="展开功能转轮"]');
-      if (!b) return 'no-hub';
+      const b = document.querySelector('nav[aria-label="活动栏"] button[aria-label="角色"]');
+      if (!b) return 'no-activity-btn';
       b.click();
       return 'clicked';
     })()`);
-    check('功能转轮可展开（[aria-label="展开功能转轮"]）', hub === 'clicked', String(hub));
+    check('活动栏存在「角色」入口并可点击（nav[aria-label="活动栏"] button[aria-label="角色"]）', hub === 'clicked', String(hub));
     await sleep(900);
-    const bubble = await evalJs(`(() => {
-      const b = document.querySelector('[aria-label="打开角色面板"]');
-      if (!b) return 'no-bubble';
-      b.click();
-      return 'clicked';
-    })()`);
-    check('「角色」气泡可点击（[aria-label="打开角色面板"]）', bubble === 'clicked', String(bubble));
 
     // 面板壳 + 列表内容（面板是懒加载 chunk，等它真的渲染出来）
+    // ★ 面板本体用 `data-panel-key` 定位（DockPanelContent.tsx:107），**不能**用 `[aria-label="角色"]`：
+    //   后者会被活动栏那个同名按钮命中，选择器不唯一（实测全仓 `aria-label="角色"` 来自
+    //   `aria-label={it.label}` 的运行时展开，字面量 grep 为 0）。
     const panel = await waitFor(`(() => {
-      const p = document.querySelector('[aria-label="角色"]');
+      const p = document.querySelector('[data-panel-key="characters"]');
       const lb = document.querySelector('[role="listbox"][aria-label="角色列表"]');
       if (!p || !lb) return '';
       return { panelText: (p.innerText || '').slice(0, 160), listText: (lb.innerText || '').slice(0, 160) };
     })()`, '角色面板渲染');
     console.log('  面板:', JSON.stringify(panel));
-    check('角色面板已打开（[aria-label="角色"] + 角色列表 listbox）', !!panel, JSON.stringify(panel));
+    check('角色面板已打开（[data-panel-key="characters"] + 角色列表 listbox）', !!panel, JSON.stringify(panel));
     // 新项目下应先呈现空态 —— 这同时证明列表确实由 store 驱动（而非硬编码）
     check('新项目的角色列表初始为空态（暂无角色）',
       typeof panel?.listText === 'string' && panel.listText.includes('暂无角色'),
@@ -622,7 +630,9 @@ try {
     if (charPersisted?.id) created.characterIds.push(charPersisted.id);
 
     // 面板不应停留在加载态
-    const stuckLoading = await evalJs(`!!document.querySelector('[aria-label="Loading"]')`);
+    // ★ 加载态选择器（t2 修正）：旧 `[aria-label="Loading"]` 全仓已 0 命中（实测含 node_modules），
+    //   新壳的加载态是 `[aria-label="加载中"]`（ProjectLayout.tsx:72 的 PanelFallback，role="status"）。
+    const stuckLoading = await evalJs(`!!document.querySelector('[aria-label="加载中"]')`);
     check('角色面板未卡在加载态', stuckLoading === false, `loading=${stuckLoading}`);
   }
 

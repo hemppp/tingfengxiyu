@@ -42,7 +42,11 @@ export const BUILTIN_PANELS: FloatingPanelDef[] = [
   { icon: MapPin, label: '地点', key: 'locations', Component: LocationManager, width: 900, height: 800, modes: ['manual'] },
   { icon: Lightbulb, label: '伏笔', key: 'foreshadows', Component: ForeshadowManager, width: 900, height: 800, modes: ['manual'] },
   { icon: Database, label: '物品', key: 'items', Component: ItemManager, width: 900, height: 800, modes: ['manual'] },
-  { icon: Network, label: '关系图', key: 'relationGraph', Component: RelationGraph, width: 900, height: 800, modes: ['manual'] },
+  // ★ 关系图是「重画布」面板：打开时**抢占中心编辑区**（ADR §1.6）——
+  //   声明 `dock:{ center: true, slot: 'center' }` ⇒ DockShell 把它渲染到中心替换槽，
+  //   而不是挤进右侧辅助侧栏（900×800 的图谱在侧栏里没法用）。
+  //   `center` 是显式布尔（裁定见 ADR §1.4），`slot:'center'` 只是建议落位，二者分工不同。
+  { icon: Network, label: '关系图', key: 'relationGraph', Component: RelationGraph, width: 900, height: 800, modes: ['manual'], dock: { center: true, slot: 'center' } },
   { icon: Map, label: '地图', key: 'storyMap', Component: StoryMap, width: 900, height: 800, modes: ['manual'] },
   { icon: Download, label: '导出', key: 'export', Component: ExportDialog, width: 800, height: 700, modes: ['manual'] },
 ] as FloatingPanelDef[];

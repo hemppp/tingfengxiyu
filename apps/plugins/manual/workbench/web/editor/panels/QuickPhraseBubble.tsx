@@ -351,7 +351,7 @@ export function QuickPhraseBubble({ editor }: QuickPhraseBubbleProps) {
                       className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] transition-all hover:scale-105 active:scale-95"
                       style={{
                         background: 'hsl(var(--card) / 0.7)',
-                        // ★ 拆长写：`border` 简写会重置 border-image → shuimo 笔触边框画不出来
+                        // ★ 拆长写：`border` 简写会重置 border-image 相关长写属性
                         borderWidth: '1px',
                         borderStyle: 'solid',
                         borderColor: `color-mix(in srgb, ${config.color} 20%, transparent)`,
