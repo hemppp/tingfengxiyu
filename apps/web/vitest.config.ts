@@ -53,6 +53,22 @@ export default defineConfig({
       '**/.git/**',
       '**/.cache/**',
       '**/e2e/**',
+      // ★ F-1 修复（t2）：**临时探针不得进入默认收集范围**。
+      //   背景：调试 / 证伪用的探针文件曾被放在 `src/components/shell/` 下
+      //   （如 `__scratch_*.test.tsx`、`__scratch__/` 目录），而 `src/**` 是
+      //   默认 include 树 ⇒ 他人恰在该窗口跑 `pnpm test` 会**连带执行**这些
+      //   一次性探针，造成：① 测试数与基线不符、② 探针的**故意失败**断言
+      //   把整个套件染红、③ 证伪结论被误读为产品缺陷。
+      //   故在此**显式排除**两种约定命名：`__scratch__/` 目录与 `__scratch_*` 文件。
+      //   ⚠ 副作用（实测更正，勿凭直觉推断）：vitest 的 CLI 位置参数是**对「已收集
+      //   文件」的过滤**，不是对收集范围的覆盖 ⇒ 被排除的探针连 `vitest run <显式
+      //   路径>` 也跑不起来（报 `No test files found, exiting with code 1`）。
+      //   · **普通**测试文件的显式路径运行**不受影响**（实测 `vitest run
+      //     src/components/shell/dock/DockShell.smoke.test.tsx` → 17 passed, exit 0）。
+      //   · **探针**必须走逃生舱：`--config vitest.probe.config.ts <探针路径>`
+      //     （见 vitest.probe.config.ts；它只放开这两种命名，其余排除项不变）。
+      '**/__scratch__/**',
+      '**/__scratch_*',
     ],
   },
   resolve: {

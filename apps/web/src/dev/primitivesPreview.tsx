@@ -1,7 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import '../styles/globals.css';
-import '../styles/themes.css';
 import {
   ApprovalCard,
   CodeBlock,
@@ -215,12 +214,15 @@ function Gallery() {
 }
 
 function App() {
-  const [theme, setTheme] = React.useState<'light' | 'dark' | 'soot'>('light');
+  // ★ 主题收敛为单档 VS Code Dark Modern（ADR §6.1）：
+  //   原先这里是 'light' | 'dark' | 'soot' 三档切换，'soot' 已随水墨三档一并退役。
+  //   现在只保留明暗两档用于对照 token 是否两套都生效 —— 主题本身无浅色变体，
+  //   所以 'light' 档仅作视觉对照，不代表受支持的主题。
+  const [theme, setTheme] = React.useState<'light' | 'dark'>('dark');
   React.useEffect(() => {
     const root = document.documentElement;
-    root.classList.toggle('dark', theme === 'dark' || theme === 'soot');
-    if (theme === 'soot') root.setAttribute('data-theme', 'soot');
-    else root.removeAttribute('data-theme');
+    root.classList.toggle('dark', theme === 'dark');
+    root.setAttribute('data-theme', 'vscode-dark-modern');
   }, [theme]);
 
   return (
@@ -228,7 +230,7 @@ function App() {
       <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-paper-line bg-paper px-5 py-3">
         <span className="mc-eyebrow">AI 交互原语 · 视觉验证</span>
         <div className="ml-auto flex gap-1.5">
-          {(['light', 'dark', 'soot'] as const).map((t) => (
+          {(['light', 'dark'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTheme(t)}

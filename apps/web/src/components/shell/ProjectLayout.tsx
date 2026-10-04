@@ -1,494 +1,110 @@
-import React, { useState, useEffect, Suspense, useCallback, useRef, useMemo } from 'react';
+// ============================================================
+// ProjectLayout.tsx —— 项目壳（P3 · t4：气泡浮窗 → dockview 停靠系统）
+//
+// 契约真源：docs/architecture/dock-protocol-adr.md
+//   §1.1–1.3  既有 11 字段全部保留；`scope` 语义收窄；`rail` 不再由宿主读取
+//   §1.6      三类内容落位；中心槽默认占用者 = 章节编辑器路由出口
+//   §2.3.2    'nm:open-panel' 迁移（监听体改调 getPanelNavigation().open）
+//   §2.3.3    'nm:open-settings' 保留（navigate(PATHS.settings)）
+//   §3.4      候选池合成 = 内置面板槽 ∪ 插件面板槽，按 key 去重
+//   §4.3      MAX_OPEN_PANELS 退役（已在 stores/panelOpenStore.ts 落地）
+//
+// ## 本次净变化（对照 ADR §0.1「现状」表）
+//   ❌ 删除：`useFloatingPanel` / `FloatingPanelWindow` / `ResizeFrame`
+//            （自研绝对定位浮窗引擎 + 八向缩放，共 ~350 行死代码）
+//   ❌ 删除：`FloatingBubbles`「功能转轮」（罗盘 + 卫星气泡入口）
+//   ❌ 删除：`PanelFallback`（转圈加载壳，浮窗引擎专用）
+//   ✅ 新增：`DockShell`（t3 交付的停靠内核）承载全部面板
+//   ✅ 新增：`PanelMenu`（顶栏下拉菜单）= 活动栏 / 侧边栏之外的第三入口
+//   ✅ 新增：顶栏 + 状态栏的 VS Code Dark Modern 视觉（project-shell.css）
+//
+// ## 保留不变的既有语义（t9 验收逐条对照）
+//   1. `filterByProjectMode` 模式过滤      —— 见下方 §3.4 合池后的过滤
+//   2. auto 模式工作台分支 + WorkbenchMissing 降级 —— 见 `mode === 'auto'` 分支
+//   3. PanelGuard 错误隔离                 —— 已按 §3.4-3 搬进 DockShell
+//                                             （dock/DockPanelContent.tsx 的
+//                                             PanelErrorBoundary），不得留在
+//                                             已删的浮窗引擎里
+//   4. chapters / ai-chat 按 key 取用      —— 降级为**普通面板**（§3.2 决策 3-A），
+//                                             由统一候选池承载，无特殊分支
+//
+// ## 中心槽语义（§1.6）
+//   `<Outlet/>`（章节编辑器路由出口）是**中心槽的默认占用者**，
+//   经 `DockShellProps.centerDefault` 注入；被声明 `dock:{center:true}`
+//   的面板抢占时替换（由 DockShell 内部处理）。
+// ============================================================
+
+import React, { useEffect, useMemo, useCallback, Suspense } from 'react';
 import { Outlet, useNavigate, useParams } from 'react-router-dom';
-import {
-  Settings, LogOut, User,
-  X, Shield, AlertTriangle,
-} from 'lucide-react';
+import { Settings, LogOut, User, Shield, AlertTriangle, Loader2, ArrowLeft } from 'lucide-react';
 import { useProjectStore } from '@/stores';
 import { useReferenceStore } from '@/stores/referenceStore';
-import { InkBackButton } from '@/components/ui/InkBackButton';
 import { useAuthStore } from '@/stores/authStore';
 import { PATHS } from '@/routes/paths';
 import { apiClient } from '@/services/api/apiClient';
 import { useSyncService } from '@/services/data/syncService';
 import type { Project } from '@novel/shared';
-// ★ D37/t4：`LeftSidebar` 的静态 import 已移除 —— 「章节」气泡浮窗改由
-//   manual 模块经 ctx.registerBuiltinBubble({ key: 'chapters' }) 注入（D21），
-//   kernel 只按 key 取注册槽；模块缺席 ⇒ 该气泡不渲染（优雅降级）。
-import { PanelSection } from '@/components/shell/PanelSection';
-import { FloatingBubbles } from '@/components/shell/FloatingBubbles';
-// ★ G-1：工作台缺席占位 —— 契约（packages/core/src/manifest.ts:71 与 plugin-context.ts:450-453）
-//   承诺「某模式的工作台槽为空 ⇒ 渲染 <WorkbenchMissing/>」。修复前这里渲染的是
-//   <PanelFallback/>（永久转圈），把一个**确定缺席**的模块伪装成「加载中」。
-//   本组件此前是全仓死代码（有实现、零导入），此处接线使其生效。
 import { WorkbenchMissing } from '@/components/shell/WorkbenchMissing';
-import { Loader2 } from 'lucide-react';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { DockShell } from '@/components/shell/DockShell';
+import type { DockPanelDef, DockShellApi } from '@/components/shell/dock/types';
+// ★ §1.5：`resolveDockMeta` 是缺省行为的**唯一真源** —— center 判定一律经它取值，
+//   本壳不得自写 `?? false` 兜底（否则与 DockShell 的分桶口径漂移）。
+import { resolveDockMeta } from '@/components/shell/dock/types';
+import { PanelMenu } from '@/components/shell/PanelMenu';
 import { usePluginRegistry, useProjectMode, filterByProjectMode, entryAppliesToProjectMode } from '@/plugin/registry';
-import { usePanelOpenStore } from '@/stores/panelOpenStore';
-import type { FloatingPanelDef, ChatPanelControlProps } from '@/plugin/types';
+import { getPanelNavigation, registerPanelViewOpener, registerPanelViewSync, usePanelOpenStore } from '@/stores/panelOpenStore';
+import type { FloatingPanelDef } from '@/plugin/types';
+import './project-shell.css';
 
-// ★ 浮窗面板已插件化：面板定义在 src/plugin/builtin.ts 注册（12 个内置面板 + 编辑器面板），
-// 这里通过 usePluginRegistry 订阅，宿主只负责渲染/拖拽/限流。
-// 章节与 AI 对话面板不受面板数上限限制（上限在 panelOpenStore）。
+// ★ 面板定义在 src/plugin/builtin.ts 注册（内置 12 面板 + 编辑器面板），
+// 这里通过 usePluginRegistry 订阅；宿主**不再**负责渲染/拖拽/限流 ——
+// 位置、尺寸、标签堆叠、悬浮全部由 DockShell（dockview）承担。
 
-// AI 写作模式的工作台：经 **注册表 `workbench` 槽**（auto 模块 `registerWorkbench` 填充）。
-// ★ D44：kernel 不再硬编码 `import('@novel-plugins/auto-workbench/web')` 说明符 ——
+// ★ AI 写作模式的工作台：经 **注册表 `workbench` 槽**（auto 模块 `registerWorkbench` 填充）。
+//   kernel 不再硬编码 `import('@novel-plugins/auto-workbench/web')` 说明符 ——
 //   那是 vite 静态可解析的模块入口字面量，auto 缺席时 `[vite:load-fallback] ENOENT`
-//   会让 build 硬失败。改由注册表取（模块缺席 ⇒ 槽为空 ⇒ 不渲染，符合 D32-Q3 降级语义）。
+//   会让 build 硬失败。改由注册表取（模块缺席 ⇒ 槽为空 ⇒ 不渲染，降级语义）。
 
+/** 面板内容加载态（Suspense fallback）。VS Code 风格：无边框转圈 + 次级文字。 */
 function PanelFallback() {
   return (
-    <div className="h-full flex items-center justify-center" aria-label="Loading" role="status">
-      <div className="flex flex-col items-center gap-3">
-        <Loader2 className="animate-spin" size={20} style={{ color: '#aeaeb2' }} />
-        <span className="text-[12px]" style={{ color: '#aeaeb2' }}>Loading...</span>
-      </div>
+    <div className="shell-panel-fallback" role="status" aria-label="加载中">
+      <Loader2 size={18} className="dock-spin" style={{ color: 'var(--vscode-descriptionForeground)' }} />
+      <span style={{ fontSize: 12, color: 'var(--vscode-descriptionForeground)' }}>加载中…</span>
     </div>
   );
 }
 
-// 面板级渲染边界：面板组件（内置或插件注册）抛错只隔离在本面板内，
-// 不再冒泡到根 ErrorBoundary 导致整个应用被替换成错误页。重试 = 换 key 重挂。
-function PanelGuard({ label, children }: { label: string; children: React.ReactNode }) {
-  const [attempt, setAttempt] = useState(0);
+/**
+ * 应用级致命错误兜底（根 ErrorBoundary 的 renderError）。
+ * 面板级错误由 DockShell 内部的 PanelGuard 隔离，不会到这里。
+ */
+function ShellFatal({ error }: { error: Error }) {
   return (
-    <ErrorBoundary
-      key={attempt}
-      renderError={function(error) {
-        return (
-          <div className="h-full flex flex-col items-center justify-center gap-3 p-6 text-center overflow-auto">
-            <AlertTriangle size={20} style={{ color: 'var(--state-running, #f59e0b)' }} />
-            <div className="text-[12px]" style={{ color: '#aeaeb2' }}>「{label}」面板组件运行出错，已隔离在本面板内</div>
-            <div className="text-[11px] font-mono break-all max-w-full" style={{ color: 'var(--state-running, #f59e0b)' }}>
-              {String(error.message || error)}
-              <br />
-              {(error.stack || '').split('\n').slice(1, 5).join('\n')}
-            </div>
-            <button
-              type="button"
-              className="nm-btn-mist-soft px-3 py-1 rounded-md text-xs"
-              onClick={() => setAttempt(function (a) { return a + 1; })}
-            >
-              重试
-            </button>
-          </div>
-        );
-      }}
-      fallback={
-        <div className="h-full flex flex-col items-center justify-center gap-3 p-6 text-center">
-          <AlertTriangle size={20} style={{ color: 'var(--state-running, #f59e0b)' }} />
-          <div className="text-[12px]" style={{ color: '#aeaeb2' }}>「{label}」面板组件运行出错，已隔离在本面板内</div>
-          <button
-            type="button"
-            className="nm-btn-mist-soft px-3 py-1 rounded-md text-xs"
-            onClick={() => setAttempt(function (a) { return a + 1; })}
-          >
-            重试
-          </button>
-        </div>
-      }
-    >
-      {children}
-    </ErrorBoundary>
-  );
-}
-
-// ★ 面板内容壳（memo）：props 引用稳定（config 来自插件注册表的常量定义），
-//   抓取/松手/拖拽中任何宿主 state 变化都不再波及内容子树——此前图表/力导向图/
-//   地图等重组件在每次重渲染时被整棵重算，是拖拽起手顿挫的主因。
-//   AI 对话面板例外：chatControls 变化时需要重渲染（开关/技能状态由浮窗层持有）。
-var PanelContent = React.memo(function PanelContent({ config, chatControls }: {
-  config: FloatingPanelDef;
-  chatControls?: ChatPanelControlProps;
-}) {
-  // 宽类型转any：AI 对话面板需要 controls，其余面板组件不接受额外 props（多传无害）
-  var PanelComponent = config.Component as React.ComponentType<any>;
-  return (
-    <Suspense fallback={<PanelFallback />}>
-      <PanelGuard label={config.label}>
-        <PanelComponent {...(chatControls ?? {})} />
-      </PanelGuard>
-    </Suspense>
-  );
-});
-
-// 浮窗拖拽 + 尺寸调整 hook：返回位置/大小、手势状态、容器 ref 与事件处理器
-function useFloatingPanel(
-  initialX: number,
-  initialY: number,
-  sizeOpts?: {
-    w: number; h: number;
-    minW: number; minH: number;
-    maxW: number | (() => number); maxH: number | (() => number);
-    // 章节/聊天等与外部布局联动的窗口：尺寸写入宿主 CSS 变量，布局实时跟随、松手免提交
-    cssVar?: { prefix: string; host: () => HTMLElement | null };
-  }
-) {
-  var [pos, setPos] = useState({ x: initialX, y: initialY });
-  var [dragging, setDragging] = useState<null | {
-    startX: number; startY: number;
-    originX: number; originY: number;
-  }>(null);
-  // 浮窗容器 DOM ref：拖动期间直接写 transform，完全绕过 React 重渲染 → 零迟滞
-  var elRef = useRef<HTMLDivElement | null>(null);
-  // 真理值：拖动中持续更新，松手时再回写 React state
-  var posRef = useRef({ x: initialX, y: initialY });
-
-  // —— 尺寸调整 ——
-  // 直接尺寸模式（插件浮窗）：尺寸先直写 DOM，松手时提交 React state；
-  // cssVar 模式（章节/聊天）：尺寸写入宿主 CSS 变量（编辑器避让等实时跟随），无需提交。
-  var [size, setSize] = useState<{ w: number; h: number } | undefined>(
-    sizeOpts ? { w: sizeOpts.w, h: sizeOpts.h } : undefined
-  );
-  var [resizing, setResizing] = useState(false);
-  var resizeStartRef = useRef<null | {
-    dir: string; startX: number; startY: number;
-    startW: number; startH: number; startPX: number; startPY: number;
-  }>(null);
-
-  // ★ 修复：用 useEffect 同步 pos 到 ref，避免渲染期直接赋值
-  useEffect(function() {
-    posRef.current = pos;
-  }, [pos]);
-
-  // 开始调整大小：记录起点、起始尺寸与起始位置（dir ∈ n/s/e/w/ne/nw/se/sw），
-  // 手势监听由下方 effect 统一挂载
-  var onResizeStart = useCallback(function(e: React.MouseEvent, dir: string) {
-    if (e.button !== 0 || !sizeOpts || !elRef.current) return;
-    e.preventDefault();
-    e.stopPropagation();
-    resizeStartRef.current = {
-      dir: dir,
-      startX: e.clientX,
-      startY: e.clientY,
-      startW: elRef.current.offsetWidth,
-      startH: elRef.current.offsetHeight,
-      startPX: posRef.current.x,
-      startPY: posRef.current.y,
-    };
-    setResizing(true);
-  }, [sizeOpts]);
-
-  var onHeaderMouseDown = useCallback(function(e: React.MouseEvent) {
-    if (e.button !== 0) return;
-    var target = e.target as HTMLElement;
-    if (target.closest('button')) return;
-    setDragging({
-      startX: e.clientX,
-      startY: e.clientY,
-      originX: posRef.current.x,
-      originY: posRef.current.y,
-    });
-    e.preventDefault();
-  }, []);
-
-  // ★ 响应式：窗口缩放时自动钳制浮窗位置，防止面板飘出可视区域
-  // ★ 坐标语义：transform 相对 main（main 顶部在 48px header 之下），因此
-  //   y 的最小钳制值按 main 内坐标取 8（视觉 ≈ header 底缘下 8px），而不是视口的 56
-  useEffect(function() {
-    var onResize = function() {
-      var el = elRef.current;
-      if (!el) return;
-      var w = el.offsetWidth;
-      var maxX = Math.max(8, window.innerWidth - Math.min(w, 80));
-      var maxY = Math.max(8, window.innerHeight - 108); // 视觉下缘留白 60px → main 内坐标再减 header 高 48
-      var cur = posRef.current;
-      var nx = Math.max(8, Math.min(maxX, cur.x));
-      var ny = Math.max(8, Math.min(maxY, cur.y));
-      if (nx !== cur.x || ny !== cur.y) {
-        posRef.current = { x: nx, y: ny };
-        setPos({ x: nx, y: ny });
-      }
-    };
-    window.addEventListener('resize', onResize);
-    return function() { window.removeEventListener('resize', onResize); };
-  }, []);
-
-  useEffect(function() {
-    if (!dragging) return;
-    var d = dragging;
-    var rafId = 0;
-    var pendingX = 0;
-    var pendingY = 0;
-    // 拖拽开始：通知背景层暂停 rAF 循环（BambooLeafFollow 雨效 / InkWash 鸟群）
-    // 这些持续运行的 canvas rAF 与拖拽 transform 更新竞争主线程，是拖拽卡顿的主因
-    document.body.classList.add('nm-dragging-active');
-    var onMove = function(e: MouseEvent) {
-      var dx = e.clientX - d.startX;
-      var dy = e.clientY - d.startY;
-      var newX = d.originX + dx;
-      var newY = d.originY + dy;
-      // 边界约束：保留至少 80px 可见；y 按 main 内坐标钳制（8 = 视觉上贴 header 底缘下 8px，
-      // 此前误用视口坐标 56，导致面板与顶栏之间有一段拖不上去的"空气屏障"）
-      var maxX = window.innerWidth - 80;
-      var maxY = window.innerHeight - 108;
-      pendingX = Math.max(8, Math.min(maxX, newX));
-      pendingY = Math.max(8, Math.min(maxY, newY));
-      // ★ 关键：拖动期间同步直写 DOM（不经 React 重渲染/VDOM diff），
-      // 浮窗位置即时跟随鼠标，彻底消除「迟滞感」
-      if (elRef.current) {
-        elRef.current.style.transform = 'translate3d(' + pendingX + 'px, ' + pendingY + 'px, 0)';
-      }
-      // 仅在 rAF 中同步真理值，绝不在 mousemove 里 setState
-      if (rafId) return;
-      rafId = requestAnimationFrame(function() {
-        rafId = 0;
-        if (posRef.current.x !== pendingX || posRef.current.y !== pendingY) {
-          posRef.current = { x: pendingX, y: pendingY };
-          // ★ rAF 中同步 React state（面板内容已 memo，重渲染只剩廉价窗壳）：
-          //   state 与 DOM 始终一致，拖拽中任何外部 store 触发的重渲染
-          //   都不会再把浮窗闪跳回旧位置
-          setPos(posRef.current);
-        }
-      });
-    };
-    var onUp = function() {
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = 0;
-      // ★ 松手时回写一次 React state，避免后续（其它 state 变化引起的）重渲染跳回旧位置
-      posRef.current = { x: pendingX, y: pendingY };
-      setPos({ x: pendingX, y: pendingY });
-      setDragging(null);
-    };
-    document.body.style.userSelect = 'none';
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-    return function() {
-      if (rafId) cancelAnimationFrame(rafId);
-      document.body.style.userSelect = '';
-      document.body.classList.remove('nm-dragging-active');
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-  }, [dragging]);
-
-  // 调整大小手势：按方向（n/s/e/w 及对角）计算新尺寸；北/西边缘缩放时同步平移位置，
-  // 直写 DOM/CSS 变量（不触发 React 重渲染），松手时提交 React state
-  useEffect(function() {
-    if (!resizing) return;
-    var start = resizeStartRef.current;
-    if (!start || !sizeOpts) {
-      setResizing(false);
-      return;
-    }
-    const s = start; // 闭包内保持非空收窄
-    var maxW = typeof sizeOpts.maxW === 'function' ? sizeOpts.maxW() : sizeOpts.maxW;
-    var maxH = typeof sizeOpts.maxH === 'function' ? sizeOpts.maxH() : sizeOpts.maxH;
-    var pendingW = s.startW, pendingH = s.startH, pendingX = s.startPX, pendingY = s.startPY;
-    var apply = function(w: number, h: number, px: number, py: number) {
-      if (sizeOpts.cssVar) {
-        var host = sizeOpts.cssVar.host();
-        if (host) {
-          host.style.setProperty('--' + sizeOpts.cssVar.prefix + '-w', w + 'px');
-          host.style.setProperty('--' + sizeOpts.cssVar.prefix + '-h', h + 'px');
-        }
-      } else if (elRef.current) {
-        elRef.current.style.width = w + 'px';
-        elRef.current.style.height = h + 'px';
-      }
-      // 北/西边缘：位置随尺寸变化平移（transform 直写，与拖拽同路径）
-      if (elRef.current) {
-        elRef.current.style.transform = 'translate3d(' + px + 'px, ' + py + 'px, 0)';
-      }
-      posRef.current = { x: px, y: py };
-      setPos({ x: px, y: py });
-    };
-    var onMove = function(e: MouseEvent) {
-      var dx = e.clientX - s.startX;
-      var dy = e.clientY - s.startY;
-      var w = s.startW, h = s.startH, px = s.startPX, py = s.startPY;
-      if (s.dir.indexOf('e') >= 0) {
-        w = Math.max(sizeOpts.minW, Math.min(maxW, s.startW + dx));
-      }
-      if (s.dir.indexOf('s') >= 0) {
-        h = Math.max(sizeOpts.minH, Math.min(maxH, s.startH + dy));
-      }
-      if (s.dir.indexOf('w') >= 0) {
-        w = Math.max(sizeOpts.minW, Math.min(maxW, s.startW - dx));
-        px = s.startPX + (s.startW - w);
-      }
-      if (s.dir.indexOf('n') >= 0) {
-        h = Math.max(sizeOpts.minH, Math.min(maxH, s.startH - dy));
-        py = s.startPY + (s.startH - h);
-      }
-      pendingW = w; pendingH = h; pendingX = px; pendingY = py;
-      apply(w, h, px, py);
-    };
-    var onUp = function() {
-      if (!sizeOpts.cssVar) {
-        setSize({ w: pendingW, h: pendingH });
-      }
-      setPos({ x: pendingX, y: pendingY });
-      setResizing(false);
-      document.body.style.userSelect = '';
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-    document.body.style.userSelect = 'none';
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-    return function() {
-      document.body.style.userSelect = '';
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-  }, [resizing, sizeOpts]);
-
-  return {
-    pos: pos, dragging: dragging, resizing: resizing, size: size,
-    elRef: elRef, onHeaderMouseDown: onHeaderMouseDown, onResizeStart: onResizeStart,
-  };
-}
-
-// 单个受限浮窗：内部管理拖拽位置；默认居中显示，多面板按序号错层避免完全重叠
-function FloatingPanelWindow({
-  config, index, onClose,
-}: {
-  config: FloatingPanelDef;
-  index: number;
-  onClose: () => void;
-}) {
-  var resizeCfg = useMemo(function() {
-    return {
-      w: Math.min(config.width || 320, Math.floor(window.innerWidth * 0.92)),
-      h: Math.min(config.height || 240, Math.floor(window.innerHeight * 0.8)),
-      minW: 240,
-      minH: 160,
-      maxW: function() { return Math.floor(window.innerWidth * 0.92); },
-      maxH: function() { return Math.floor(window.innerHeight * 0.8); },
-    };
-  }, [config]);
-  // 居中：水平/垂直都以视口为准（面板锚定在 main 内，main 顶部在 48px header 之下）
-  var defaultX = Math.max(8, Math.round((window.innerWidth - resizeCfg.w) / 2) + index * 24);
-  var defaultY = Math.max(8, Math.round((window.innerHeight - 48 - resizeCfg.h) / 2) + index * 24);
-  var { pos, dragging, resizing, size, elRef, onHeaderMouseDown, onResizeStart } = useFloatingPanel(defaultX, defaultY, resizeCfg);
-  // ★ AI 对话浮窗：功能开关/技能状态由浮窗持有，贴附气泡（左缘）切换
-  var isAiChat = config.key === 'ai-chat';
-  // 气泡栏可被插件接管（chatRail 扩展点）：插件注册优先，宿主内置兜底。
-  // ★ 按当前项目创作模式过滤：不适用于本模式的 chatRail 视同未注册（回退内置气泡栏）。
-  var projectMode = useProjectMode();
-  var pluginChatRailRaw = usePluginRegistry(function(s) { return s.chatRail; });
-  var pluginChatRail = pluginChatRailRaw && entryAppliesToProjectMode(pluginChatRailRaw, projectMode) ? pluginChatRailRaw : null;
-  var [chatControls, setChatControls] = useState({ syncInsert: false, enableTools: false, enableAgent: false, skillId: null as string | null });
-  var chatControlProps: ChatPanelControlProps | undefined = undefined;
-  var aiRail: React.ReactNode = null;
-  if (isAiChat) {
-    const c = chatControls;
-    chatControlProps = {
-      syncInsert: c.syncInsert,
-      enableTools: c.enableTools,
-      enableAgent: c.enableAgent,
-      activeSkillId: c.skillId,
-      onSyncInsertChange: function(v) { setChatControls(function(p) { return { ...p, syncInsert: v }; }); },
-      onEnableToolsChange: function(v) {
-        // 与 Agent 模式互斥
-        setChatControls(function(p) { return { ...p, enableTools: v, enableAgent: v ? false : p.enableAgent }; });
-      },
-      onEnableAgentChange: function(v) {
-        // 与工具调用互斥
-        setChatControls(function(p) { return { ...p, enableAgent: v, enableTools: v ? false : p.enableTools }; });
-      },
-      onActiveSkillChange: function(id) { setChatControls(function(p) { return { ...p, skillId: id }; }); },
-    };
-    const ccp = chatControlProps; // const 窄化进闭包
-    // ★ D32-Q3/t5：kernel 不再提供内置兜底（AiChatBubbleRail 属 auto，静态引用即 K2A）。
-    //   auto 模块经 registerChatRail 注册；未注册 ⇒ 该气泡栏不渲染（优雅降级）。
-    const RailComponent = pluginChatRail?.Component ?? null;
-    if (RailComponent) aiRail = (
-      <RailComponent
-        key={pluginChatRail?.key ?? 'builtin-chat-rail'}
-        syncInsert={ccp.syncInsert}
-        enableTools={ccp.enableTools}
-        enableAgent={ccp.enableAgent}
-        activeSkillId={ccp.activeSkillId}
-        onToggleSync={function() { ccp.onSyncInsertChange(!ccp.syncInsert); }}
-        onToggleTools={function() { ccp.onEnableToolsChange(!ccp.enableTools); }}
-        onToggleAgent={function() { ccp.onEnableAgentChange(!ccp.enableAgent); }}
-        onSkillChange={ccp.onActiveSkillChange}
-      />
-    );
-  }
-
-  return (
-    <div
-      className={`absolute z-30 flex flex-col nm-float-panel-mobile${dragging ? ' is-dragging' : ''}`}
-      ref={elRef}
-      style={{
-        // ★ GPU 友好定位：用 transform 替代 left/top，移动时只触发合成（composite），
-        // 不再触发 layout/reflow，配合 .is-dragging 临时禁用 backdrop-filter 大幅降低拖动开销。
-        // 用 left:0/top:0 锚定基准点，translate3d 的位移才等价于原先的 left/top。
-        // ★ 响应式：宽度用 min(config.width, 92vw) 防止小屏溢出，移动端由 .nm-float-panel-mobile 全屏化
-        left: 0,
-        top: 0,
-        transform: `translate3d(${pos.x}px, ${pos.y}px, 0)`,
-        width: (size ? size.w : resizeCfg.w) + 'px',
-        height: (size ? size.h : resizeCfg.h) + 'px',
-        opacity: dragging ? 0.92 : 1,
-        // 拖拽/缩放中禁用过渡：transform 直写即时跟手
-        transition: dragging || resizing ? 'none' : 'opacity 0.2s ease, transform 0.28s cubic-bezier(0.16, 1, 0.3, 1)',
-        willChange: dragging || resizing ? 'transform' : undefined,
-        pointerEvents: 'auto',
-      }}
-    >
-      {/* ★ AI 对话：功能气泡贴附在浮窗左缘外侧（根 div 是 absolute 定位基准，不受内容区裁剪） */}
-      {aiRail}
-      {/* ★ 插件面板可选的左缘气泡栏（FloatingPanelDef.rail，如自动写作面板旁的技能入口） */}
-      {config.rail ? <config.rail /> : null}
-      <PanelSection
-        title={config.label}
-        icon={config.icon}
-        grow="flex-1"
-        headerHeight={36}
-        collapsed={false}
-        onHeaderMouseDown={onHeaderMouseDown}
-        dragging={!!dragging}
-        headerActions={
-          <button
-            type="button"
-            onClick={onClose}
-            className="nm-btn-apple-icon-sm"
-            title={'关闭' + config.label}
-            aria-label={'关闭' + config.label}
-          >
-            <X size={13} />
-          </button>
-        }
+    <div className="shell-fatal" role="alert">
+      <AlertTriangle size={22} style={{ color: 'var(--vscode-semantic-warning)' }} />
+      <div style={{ fontSize: 13 }}>应用发生错误，已停止渲染</div>
+      <div
+        style={{
+          fontSize: 11,
+          fontFamily: 'var(--vscode-font-family-mono)',
+          wordBreak: 'break-all',
+          maxWidth: 640,
+          color: 'var(--vscode-semantic-error)',
+        }}
       >
-        <PanelContent config={config} chatControls={chatControlProps} />
-      </PanelSection>
-      <ResizeFrame onResizeStart={onResizeStart} label={config.label} />
+        {String(error?.message || error)}
+      </div>
+      <button
+        type="button"
+        className="nm-btn-apple-icon-sm"
+        style={{ padding: '4px 12px', fontSize: 12 }}
+        onClick={function () { window.location.reload(); }}
+      >
+        重新加载
+      </button>
     </div>
-  );
-}
-
-// 八向调整大小手柄：四边 + 四角均可拖拽缩放（北/西方向缩放时窗口位置随之平移）
-function ResizeFrame({ onResizeStart, label }: { onResizeStart: (e: React.MouseEvent, dir: string) => void; label: string }) {
-  var handles = [
-    { dir: 'n', cls: 'top-0 left-3 right-3 h-1.5 cursor-n-resize' },
-    { dir: 's', cls: 'bottom-0 left-3 right-3 h-1.5 cursor-s-resize' },
-    { dir: 'w', cls: 'left-0 top-3 bottom-3 w-1.5 cursor-w-resize' },
-    { dir: 'e', cls: 'right-0 top-3 bottom-3 w-1.5 cursor-e-resize' },
-    { dir: 'nw', cls: 'left-0 top-0 w-3.5 h-3.5 cursor-nw-resize' },
-    { dir: 'ne', cls: 'right-0 top-0 w-3.5 h-3.5 cursor-ne-resize' },
-    { dir: 'sw', cls: 'left-0 bottom-0 w-3.5 h-3.5 cursor-sw-resize' },
-    { dir: 'se', cls: 'right-0 bottom-0 w-3.5 h-3.5 cursor-se-resize' },
-  ];
-  var dirNames: Record<string, string> = { n: '上', s: '下', w: '左', e: '右', nw: '左上', ne: '右上', sw: '左下', se: '右下' };
-  return (
-    <>
-      {handles.map(function(h) {
-        return (
-          <div
-            key={h.dir}
-            className={`absolute ${h.cls} z-20`}
-            onMouseDown={function(e) { onResizeStart(e, h.dir); }}
-            aria-label={`${label}，从${dirNames[h.dir]}边缘拖动调整大小`}
-            title="拖动调整大小"
-          />
-        );
-      })}
-    </>
   );
 }
 
@@ -517,47 +133,118 @@ export function ProjectLayout() {
   var setProject = useProjectStore(function(s) { return s.setProject; });
   var user = useAuthStore(function(s) { return s.user; });
   var logout = useAuthStore(function(s) { return s.logout; });
-  // 受限浮窗开闭状态上移到 store（编辑器内的插件面板栏共享同一份，可开关面板）
+
+  // 打开状态来自 store（编辑器内的插件面板栏共享同一份，可开关面板）
   var openPanelKeys = usePanelOpenStore(function(s) { return s.keys; });
-  var openPanel = usePanelOpenStore(function(s) { return s.open; });
-  var closePanelStore = usePanelOpenStore(function(s) { return s.close; });
+  var activeKey = usePanelOpenStore(function(s) { return s.activeKey; });
+  var syncFromView = usePanelOpenStore(function(s) { return s._syncFromView; });
+  var setActiveKey = usePanelOpenStore(function(s) { return s._setActive; });
 
   // ★ 插件化：面板列表来自插件注册表（内置 12 面板 + 插件新增面板）
   // ★ 按当前项目创作模式过滤：手写台只渲染 manual + shared 面板（auto 面板归 AI 工作台）
   var projectMode = useProjectMode();
   var allFloatingPanels = usePluginRegistry(function(s) { return s.projectPanels; });
-  var floatingPanels = useMemo(function() {
-    return filterByProjectMode(allFloatingPanels, projectMode);
-  }, [allFloatingPanels, projectMode]);
+  // ★ §3.3：扩展点已由 `builtinBubbles` 更名为 `builtinPanels`。读到的是
+  //   `BuiltinPanelDef`（`FloatingPanelDef` 的真子集），**合池后类型天然成立**，
+  //   不再需要 `as unknown as FloatingPanelDef` 双断言（§3.2）。
+  var builtinPanels = usePluginRegistry(function(s) { return s.builtinPanels; });
 
-  // ★ D44：AI 工作台壳经**注册表 `workbench` 槽**取（auto 模块经 ctx.registerWorkbench 填充）。
-  //   模块缺席 ⇒ 槽为空 ⇒ 不渲染该工作台（D32-Q3 降级语义）。
-  //   kernel 侧不再出现 `@novel-plugins/auto-workbench/web` 这一模块入口说明符 ——
-  //   否则 auto 缺席时 vite 在 load-fallback 阶段 ENOENT，build 硬失败。
+  // ★ §3.4 候选池合成（冻结）：内置面板槽 ∪ 插件面板槽，按 key 去重（前者优先）。
+  //   这一条同时修掉了实测缺陷：`'ai-chat'` 全仓 0 注册点 ⇒ 合池前 `chatBubbleDef`
+  //   恒为 null、AI 对话面板**从不渲染**；合池后只要有模块注册 `'ai-chat'` 即自然生效。
+  var candidatePanels = useMemo<FloatingPanelDef[]>(function() {
+    var byKey = new Map<string, FloatingPanelDef>();
+    for (var i = 0; i < builtinPanels.length; i++) {
+      var b = builtinPanels[i];
+      if (!b) continue;
+      // BuiltinPanelDef 字段集 ⊂ FloatingPanelDef（§3.2），此处是**安全的**收窄
+      byKey.set(b.key, {
+        key: b.key,
+        label: b.label ?? b.key,
+        icon: b.icon ?? undefined,
+        Component: b.Component,
+        width: b.width,
+        height: b.height,
+        order: b.order,
+        modes: b.modes,
+      } as FloatingPanelDef);
+    }
+    for (var j = 0; j < allFloatingPanels.length; j++) {
+      var p = allFloatingPanels[j];
+      if (!p) continue;
+      if (!byKey.has(p.key)) byKey.set(p.key, p);
+    }
+    return Array.from(byKey.values());
+  }, [builtinPanels, allFloatingPanels]);
+
+  // ★ 保留语义 1/4：`filterByProjectMode` 模式过滤 —— 函数名与行为均不变
+  var floatingPanels = useMemo(function() {
+    return filterByProjectMode(candidatePanels, projectMode);
+  }, [candidatePanels, projectMode]);
+
+  // ★ §1.2 scope 语义收窄：'editor' → 辅助侧栏；缺省/'workspace' → 主候选池。
+  //   分类真源唯一为 `resolveDockMeta(def).slot`（DockShell 内分桶），
+  //   故本壳**不做** scope 分流，整池透传给 DockShell（避免两处各写一套缺省）。
+  var allShellPanels = useMemo<DockPanelDef[]>(function() {
+    return floatingPanels as DockPanelDef[];
+  }, [floatingPanels]);
+
+  // ★ F1 / §1.6 中心槽抢占：`activeCenterKey` = 「被占用时显示的中心面板 key」
+  //   （null = 中心槽交回 `centerDefault` 的章节编辑器路由出口）。
+  //
+  //   判定口径**与 DockShell 完全一致**：只认 `resolveDockMeta(def).center`（§1.5 唯一真源）。
+  //   本壳不得自写 `?? false` 之类的兜底 —— 那会让宿主与内核的 center 判据各写一份、逐渐漂移。
+  //
+  //   取值优先级（闭环 t9 评审遗留的 F1：原实现硬编码 null，使该能力实际不可达）：
+  //     1. dockview 当前**激活**面板若声明了 center ⇒ 用它（用户正聚焦者抢占中心槽）
+  //     2. 否则回落：已打开的 center 面板中**最近打开**的那个
+  //        （`keys` 为打开顺序，故倒序扫描取首个命中）
+  //     3. 无任何已打开的 center 面板 ⇒ null
+  //   关闭 center 面板后它同时从 `keys` 与 `activeKey` 消失 ⇒ 自然回落 null；
+  //   多个 center 面板并存时，后开者关闭会重新占用先前那个（互斥语义），无需额外状态。
+  //
+  //   ⚠ 本推导是 hook，必须位于下方 `mode === 'auto'` 提前 return **之前**，
+  //     以保证两种创作模式下 hooks 调用顺序完全一致。
+  var defByKey = useMemo(function() {
+    var map = new Map<string, DockPanelDef>();
+    for (var i = 0; i < allShellPanels.length; i++) {
+      var def = allShellPanels[i];
+      if (def) map.set(def.key, def);
+    }
+    return map;
+  }, [allShellPanels]);
+
+  var activeCenterKey = useMemo<string | null>(function() {
+    var isCenterPanel = function(key: string): boolean {
+      var def = defByKey.get(key);
+      return !!def && resolveDockMeta(def).center;
+    };
+    // 1) 激活面板优先（仅当它确实处于已打开集合中）
+    if (activeKey && openPanelKeys.indexOf(activeKey) !== -1 && isCenterPanel(activeKey)) {
+      return activeKey;
+    }
+    // 2) 回落：已打开集合中最近打开的 center 面板
+    for (var i = openPanelKeys.length - 1; i >= 0; i--) {
+      var key = openPanelKeys[i];
+      if (key && isCenterPanel(key)) return key;
+    }
+    // 3) 无 center 面板被打开 ⇒ 中心槽用 centerDefault
+    return null;
+  }, [defByKey, openPanelKeys, activeKey]);
+
+  // ★ 章节 / AI 对话面板：§3.2 决策 3-A —— 取消 ProjectLayout 的 key 硬编码查找，
+  //   降级为**普通面板**，由上面的统一候选池承载，DockShell 对二者无特殊分支。
+  //   「内置面板缺席 ⇒ 不渲染」的优雅降级语义因此天然成立。
+
+  // ★ AI 工作台壳经**注册表 `workbench` 槽**取（auto 模块经 ctx.registerWorkbench 填充）。
+  //   模块缺席 ⇒ 槽为空 ⇒ 不渲染该工作台（降级语义）。kernel 侧不再出现
+  //   `@novel-plugins/auto-workbench/web` 这一模块入口说明符。
   var workbenchSlots = usePluginRegistry(function(s) { return s.workbenches; });
   var activeWorkbench = useMemo(function() {
     var def = workbenchSlots[projectMode] ?? workbenchSlots.shared;
     if (!def) return null;
     return entryAppliesToProjectMode(def, projectMode) ? def : null;
   }, [workbenchSlots, projectMode]);
-
-  // ★ 章节 / AI 对话并入气泡浮窗体系：与功能面板同为「气泡 → 居中浮窗」交互
-  // ★ D21/D37：这两个气泡由**模块经 ctx.registerBuiltinBubble 注册**，kernel 只按
-  //   key 取槽位；模块缺席 ⇒ 槽为空 ⇒ 该气泡不渲染（优雅降级，kernel 无静态 import）。
-  var builtinBubbles = usePluginRegistry(function(s) { return s.builtinBubbles; });
-  var chapterBubbleDef = useMemo<FloatingPanelDef | null>(function() {
-    const def = builtinBubbles.find(function(b) { return b.key === 'chapters'; });
-    return def ? (def as unknown as FloatingPanelDef) : null;
-  }, [builtinBubbles]);
-  var chatBubbleDef = useMemo<FloatingPanelDef | null>(function() {
-    const def = builtinBubbles.find(function(b) { return b.key === 'ai-chat'; });
-    return def ? (def as unknown as FloatingPanelDef) : null;
-  }, [builtinBubbles]);
-  var bubblePanels = useMemo<FloatingPanelDef[]>(function() {
-    return ([chapterBubbleDef, chatBubbleDef].filter(Boolean) as FloatingPanelDef[]).concat(
-      floatingPanels.filter(function(p) { return p.scope !== 'editor'; })
-    );
-  }, [chapterBubbleDef, chatBubbleDef, floatingPanels]);
 
   // ★ 刷新恢复：URL 带有 :bookId 但 store 已重置（currentProject 为 null 或 id 不匹配）时，
   // 从后端拉取项目元数据写回 store。这样刷新 /project/:bookId/:chapterId 不会丢失书籍。
@@ -582,7 +269,7 @@ export function ProjectLayout() {
   var { reload: reloadProjectData } = useSyncService(urlBookId || project?.id);
 
   // ★ 加载参考书：当项目 ID 可用时从后端加载参考书列表
-  // 参考书独立于 syncService 的实体同步，且 ReferenceReader 是惰性加载的浮窗面板，
+  // 参考书独立于 syncService 的实体同步，且 ReferenceReader 是惰性加载的停靠面板，
   // 刷新页面时面板未打开，ReferenceReader 不会挂载，loadBooks 也不会被调用。
   // 因此需要在 ProjectLayout 层面主动加载，确保参考书数据在项目加载时即可用。
   var referenceProjectId = urlBookId || project?.id;
@@ -591,43 +278,73 @@ export function ProjectLayout() {
     useReferenceStore.getState().loadBooks(referenceProjectId);
   }, [referenceProjectId]);
 
-  // 跨组件请求打开浮窗（如 ForeshadowWarning 的"查看"按钮派发 nm:open-panel 事件）
+  // ★ 把 store 的开闭状态桥到 DockShell（视图层）：
+  //   · 打开路径由 getPanelNavigation() 的「执行器注册 + 排队回放」承担（§2.4）
+  //   · 关闭路径（减少集合）无法表示为单个 open 调用，故注册整集合同步回调
+  //   ⇒ 用户点标签 ×、拖走面板等视图层交互，DockShell 经 onOpenChange 回写 store。
+  var dockApiRef = React.useRef<DockShellApi | null>(null);
+  useEffect(function() {
+    var unregisterOpen = registerPanelViewOpener(function(key) {
+      dockApiRef.current?.openPanel(key);
+    });
+    registerPanelViewSync(function(keys) {
+      syncFromView(keys);
+    });
+    return function() {
+      unregisterOpen();
+      registerPanelViewSync(null);
+    };
+  }, [syncFromView]);
+
+  // ★ 跨组件请求打开面板（ForeshadowWarning 的「查看」、正文高亮、AI 生成插件模板…）
+  //
+  //   ⚠ 本事件**不得删除**（ADR D6 / §2.3.2）：apps/server/src/ai/tools/plugin-tools.ts:189
+  //     的 AI 插件生成模板会**永久**为已落盘插件吐 `'nm:open-panel'` 这个字面量，
+  //     已发布的第三方插件也只会发这个事件。前端 4 个派发点（worldbuilding 2 处、
+  //     ForeshadowWarning、LeadCharacterHighlight）**一行不改**。
+  //
+  //   迁移动作（§2.3.2）：回调体从旧的 `openPanel(key)` 改为
+  //   `getPanelNavigation().open(key)`；前置校验逐字保留。
+  //   监听挂载点：**保留在 `ProjectLayout`**（§2.3.2 允许「DockShell 或其父层」二选一）。
+  //     选 ProjectLayout 的理由：它是项目的路由壳，即使 DockShell 尚未 ready
+  //     （dockview 初始化是异步的）事件也不会丢 —— 命令式入口会**静默排队**（§2.4），
+  //     DockShell ready 后回放。挂在 DockShell 内则要额外处理 ready 前的窗口期。
+  //
+  //   退出条件（§2.3.2-5 要求写进代码）：当 apps/server 的模板改为派发新的
+  //     `nm:panel` 事件 **且** 已落盘的第三方插件完成迁移后，才可删除本监听。
+  //     **本重构不满足该条件，故长期保留。**
   useEffect(function() {
     var onOpenPanel = function(e: Event) {
       var key = (e as CustomEvent<{ key: string }>).detail?.key;
       if (!key) return;
-      openPanel(key);
+      getPanelNavigation().open(key);
     };
     window.addEventListener('nm:open-panel', onOpenPanel as EventListener);
-    // ★ D46：跨域「打开设置页」事件桥 —— auto 模块/独立插件包内的技能栏点「添加技能」时派发。
-    //   插件包不依赖 react-router-dom，故经此桥由 kernel 壳导航（与 nm:open-panel 同构）。
+    // ★ D7 / §2.3.3：跨域「打开设置页」事件桥 —— auto 模块/独立插件包内的技能栏
+    //   点「添加技能」时派发。插件包不依赖 react-router-dom，故经此桥由 kernel 壳导航
+    //   （与 nm:open-panel 同构）。实测当前**零派发点**，但属公开契约
+    //   （docs/architecture/web-workbench-split.md:896 有正式记载），保留监听。
     var onOpenSettings = function() { navigate(PATHS.settings); };
     window.addEventListener('nm:open-settings', onOpenSettings as EventListener);
     return function() {
       window.removeEventListener('nm:open-panel', onOpenPanel as EventListener);
       window.removeEventListener('nm:open-settings', onOpenSettings as EventListener);
     };
-  }, [openPanel, navigate]);
-
-  var closePanel = useCallback(function(key: string) {
-    closePanelStore(key);
-  }, [closePanelStore]);
+  }, [navigate]);
 
   var handleLogout = useCallback(async function() {
     await logout();
     navigate(PATHS.login);
   }, [logout, navigate]);
 
-  // ★ 创作模式分流：AI 写作模式走固定工作台 —— 不渲染罗盘气泡，也不挂载任何手写浮窗面板。
+  // ★ 创作模式分流：AI 写作模式走固定工作台 —— 不渲染停靠外壳。
   //   刻意放在所有 hooks 之后，保证两种模式下 hooks 的调用顺序完全一致。
-  //   ★ D44：工作台组件来自注册表槽（auto 模块注册）。模块缺席 ⇒ activeWorkbench 为 null
-  //     ⇒ 不渲染工作台（保留项目壳与返回入口，不伪造兜底实现）。
+  //   ★ 工作台组件来自注册表槽（auto 模块注册）。模块缺席 ⇒ activeWorkbench 为 null
+  //     ⇒ 渲染「AI 写作台未安装」占位（WorkbenchMissing），保留项目壳与返回入口，
+  //       不伪造兜底实现，也**不**用转圈占位（那会让用户永远等待一个不会来的组件）。
+  //     本分支只覆盖 mode==='auto'，手写台（manual）路径不受任何影响。
   if ((project?.mode ?? 'manual') === 'auto') {
     var WorkbenchComponent = activeWorkbench?.Component as React.ComponentType<any> | undefined;
-    // ★ G-1：工作台槽为空 = 该模式对应的模块**确定不在**（auto 模块未安装 / 被剥离），
-    //   渲染「AI 写作台未安装」占位。绝不可以用 <PanelFallback/> —— 那会让用户
-    //   永远转圈等待一个永远不会到来的组件。加载态另由下面的 Suspense fallback 承担。
-    //   本分支只覆盖 mode==='auto'，手写台（manual）路径不受任何影响。
     if (!WorkbenchComponent) return <WorkbenchMissing mode="auto" />;
     return (
       <Suspense fallback={<PanelFallback />}>
@@ -636,126 +353,110 @@ export function ProjectLayout() {
     );
   }
 
+  // 中心槽占用者 `activeCenterKey` 已在上方（提前 return 之前）经
+  // `resolveDockMeta(def).center` 派生 —— 见 F1 / §1.6 注释块。
+
   return (
-    <div
-      className="h-screen flex flex-col overflow-hidden relative"
-    >
-      {/* 液态玻璃环境背景由 App.tsx 全局挂载 */}
-
-      {/* 顶栏：透明（无霜层，融入背景）；功能入口全部在气泡层 */}
-      <header
-        className="relative z-40 grid items-center shrink-0"
-        style={{ height: 48, padding: '0 16px', gridTemplateColumns: '1fr auto 1fr', background: 'transparent' }}
-      >
-        {/* 左侧：返回书架 + 项目名 */}
-        <div className="flex items-center gap-2 justify-self-start">
-          <InkBackButton onClick={handleBack} size={15} label="返回" />
-          <span
-            className="text-[13px] font-semibold select-none cursor-pointer truncate max-w-[120px] sm:max-w-[200px]"
-            style={{ color: 'hsl(var(--foreground))', letterSpacing: '-0.2px' }}
-            onClick={() => navigate(backTarget)}
-            title={backLabel}
-            aria-label={backLabel}
-          >
-            {project ? project.name : '听风细雨'}
-          </span>
-        </div>
-
-        <div />
-
-        <div className="flex items-center gap-1.5 justify-self-end">
-          <button
-            onClick={function() { navigate(PATHS.settings); }}
-            className="nm-btn-apple-icon-sm"
-            title="设置"
-            aria-label="设置"
-          >
-            <Settings size={15} />
-          </button>
-          {user?.isAdmin && (
+    <ErrorBoundary renderError={function(error) { return <ShellFatal error={error} />; }}>
+      <div className="shell-root">
+        {/* 顶栏（§5.3.6）：VS Code titleBar/topBar 视觉，颜色全取 --vscode-* */}
+        <header className="shell-topbar" role="banner">
+          {/* 左侧：返回书架 + 项目名 */}
+          <div className="shell-topbar-left">
+            {/* ★ 返回入口：原 `InkBackButton`（水墨毛笔箭头）已随水墨体系退役（ADR §6.4）。
+                全站返回入口统一改用 lucide 的 `ArrowLeft`（同 AdminPage 的做法），
+                保留原有 onClick 行为与中文无障碍标签。 */}
             <button
-              onClick={() => navigate(PATHS.admin)}
+              type="button"
+              onClick={handleBack}
               className="nm-btn-apple-icon-sm"
-              title="管理员后台"
-              aria-label="管理员后台"
+              title={backLabel}
+              aria-label="返回"
             >
-              <Shield size={15} />
+              <ArrowLeft size={15} aria-hidden="true" />
             </button>
-          )}
-          {user && (
-            <div
-              className="flex items-center gap-1.5 px-2 py-1 rounded-full"
-              style={{
-                color: 'hsl(var(--muted-foreground))',
-                background: 'rgb(var(--glass-tint) / 0.4)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-              }}
+            <span
+              className="shell-topbar-title"
+              onClick={function() { navigate(backTarget); }}
+              title={backLabel}
+              aria-label={backLabel}
             >
-              <div
-                className="w-5 h-5 flex items-center justify-center rounded-full text-white text-[11px] font-semibold"
-                // 墨阶化（2026-09-16）：原为硬编码霁青 #2383C7，是水墨主题里唯一
-                // 还在用的彩色实心块（同批的 BookScanDirectory 已改成浓墨）。
-                style={{ background: 'hsl(var(--ink))' }}
-              >
-                {user.displayName ? user.displayName.charAt(0).toUpperCase() : <User size={10} />}
-              </div>
-              <span className="text-[11px] max-w-[60px] truncate hidden md:inline" style={{ color: 'hsl(var(--muted-foreground))' }}>{user.displayName}</span>
-            </div>
-          )}
-          <button
-            onClick={handleLogout}
-            className="nm-btn-apple-icon-sm"
-            title="登出"
-            aria-label="登出"
-          >
-            <LogOut size={15} />
-          </button>
-        </div>
-      </header>
-
-      {/* 主区：透明背景，让环境层透过 */}
-      <main className="flex-1 flex overflow-hidden relative z-10" style={{ background: 'transparent' }}>
-        {/* 编辑器区域 — 功能面板均为居中浮窗，编辑器不再做边距避让 */}
-        <div
-          className="flex-1 flex flex-col overflow-hidden nm-editor-main"
-          style={{ minWidth: 0 }}
-        >
-          <div className="flex-1 overflow-hidden flex flex-col">
-            <Suspense fallback={<PanelFallback />}>
-              <Outlet />
-            </Suspense>
+              {project ? project.name : '听风细雨'}
+            </span>
           </div>
-        </div>
 
-        {/* 浮窗组（章节 / AI 对话 / 功能面板统一）：最多 MAX_OPEN_PANELS 个，居中显示，可拖拽 + 八向缩放 */}
-        {openPanelKeys.map(function(key, idx) {
-          var config = bubblePanels.find(function(p) { return p.key === key; });
-          if (!config) return null;
-          return (
-            <FloatingPanelWindow
-              key={key}
-              config={config}
-              index={idx}
-              onClose={function() { closePanel(key); }}
-            />
-          );
-        })}
-      </main>
+          <div />
 
-      {/* 功能转轮 — 放在 main 之外（main 的 z-10 层叠上下文会限制内部 z-index），确保真正全局最顶层。
-          待机 = 顶栏中央一颗罗盘泡；悬停花开出全部功能面板（开/关切换） */}
-      <FloatingBubbles
-        panels={bubblePanels}
-        openKeys={openPanelKeys}
-        onToggle={function(key) {
-          if (openPanelKeys.includes(key)) {
-            closePanel(key);
-          } else {
-            openPanel(key);
-          }
-        }}
-      />
-    </div>
+          <div className="shell-topbar-right">
+            {/* ★ 面板菜单 = 退役的功能转轮的替代入口（ADR §0.3） */}
+            <PanelMenu panels={floatingPanels} />
+            <button
+              onClick={function() { navigate(PATHS.settings); }}
+              className="nm-btn-apple-icon-sm"
+              title="设置"
+              aria-label="设置"
+            >
+              <Settings size={15} />
+            </button>
+            {user?.isAdmin && (
+              <button
+                onClick={function() { navigate(PATHS.admin); }}
+                className="nm-btn-apple-icon-sm"
+                title="管理员后台"
+                aria-label="管理员后台"
+              >
+                <Shield size={15} />
+              </button>
+            )}
+            {user && (
+              <div className="shell-user-chip">
+                <div className="shell-user-avatar">
+                  {user.displayName ? user.displayName.charAt(0).toUpperCase() : <User size={10} />}
+                </div>
+                <span className="shell-user-name">{user.displayName}</span>
+              </div>
+            )}
+            <button
+              onClick={handleLogout}
+              className="nm-btn-apple-icon-sm"
+              title="登出"
+              aria-label="登出"
+            >
+              <LogOut size={15} />
+            </button>
+          </div>
+        </header>
+
+        {/* 主区：DockShell 承载全部面板（编辑区 + 四区 + 悬浮 + 标签堆叠 + Splitter） */}
+        <main className="shell-main">
+          <DockShell
+            panels={allShellPanels}
+            centerDefault={<Outlet />}
+            activeCenterKey={activeCenterKey}
+            apiRef={dockApiRef}
+            openKeys={openPanelKeys}
+            onOpenChange={syncFromView}
+            onActiveChange={setActiveKey}
+          />
+        </main>
+
+        {/* 状态栏（§5.3.5）：VS Code 窄条，颜色全取 --vscode-* */}
+        <footer className="shell-statusbar" role="contentinfo">
+          <div className="shell-statusbar-group">
+            <span className="shell-statusbar-item is-remote">
+              {projectMode === 'auto' ? 'AI 写作模式' : '手写模式'}
+            </span>
+            <span className="shell-statusbar-item">
+              {openPanelKeys.length === 0 ? '无打开面板' : openPanelKeys.length + ' 个面板'}
+            </span>
+          </div>
+          <div className="shell-statusbar-group">
+            <span className="shell-statusbar-item">
+              {activeKey ? '焦点：' + activeKey : '无活动面板'}
+            </span>
+          </div>
+        </footer>
+      </div>
+    </ErrorBoundary>
   );
 }

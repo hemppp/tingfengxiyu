@@ -177,7 +177,7 @@ export const ProjectIndexPage: React.FC = () => {
               background: 'hsl(var(--mountain-deep))',
               // ★ 这里原本有内联 `border: 'none'`（2026-09-19 删）：
               //   `border-style: none` 时 **border-image 根本不绘制** →
-              //   shuimo 的笔触边框穿不上（11.6 的元素级规则被静默吃掉）。
+              //   主题层的按钮外框穿不上（元素级规则被静默吃掉）。
               //   删掉无副作用：ink 主题下 Tailwind preflight 本来就是 `border-width: 0`。
               //   ⚠️ 本文件另一处「开始写作」按钮（~316 行）同样处理。
               cursor: 'pointer',
@@ -317,7 +317,7 @@ export const ProjectIndexPage: React.FC = () => {
               fontSize: 13,
               color: 'hsl(var(--card))',
               background: 'hsl(var(--mountain-deep))',
-              // 同「去书架」按钮：删掉内联 `border: 'none'`，否则 shuimo 笔触穿不上
+              // 同「去书架」按钮：删掉内联 `border: 'none'`，否则主题层外框穿不上
             }}
           >
             <Plus size={14} />

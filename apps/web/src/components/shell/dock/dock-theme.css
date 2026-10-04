@@ -1,0 +1,527 @@
+/* ============================================================
+ * dock-theme.css — dockview 主题接线 + VS Code 式外壳骨架（P2 · t3）
+ *
+ * 契约（冻结）：docs/architecture/dock-protocol-adr.md
+ *   §5.5  `.dv-theme-vscode` 把 dockview 的 `--dv-*` 映射到 `--vscode-*`
+ *   §5.6  拖拽预览指示器：落区填充 = --vscode-panel-dropBackground，
+ *         边框 2px solid var(--vscode-focusBorder)，圆角 0
+ *   约定 C-3：**不写 `var(--x, #fff)` 兜底** —— 兜底会让 token 缺失退化为静默错色。
+ *
+ * ⚠️ 本文件**不含任何字面色值**（无 #hex / rgb() / hsl()），全部经 var() 引用。
+ * ⚠️ --dv-* 变量名以实际安装版本 dockview@8.4.0 为准（ADR §5.5 脚注允许改名）。
+ *    本文件底部列出「实际使用的 --dv-* 变量名」清单。
+ * ============================================================ */
+
+/* ---------- §5.5 dockview 主题接线 ---------- */
+.dv-theme-vscode {
+  /* 底色 / 前景 */
+  /* 注：dockview@8.4.0 **没有** `--dv-background-color`（实测 styles/dockview.css 命中 0 次），
+     故此处不声明它。dockview 的底色真源是 `--dv-group-view-background-color`（见下行）。 */
+  --dv-group-view-background-color: var(--vscode-editor-background);
+
+  /* paneview 轮廓 */
+  --dv-paneview-active-outline-color: var(--vscode-focusBorder);
+  --dv-paneview-header-border-color: var(--vscode-border);
+
+  /* 标签条容器（VS Code：活动栏/侧栏色系） */
+  --dv-tabs-and-actions-container-background-color: var(--vscode-tab-inactiveBackground);
+  --dv-tabs-and-actions-container-font-size: 13px;
+  --dv-tabs-and-actions-container-height: 35px;
+
+  /* 标签活动 / 非活动（active group） */
+  --dv-activegroup-visiblepanel-tab-background-color: var(--vscode-tab-activeBackground);
+  --dv-activegroup-hiddenpanel-tab-background-color: var(--vscode-tab-inactiveBackground);
+  --dv-activegroup-visiblepanel-tab-color: var(--vscode-tab-activeForeground);
+  --dv-activegroup-hiddenpanel-tab-color: var(--vscode-tab-inactiveForeground);
+
+  /* 标签（inactive group）：失焦但可见 */
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--vscode-tab-unfocusedActiveBackground);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: var(--vscode-tab-unfocusedInactiveBackground);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--vscode-tab-unfocusedActiveForeground);
+  --dv-inactivegroup-hiddenpanel-tab-color: var(--vscode-tab-unfocusedInactiveForeground);
+
+  /* 分隔 / 边框（能力 7：Splitter 与组间分隔） */
+  --dv-separator-border: var(--vscode-divider);
+  --dv-border-radius: 0px;            /* VS Code 直角 */
+  --dv-tab-border-radius: 0px;        /* VS Code 标签直角 */
+  --dv-sash-border-radius: 0px;
+
+  /* Splitter（sash）—— 8.4.0 语义实测（styles/dockview.css L1447/L1450）：
+     · 空闲态  background-color: var(--dv-sash-color, transparent)          → 中性底
+     · 悬停/按下 background-color: var(--dv-active-sash-color, transparent)  → 焦点蓝
+     故焦点蓝必须赋给 --dv-active-sash-color，空闲态给中性色（否则空闲 Splitter 被染蓝）。 */
+  --dv-sash-color: var(--vscode-splitter-background);
+  --dv-active-sash-color: var(--vscode-sash-hoverBorder);
+
+  /* 能力 5：拖拽落点预览指示器（§5.6 冻结） */
+  --dv-drag-over-background-color: var(--vscode-panel-dropBackground);
+  --dv-drag-over-border-color: var(--vscode-focusBorder);
+  --dv-drag-over-border: 2px solid var(--vscode-focusBorder);
+
+  /* 图标悬停 */
+  --dv-icon-hover-background-color: var(--vscode-toolbar-hoverBackground);
+
+  /* 悬浮组（能力 2）：阴影 + 边框 + 标题栏（VS Code 窗口感） */
+  --dv-floating-box-shadow: 0 8px 24px var(--vscode-widget-shadow);
+  --dv-floating-border: 1px solid var(--vscode-widget-border);
+  --dv-floating-group-border: 1px solid var(--vscode-widget-border);
+  --dv-floating-titlebar-background-color: var(--vscode-titleBar-activeBackground);
+  --dv-floating-titlebar-border-bottom: 1px solid var(--vscode-titleBar-border);
+  --dv-floating-titlebar-height: 30px;
+  --dv-floating-group-dragging-opacity: 0.85;
+
+  /* 上下文菜单 / 下拉（VS Code 菜单色） */
+  --dv-context-menu-background-color: var(--vscode-menu-background);
+  --dv-context-menu-color: var(--vscode-menu-foreground);
+  --dv-dropdown-border-radius: 0px;
+
+  /* 滚动条 */
+  --dv-scrollbar-background-color: var(--vscode-scrollbarSlider-background);
+
+  /* 标签分隔线 / 字体 */
+  --dv-tab-divider-color: var(--vscode-panel-border);
+  --dv-tab-font-size: 13px;
+  --dv-tab-margin: 0px;
+  --dv-tab-margin-block: 0px;
+  --dv-tab-margin-inline: 0px;
+
+  /* 智能参考线 + 边停靠指示 */
+  --dv-smart-guides-color: var(--vscode-focusBorder);
+  --dv-smart-guides-preview-color: var(--vscode-panel-dropBackground);
+  --dv-edge-dock-indicator-color: var(--vscode-focusBorder);
+
+  /* 过渡（能力 5 的预览动画） */
+  --dv-transition-duration: 120ms;
+}
+
+/* ---------- §5.6 拖拽预览指示器：显式对齐 VS Code（直角 + 焦点边框） ---------- */
+.dv-theme-vscode .dv-drop-target,
+.dv-theme-vscode .dv-drop-target-selection,
+.dv-theme-vscode .dv-drop-target-container .dv-drop-target-anchor {
+  border-radius: 0 !important;
+}
+
+/* 落区框：2px 焦点色（VS Code 拖拽预览的视觉签名） */
+.dv-theme-vscode .dv-drop-target > .dv-drop-target-selection {
+  border: 2px solid var(--vscode-focusBorder);
+  background-color: var(--vscode-panel-dropBackground);
+}
+
+/* 标签拖拽插入指示器：细条（tabGroupIndicator='none' 时的兜底视觉） */
+.dv-theme-vscode .dv-tab-drop-indicator,
+.dv-theme-vscode .dv-tabs-container .dv-drop-target-selection {
+  border-radius: 0 !important;
+  background-color: var(--vscode-focusBorder);
+}
+
+/* ---------- 能力 7：Splitter（sash）可拖动 + 视觉反馈 ----------
+   dockview@8.4.0 的 sash 只存在于 `.dv-split-view-container .dv-sash-container .dv-sash`；
+   `.dv-sash` 的父级永远不是悬浮组外层容器 —— 原先那条以悬浮组外层类名起头的选择器
+   永不命中，是死选择器，已删除。
+   悬停/按下态本可由 `--dv-active-sash-color`（上方已赋焦点蓝）承担；
+   此处保留规则以覆盖该变量未被主题解析时的兜底，并让 :active 也高亮。 */
+.dv-theme-vscode .dv-sash-container .dv-sash:not(.disabled):hover,
+.dv-theme-vscode .dv-sash-container .dv-sash:not(.disabled):active {
+  background-color: var(--vscode-sash-hoverBorder);
+}
+
+/* ---------- 外壳骨架（VS Code 网格） ---------- */
+.dock-shell {
+  display: grid;
+  grid-template-columns: 48px 260px minmax(0, 1fr) 240px;
+  grid-template-rows: minmax(0, 1fr) minmax(0, auto) 22px;
+  grid-template-areas:
+    'activity sidebar main    aux'
+    'activity sidebar bottom  aux'
+    'status   status  status  status';
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background-color: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+.dock-shell > .dock-bottom-area {
+  max-height: 240px;
+}
+
+/* --- 活动栏 --- */
+.dock-activity-bar {
+  grid-area: activity;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-top: 6px;
+  background-color: var(--vscode-activityBar-background);
+  color: var(--vscode-activityBar-foreground);
+  border-right: 1px solid var(--vscode-activityBar-border);
+}
+
+.dock-activity-item {
+  width: 48px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.dock-activity-item:hover {
+  color: var(--vscode-activityBar-activeBorder);
+}
+
+.dock-activity-item.is-active {
+  color: var(--vscode-activityBar-activeBorder);
+  background-color: var(--vscode-activityBar-activeBackground);
+  border-left-color: var(--vscode-activityBar-activeBorder);
+}
+
+/* --- 侧边栏 / 辅助侧栏 --- */
+.dock-side-bar {
+  grid-area: sidebar;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  background-color: var(--vscode-sideBar-background);
+  color: var(--vscode-sideBar-foreground);
+  border-right: 1px solid var(--vscode-sideBar-border);
+}
+
+.dock-aux-bar {
+  grid-area: aux;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  background-color: var(--vscode-sideBar-background);
+  color: var(--vscode-sideBar-foreground);
+  border-left: 1px solid var(--vscode-sideBar-border);
+}
+
+.dock-side-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.dock-side-empty {
+  padding: 12px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+/* --- 分区标题条 --- */
+.dock-section-header {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  flex: 0 0 auto;
+  background-color: var(--vscode-sideBarSectionHeader-background);
+  color: var(--vscode-sideBarSectionHeader-foreground);
+  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dock-section-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- 中心编辑区（dockview 宿主） --- */
+.dock-main {
+  grid-area: main;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background-color: var(--vscode-editor-background);
+}
+
+.dockview-host {
+  position: absolute;
+  inset: 0;
+}
+
+.dock-booting {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  background-color: var(--vscode-editor-background);
+  z-index: 1;
+}
+
+.dock-editor-surface,
+.dock-center-slot,
+.dock-panel-body {
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+  overflow: auto;
+  background-color: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+}
+
+.dock-panel-body {
+  background-color: var(--vscode-panel-background);
+  color: var(--vscode-panel-foreground);
+}
+
+/* --- 底部面板区骨架 --- */
+.dock-bottom-area {
+  grid-area: bottom;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background-color: var(--vscode-panel-background);
+  color: var(--vscode-panel-foreground);
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.dock-bottom-hint {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+/* --- 状态栏 --- */
+.dock-status-bar {
+  grid-area: status;
+  align-self: end;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  background-color: var(--vscode-statusBar-background);
+  color: var(--vscode-statusBar-foreground);
+  border-top: 1px solid var(--vscode-statusBar-border);
+  font-size: 12px;
+  z-index: 2;
+}
+
+.dock-status-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dock-status-item {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- 能力 4：标签（堆叠标签的视觉，VS Code 对齐） --- */
+.dock-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  padding: 0 8px;
+  font-size: 13px;
+  white-space: nowrap;
+  color: inherit;
+}
+
+.dock-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  opacity: 0.85;
+}
+
+.dock-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dock-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0;
+  border-radius: 0;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.dv-theme-vscode .dv-tab:hover .dock-tab-close,
+.dv-theme-vscode .dv-active-tab .dock-tab-close {
+  opacity: 0.75;
+}
+
+.dock-tab-close:hover {
+  opacity: 1;
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+/* 活动标签顶部指示条（VS Code 的蓝线签名） */
+.dv-theme-vscode .dv-active-tab {
+  border-top: 1px solid var(--vscode-tab-activeBorderTop);
+}
+
+/* --- 水中图 / 缺省内容 --- */
+.dock-watermark {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--vscode-descriptionForeground);
+  background-color: var(--vscode-editor-background);
+  text-align: center;
+  padding: 24px;
+}
+
+.dock-watermark-title {
+  font-size: 16px;
+  color: var(--vscode-editor-foreground);
+}
+
+.dock-watermark-hint {
+  font-size: 12px;
+  max-width: 360px;
+}
+
+.dock-panel-missing {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  background-color: var(--vscode-panel-background);
+}
+
+.dock-panel-retry {
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 0;
+  border: 1px solid var(--vscode-button-border);
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.dock-panel-retry:hover {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+.dock-spin {
+  animation: dock-spin 1s linear infinite;
+}
+
+@keyframes dock-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- 关系图中心面板（@xyflow/react 承载，D16 无 C++/Qt） --- */
+.dock-graph-panel {
+  height: 100%;
+  width: 100%;
+  background-color: var(--vscode-editor-background);
+}
+
+.dock-graph-panel .react-flow__node {
+  background-color: var(--vscode-editorWidget-background);
+  color: var(--vscode-editorWidget-foreground);
+  border: 1px solid var(--vscode-editorWidget-border);
+  border-radius: 0;
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.dock-graph-panel .react-flow__edge-path {
+  stroke: var(--vscode-editor-foreground);
+}
+
+.dock-graph-panel .react-flow__controls-button {
+  background-color: var(--vscode-editorWidget-background);
+  border-bottom: 1px solid var(--vscode-editorWidget-border);
+  color: var(--vscode-editorWidget-foreground);
+  fill: var(--vscode-editorWidget-foreground);
+}
+
+/* ============================================================
+ * 实际使用的 --dv-* 变量名清单
+ * ------------------------------------------------------------
+ * 依据：dockview@8.4.0 随包的 styles/dockview.css **逐名实测**（非按 ADR 表格抄录）。
+ * 口径：下列名称均在本文件的 .dv-theme-vscode 块中被声明，且能在该 dockview 版本里
+ *       找到消费点；如某版本改名，以实际版本为准（ADR §5.5 脚注允许改名）。
+ * 已排除：`--dv-background-color` —— dockview@8.4.0 中命中 0 次，该版本**不存在**此变量。
+ * --dv-group-view-background-color
+ * --dv-paneview-active-outline-color
+ * --dv-paneview-header-border-color
+ * --dv-tabs-and-actions-container-background-color
+ * --dv-tabs-and-actions-container-font-size
+ * --dv-tabs-and-actions-container-height
+ * --dv-activegroup-visiblepanel-tab-background-color
+ * --dv-activegroup-hiddenpanel-tab-background-color
+ * --dv-activegroup-visiblepanel-tab-color
+ * --dv-activegroup-hiddenpanel-tab-color
+ * --dv-inactivegroup-visiblepanel-tab-background-color
+ * --dv-inactivegroup-hiddenpanel-tab-background-color
+ * --dv-inactivegroup-visiblepanel-tab-color
+ * --dv-inactivegroup-hiddenpanel-tab-color
+ * --dv-separator-border
+ * --dv-border-radius
+ * --dv-tab-border-radius
+ * --dv-sash-border-radius
+ * --dv-sash-color
+ * --dv-active-sash-color
+ * --dv-drag-over-background-color
+ * --dv-drag-over-border-color
+ * --dv-drag-over-border
+ * --dv-icon-hover-background-color
+ * --dv-floating-box-shadow
+ * --dv-floating-border
+ * --dv-floating-group-border
+ * --dv-floating-titlebar-background-color
+ * --dv-floating-titlebar-border-bottom
+ * --dv-floating-titlebar-height
+ * --dv-floating-group-dragging-opacity
+ * --dv-context-menu-background-color
+ * --dv-context-menu-color
+ * --dv-dropdown-border-radius
+ * --dv-scrollbar-background-color
+ * --dv-tab-divider-color
+ * --dv-tab-font-size
+ * --dv-tab-margin
+ * --dv-tab-margin-block
+ * --dv-tab-margin-inline
+ * --dv-smart-guides-color
+ * --dv-smart-guides-preview-color
+ * --dv-edge-dock-indicator-color
+ * --dv-transition-duration
+ * ============================================================ */

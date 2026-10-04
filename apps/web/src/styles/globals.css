@@ -64,8 +64,8 @@
        按"墨浓度"合成三段渐变，`--cover-line` 供 SVG 线条用，`--cover-seal` 是卷印。
 
        ★ 为什么抽成变量（2026-09-18）：这 8 套封面的渐变色值原来是**内联 style**
-         里的硬编码灰阶，主题 CSS 压不动 —— 切到 shuimo（宣纸）主题后，
-         书架页杵着两块深灰卡片，是最扎眼的"没换皮"证据。
+         里的硬编码灰阶，主题 CSS 压不动 —— 换主题后书架页会杵着两块
+         不跟随的深灰卡片，是最扎眼的"没换皮"证据。
 
        ★ 默认值刻意选成与旧灰阶**等价**（旧值 = mix(#1c1c1c P%, #ffffff)，
          P 由 `(255 − T) / 227` 反算），所以默认主题下渲染结果逐像素不变。 */
@@ -87,9 +87,9 @@
          （书名 `rgba(255,255,255,.95)`、作者 `.65`、体裁胶囊 `.18/.25/.92`、
           统计条 `.10/.15/.75`），因为原设计封面下半部被好几条 `fill={ink}`
           的"地面"path 叠成近黑，白字放上去才读得清。
-         shuimo 把封面改成暖调淡纸后，白字实测只有 **4.42:1** ——
+         换暖调淡纸底后，白字实测只有 **4.42:1** ——
          裁剪量像素、半透明前景先合成再算，低于项目 4.5:1 的 AA 门槛。
-         正确解法不是"把封面再压黑"，而是让文字跟着纸走：宣纸底配墨字。
+         正确解法不是"把封面再压黑"，而是让文字跟着纸走：淡底配墨字。
 
        ★ 只用一个变量：`--cover-fg` 表示"封面上的前景色"，
          其余全部用 `color-mix(in srgb, var(--cover-fg) N%, transparent)` 推出来。
@@ -111,7 +111,7 @@
 
     /* 装饰层**额外**的浓度倍率（1 = 原样）。
        和 --cover-wash-scale 的区别：那个管渐变底色，这个只管 SVG 山/云/竹。
-       shuimo 需要"底色淡 + 装饰更淡"（远山如洗），所以要单独一档。
+       浅色封面需要"底色淡 + 装饰更淡"（远山如洗），所以要单独一档。
        无单位数字 —— `% × %` 在 calc 里非法，倍率必须是无单位的。 */
     --cover-decor-alpha: 1;
 
@@ -145,9 +145,22 @@
     --mist-blue: 0 0% 62%;                 /* 中淡墨 */
     --mist-pale: 0 0% 92%;                 /* 淡雾 → 纸灰 */
     --mist-deep: 0 0% 44%;                 /* 深雾 → 重墨偏淡 */
-    --ink: 0 0% 9%;                        /* 焦墨 */
-    --ink-light: 0 0% 38%;                 /* 淡墨 */
-    --ink-pale: 0 0% 58%;                  /* 清墨 */
+    /* ★ 遗留别名（2026-10 停靠重构）：`--ink*` 是水墨主题期的**前景色三元组**，
+       现语义等价于 VS Code Dark Modern 的前景三级 ——
+         --ink        ≈ --vscode-editor-foreground         (L41  hsl(220 14% 85%))
+         --ink-light  ≈ --vscode-panel-foreground          (L74  hsl(220 14% 80%))
+         --ink-pale   ≈ --vscode-input-placeholderForeground(L152 hsl(220 8% 48%))
+       ⚠️ 为什么**只换注释、不删定义**（ADR §6.4 的前提在此不成立，已上报）：
+         这三个名字仍有 **187 处活跃消费点**（`var(--ink)` 72 / `var(--ink-light)` 83 /
+         `var(--ink-pale)` 32），全部是 `hsl(var(--ink…))` 三元组写法，且绝大多数位于
+         `apps/plugins/**`、`apps/web/src/pages/**`、`apps/web/src/components/settings/**`
+         —— 不在本次清理的 writeScope 内。真源 vscode-dark-modern.css **不定义** `--ink*`，
+         所以一旦删除定义，这 187 处会静默失效（无效值 ⇒ 回落继承色），是纯视觉回归。
+       ⇒ 迁移路径：随各消费文件逐步改引 `--vscode-*` 后，再删这三行。
+         迁移完成前，本块是**唯一的** `--ink*` 真源（值仍为 HSL 三元组，勿改成整色值）。 */
+    --ink: 0 0% 9%;                        /* 前景·主 */
+    --ink-light: 0 0% 38%;                 /* 前景·次 */
+    --ink-pale: 0 0% 58%;                  /* 前景·弱 */
     --cinnabar: 0 0% 18%;                  /* 朱砂 → 最重墨 */
     --cinnabar-pale: 0 0% 90%;
     --willow: 0 0% 28%;                    /* 成功/生长 → 浓墨 */
@@ -223,7 +236,7 @@
        原为 6 色高饱和板（#4a90d9 蓝 / #8b5cf6 紫 / #ec4899 粉 / #f97316 橙 /
        #14b8a6 青 / #eab308 黄）+ 3 个事件类型色（#d4a853 金 等）。
        两套色作为「文字压在自身 10% 透明底上」时对比度仅 1.71–3.56:1，全部低于 AA(4.5)，
-       且与黑白水墨主题直接冲突（详见 docs/ui-audit-2026-09-16.md C2）。
+       且与黑白灰主题直接冲突（详见 docs/ui-audit-2026-09-16.md C2）。
 
        改为 8 档墨阶：明度 4%→38%，相邻差 4–5%，灰阶下可区分；
        最浅档（38%）在自身 10% 底上仍有 5.14:1，全部过 AA。
@@ -240,7 +253,7 @@
     /* ============================================================
      * 墨韵工艺层 · Ink Craft Layer（2026-09-18）
      *
-     * 来源：beautifului.dev 的非彩色设计基座，移植到水墨体系上。
+     * 来源：beautifului.dev 的非彩色设计基座，移植到本设计体系上。
      * 目的：把「纸的层级 / 墨的深浅 / 圆角档位 / 投影档位 / 缓动」
      *       从散落的工具类收编成一套**有档位**的令牌，
      *       供 AI 交互面与布局外壳统一取用。
@@ -253,10 +266,9 @@
      *   3. 字号地板：面板内正文/标签下限 11px，关键信息 12px。
      *      与 --tone-* 配套 —— 见文件末尾「排版地板」小节。
      *
-     * ⚠️ **加了新令牌，必须同步补 `themes.css` 的 `html[data-theme="soot"]`**。
-     *    非默认主题只覆盖 globals.css 里 :root/.dark 定义过的变量，
-     *    漏一组就会从 :root 继承**亮色**值 —— 在松烟暗底上表现为
-     *    「悬停变白、次级文字比正文还暗」，即 themes.css 自己警告的"换了一半皮"。
+     * ⚠️ **加了新令牌，必须同步确认它在每一档主题下都有定义**（当前仅
+     *    vscode-dark-modern 单档，即 ui-kit 的 styles/vscode-dark-modern.css）。
+     *    漏一组就会从 :root 继承非预期值，表现为"换了一半皮"。
      *    别名类（--paper / --paper-canvas / --paper-inset / --paper-field）除外，
      *    它们跟着 --card 等自动反相，主题里不要重列。
      * ============================================================ */
@@ -324,7 +336,7 @@
     /* —— 极克制信号色（sig）——
        **本体系唯一的彩色，且只准用于状态指示**（圆点/图标/细线/极小标签底）。
        取法：色相借自该库的状态色，饱和度压到 16–36%（该库 15–20% chroma），
-       明度按水墨调子收紧。禁止用于大面积填充、正文、边框。
+       明度按灰阶调子收紧。禁止用于大面积填充、正文、边框。
        实测：作为 11px 文字压在自身 10% 淡底上，亮色最低 4.57:1 / 暗色最低 5.54:1，全过 AA。 */
     --sig-run: 210 18% 42%;                 /* 进行中 / 思考中 / 流式 */
     --sig-done: 152 16% 34%;                /* 已完成 / 已落库 */
@@ -336,7 +348,7 @@
     --sig-stop-tint: 4 34% 44% / 0.1;
   }
 
-  /* —— 暗色模式（夜墨：纸转入夜，墨转为亮）—— */
+  /* —— 暗色模式（html.dark：底转深，前景转亮）—— */
   .dark {
     --background: 0 0% 7%;                 /* #121212 夜宣 */
     --foreground: 0 0% 94%;                /* 反相焦墨 → 亮墨 */
@@ -357,11 +369,13 @@
     --input: 0 0% 18%;
     --ring: 0 0% 70%;
 
+    /* 遗留别名 `--ink*` 的暗色档（语义见上方 :root 同名的长注释）。
+       三元组必须与亮色档分开声明，否则暗色下 `hsl(var(--ink))` 会拿到亮色的深值。 */
     --ink: 0 0% 94%;
     --ink-light: 0 0% 70%;
     --ink-pale: 0 0% 52%;
 
-    /* 夜墨质感：纸在夜里近乎不显，高光更弱、叠加略高于玻璃期（纸不透明） */
+    /* 暗色质感：底色在暗档下近乎不显，高光更弱、叠加略高于玻璃期（底不透明） */
     --glass-tint: 255 255 255;
     --glass-highlight: 255 255 255;
     --glass-shadow: 0 0% 0%;
@@ -1412,7 +1426,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
    登录/注册页 — 与液态背景呼应的 Hero + 卡片
    ============================================================ */
 
-/* Logo 印章 — 山青渐变圆 + 水墨笔触感 */
+/* Logo 印章 — 圆形渐变底（--mountain-* 已是灰阶，色相恒 0） */
 .nm-logo-seal {
   width: 64px;
   height: 64px;
@@ -1538,83 +1552,6 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   height: 4px;
   background: hsl(var(--mountain-cyan) / 0.5);
   transform: rotate(45deg);
-}
-
-/* ============================================================
-   AmbientBackdrop — 全局环境背景（水墨作画层，2026-09-15 重制）
-   固定铺满视口、z-index:-1、pointer-events:none，由 App.tsx 全局挂载。
-   构成：宣纸基底 → 水墨作画（远山 / 竹枝 / 云气 / 飞白 / 溅墨，见组件内 SVG）
-         → 纸纹噪点。
-   ============================================================ */
-.ambient-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-/* 基底：宣纸色 + 两处大范围淡墨晕 —— 作画层之下的「底水」 */
-.ambient-base {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 62% 52% at 14% 10%, hsl(var(--ink) / 0.05), transparent 68%),
-    radial-gradient(ellipse 54% 46% at 88% 92%, hsl(var(--ink) / 0.042), transparent 70%),
-    linear-gradient(to bottom, hsl(var(--background)) 0%, hsl(var(--background)) 64%, hsl(var(--ink) / 0.035) 100%);
-}
-
-/* ★ 水墨作画层：铺满视口（slice 保证不留边）。
-   整张画是静态的，只做极缓慢横向漂移 —— 像人站在画前轻轻移步；
-   走 translate3d 交合成器，不触发重排/重绘。 */
-.ambient-ink-painting {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  transform: translateZ(0);
-  will-change: transform;
-  animation: ambient-ink-drift 120s ease-in-out infinite alternate;
-}
-
-/* 竹枝极轻摇曳：幅度不到 1 度，几乎察觉不到，只为「活着」 */
-.ambient-ink-bamboo {
-  transform-origin: 40px 300px;
-  animation: ambient-bamboo-sway 14s ease-in-out infinite alternate;
-}
-
-@keyframes ambient-ink-drift {
-  from { transform: translate3d(-0.8%, 0, 0); }
-  to   { transform: translate3d(0.8%, 0, 0); }
-}
-
-@keyframes ambient-bamboo-sway {
-  from { transform: rotate(-0.35deg); }
-  to   { transform: rotate(0.35deg); }
-}
-
-/* 噪点纹理：极低透明度增加纸面质感 */
-.ambient-grain {
-  position: absolute;
-  inset: 0;
-  opacity: 0.035;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-
-/* 系统偏好减少动态时关闭所有背景动画 */
-@media (prefers-reduced-motion: reduce) {
-  .ambient-ink-painting,
-  .ambient-ink-bamboo {
-    animation: none;
-  }
-}
-
-/* ★ 拖拽浮窗时暂停背景持续动画：逐帧变化会让所有玻璃面板的 backdrop-filter
-   缓存失效、逐帧重采样，与拖拽合成抢占 GPU
-   （竹叶雨效已在 JS 侧消费同一 class 暂停）。 */
-body.nm-dragging-active .ambient-ink-painting,
-body.nm-dragging-active .ambient-ink-bamboo {
-  animation-play-state: paused !important;
 }
 
 /* ════ 划词菜单 ════ */
@@ -2152,182 +2089,19 @@ body.nm-dragging-active .ambient-ink-bamboo {
 }
 
 /* ============================================================
- * 毛笔手绘返回按钮（InkBackButton）—— 水墨化 2026-09-15
+ * 全局底色（VS Code Dark Modern）
  *
- * 交互语言借自书法：
- *   hover  → 墨落在纸上「晕开」（径向渐变 + blur 柔边自中心扩散）
- *   active → 笔尖按下后墨点向外「化开」一圈墨环，笔身同时下沉左移
- *   focus  → 墨环替代系统 outline（键盘可达）
- * 全部动效尊重 prefers-reduced-motion。
- * ============================================================ */
-.nm-ink-back {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: none;
-  border-radius: 9999px;
-  background: transparent;
-  color: hsl(var(--ink-light));
-  cursor: pointer;
-  isolation: isolate;
-  -webkit-tap-highlight-color: transparent;
-  transition: color 0.25s ease;
-}
-
-/* 墨迹晕开：自中心向外扩散 */
-.nm-ink-back::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background: radial-gradient(
-    circle at 50% 50%,
-    hsl(var(--ink) / 0.14) 0%,
-    hsl(var(--ink) / 0.07) 45%,
-    transparent 72%
-  );
-  filter: blur(3px);
-  opacity: 0;
-  transform: scale(0.35);
-  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
-}
-
-/* 墨点扩散：按下时一圈墨环向外化开 */
-.nm-ink-back::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  border: 1px solid hsl(var(--ink) / 0.38);
-  opacity: 0;
-  transform: scale(0.72);
-  pointer-events: none;
-}
-
-.nm-ink-back:hover {
-  color: hsl(var(--ink));
-}
-.nm-ink-back:hover::before {
-  opacity: 1;
-  transform: scale(1);
-}
-/* 起笔：笔锋先向左探出一点（返回的方向） */
-.nm-ink-back:hover .nm-ink-back-icon {
-  transform: translateX(-1.5px);
-}
-
-.nm-ink-back:active::before {
-  opacity: 0.92;
-  transform: scale(1.22);
-  transition-duration: 0.12s;
-}
-.nm-ink-back:active::after {
-  animation: nm-ink-ripple 0.62s cubic-bezier(0.16, 1, 0.3, 1);
-}
-/* 落笔：按下时笔身下沉并再向左一点 */
-.nm-ink-back:active .nm-ink-back-icon {
-  transform: translateX(-3px) scale(0.94);
-}
-
-/* 键盘可达：墨环替代 outline */
-.nm-ink-back:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring) / 0.5);
-}
-
-.nm-ink-back:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.nm-ink-back:disabled::before,
-.nm-ink-back:disabled::after {
-  display: none;
-}
-
-.nm-ink-back-icon {
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  transform-origin: 50% 50%;
-}
-
-@keyframes nm-ink-ripple {
-  0%   { opacity: 0.55; transform: scale(0.72); }
-  100% { opacity: 0;    transform: scale(1.65); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .nm-ink-back::before,
-  .nm-ink-back::after,
-  .nm-ink-back-icon { transition: none !important; animation: none !important; }
-}
-
-/* ============================================================
- * 水墨质感层（2026-09-15）
- *
- * 三样东西，全部只用 background-image 实现（不引入图片、不用大面积
- * filter / backdrop-filter，避免滚动掉帧）：
- *   ① 纸纹     —— 两组不同角度的 1px 细线，模拟宣纸纤维
- *   ② 墨晕     —— 两处大范围 radial-gradient，像纸上化开的淡墨
- *   ③ 飞白分隔 —— .nm-ink-divider：中间浓两端淡，替代生硬的 1px 实线
- * 明暗两套独立取值（暗底要把墨"反相"成亮痕，否则看不出纸性）。
+ * 旧实现是「质感层」：细线纹理 + 两处 radial-gradient 墨晕。
+ * 该层随旧主题体系整体退役 —— VS Code 是**平面**编辑器，底色不带纹理。
+ * 现在 body 只铺编辑器底色；纹理由组件自己按需表达（停靠面板 / 标签组）。
  * ============================================================ */
 @layer base {
   body {
-    background-color: hsl(var(--background));
-    background-image:
-      /* ② 墨晕：左上、右下各一团淡墨 */
-      radial-gradient(ellipse 55% 45% at 16% 6%, hsl(var(--ink) / 0.030), transparent 68%),
-      radial-gradient(ellipse 45% 40% at 86% 94%, hsl(var(--ink) / 0.022), transparent 70%),
-      /* ① 纸纹：纵横两组细线 */
-      repeating-linear-gradient(0deg, hsl(var(--ink) / 0.013) 0 1px, transparent 1px 3px),
-      repeating-linear-gradient(90deg, hsl(var(--ink) / 0.009) 0 1px, transparent 1px 4px);
-  }
-
-  .dark body {
-    background-image:
-      radial-gradient(ellipse 55% 45% at 16% 6%, hsl(var(--foreground) / 0.045), transparent 68%),
-      radial-gradient(ellipse 45% 40% at 86% 94%, hsl(var(--foreground) / 0.036), transparent 70%),
-      repeating-linear-gradient(0deg, hsl(var(--foreground) / 0.015) 0 1px, transparent 1px 3px),
-      repeating-linear-gradient(90deg, hsl(var(--foreground) / 0.011) 0 1px, transparent 1px 4px);
+    background-color: var(--vscode-editor-background);
   }
 }
 
 @layer components {
-  /* ③ 飞白分隔线：中间浓、两端淡并渐隐，像毛笔一横的起收 */
-  .nm-ink-divider {
-    height: 1px;
-    border: 0;
-    background-image: linear-gradient(
-      90deg,
-      transparent 0%,
-      hsl(var(--ink) / 0.18) 10%,
-      hsl(var(--ink) / 0.34) 50%,
-      hsl(var(--ink) / 0.18) 90%,
-      transparent 100%
-    );
-  }
-
-  /* 题字式标题：衬线 + 微收字距，像落款。与 .nm-ink-divider 配套使用 */
-  .nm-ink-title {
-    font-family: 'Noto Serif SC', 'Source Han Serif SC', serif;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    color: hsl(var(--ink));
-  }
-
-  /* 笔触感的卡片悬停：抬升同时墨色略深，模拟纸张被拈起 */
-  .nm-ink-lift {
-    transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.32s ease;
-  }
-  .nm-ink-lift:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 26px -12px hsl(var(--ink) / 0.24);
-  }
-
   /* 只读图谱的节点手柄：**藏起来**。
      流程/变动图是给人看的（不能拖出新边），节点边缘挂小圆点纯属噪音。
      为什么写成 `.react-flow__handle.stage-handle` 双类：xyflow 自带的
@@ -2342,11 +2116,6 @@ body.nm-dragging-active .ambient-ink-bamboo {
     border: none;
     background: transparent;
   }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .nm-ink-lift { transition: none !important; }
-  .nm-ink-lift:hover { transform: none; }
 }
 
 /* ============================================================================
@@ -2518,7 +2287,7 @@ body.nm-dragging-active .ambient-ink-bamboo {
 .mc-press:active { transform: scale(0.96); }
 .mc-press-strong:active { transform: scale(0.94); }
 
-/* 焦点环：只用墨线，不用彩色 ring —— 与水墨基调一致 */
+/* 焦点环：只用中性描边，不用彩色 ring —— 与 VS Code Dark Modern 的克制基调一致 */
 .mc-focus:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px hsl(var(--paper-canvas)), 0 0 0 4px hsl(var(--paper-line-strong));

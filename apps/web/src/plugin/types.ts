@@ -13,6 +13,14 @@ import type {
   SettingsCategory as CoreSettingsCategory,
   PluginMode,
 } from '@novel/core/web';
+// ★ ADR §1.4/§1.5 的 dock 元数据类型：单一真源在停靠内核侧
+//   （`components/shell/dock/types.ts`，t3 交付）。这里**只做类型再导出**，
+//   不复制定义 —— `dock/types.ts` 属 out-of-scope，不能反向 import 插件层，
+//   故由本文件作为「插件可见的类型面」把它转发出去。
+//   `import type` ⇒ 零运行时依赖，不会把 dockview 拖进插件包。
+//   ⚠ 缺省值的真源仍是 `resolveDockMeta()`；本文件**不**复刻缺省表（ADR §1.5）。
+export type { FloatingPanelDockMeta } from '@/components/shell/dock/types';
+import type { FloatingPanelDockMeta } from '@/components/shell/dock/types';
 
 // ---- 具体化类型（组件层使用，icon/Component 用真实类型）----
 
@@ -43,8 +51,31 @@ export interface FloatingPanelDef {
    * 手写模式的浮窗面板不使用此字段。
    */
   group?: 'live' | 'data';
-  /** 浮窗左缘外侧贴附的功能气泡栏（绝对定位由组件自理，参照 AI 对话气泡栏） */
+  /**
+   * 浮窗左缘外侧贴附的功能气泡栏。
+   *
+   * ★ ADR §1.3 冻结（渲染位置迁移）：字段**保留不删**（第三方插件不炸），
+   *   但**宿主不再读取它** —— dockview 面板的根 div 不是插件可预测的定位基准
+   *   （拖动 / 停靠 / 悬浮三种形态下 DOM 结构不同），继续依赖外层定位会让 rail
+   *   在停靠态错位。需要 rail 的面板请在其自己的 `Component` **内部**渲染，
+   *   由组件自理定位。未声明 ⇒ 无任何渲染（本就如此）。
+   */
   rail?: React.ComponentType;
+  /**
+   * ★ P0 新增（ADR §1.4）：停靠布局元数据，**全字段可选**。
+   *
+   * 缺省 `undefined` ⇒ 等价于 `{}` ⇒ 全部走 ADR §1.4「缺省行为」列，
+   * 即 `slot:'right' / defaultOpen:false / allowMultiple:false / closable:true /
+   * floatable:true / minSize:240×160 / center:false`，`floatingSize` 回落
+   * 顶层 `width`/`height` → `1024×720`。
+   *
+   * ⚠ 缺省行为的**唯一真源**是 `DockShell` 内的 `resolveDockMeta()` 纯函数
+   *   （`components/shell/dock/types.ts`）。消费方一律经它取值，
+   *   **不得**在此类型旁再写一份 `?? 默认值`（ADR §1.5 冻结）。
+   *
+   * 因此本字段是**纯可选新增** ⇒ 既有插件注册代码 100% 向后兼容。
+   */
+  dock?: FloatingPanelDockMeta;
   /** 适用创作模式，见 PluginMode */
   modes?: PluginMode[];
 }
@@ -177,8 +208,18 @@ export interface WorkbenchDef {
   Component: React.ComponentType<any>;
 }
 
-/** 内核内置气泡浮窗定义（registerBuiltinBubble）；按 key 键控多槽 */
-export interface BuiltinBubbleDef {
+/**
+ * 内核内置面板槽定义（ADR D9 / §3.3）。
+ *
+ * ★ 更名历史：原名 `BuiltinBubbleDef`。「bubble（气泡）」是本次重构退役的
+ *   **UI 形态词**（ADR §0.3：功能转轮退役），继续用它命名扩展点会让下游
+ *   误以为要保留气泡。类型更名，槽位本身作为扩展点保留。
+ *
+ * 字段集是 `FloatingPanelDef` 的**真子集**（少 `scope/rail/group/dock`），
+ * 因此合池时无需 `as unknown as FloatingPanelDef` 双断言（ADR §3.2）。
+ * 按 key 键控多槽：`'chapters'`（manual 模块）、`'ai-chat'`（auto 模块，待补）。
+ */
+export interface BuiltinPanelDef {
   key: string;
   Component: React.ComponentType<any>;
   icon?: LucideIcon;
@@ -188,3 +229,6 @@ export interface BuiltinBubbleDef {
   order?: number;
   modes?: PluginMode[];
 }
+
+/** @deprecated ADR D9：改名 `BuiltinPanelDef`。别名仅为兼容已发布插件。 */
+export type BuiltinBubbleDef = BuiltinPanelDef;

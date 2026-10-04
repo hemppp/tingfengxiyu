@@ -1,0 +1,357 @@
+/* ============================================================
+ * project-shell.css — ProjectLayout 宿主壳的 VS Code Dark Modern 视觉
+ *                    （P3 · t4）
+ *
+ * 契约：docs/architecture/dock-protocol-adr.md
+ *   §5.3.6 `--vscode-titleBar-*` / `--vscode-topBar-background`   （顶栏）
+ *   §5.3.5 `--vscode-statusBar-*`                                （状态栏）
+ *   §5.3.9 `--vscode-button-*` / `--vscode-toolbar-*`            （按钮）
+ *   §5.3.12 `--vscode-list-*`                                    （面板菜单项）
+ *   约定 C-3：**不写 `var(--x, #fff)` 兜底** —— 兜底会让 token 缺失退化为静默错色。
+ *   约定 C-2：token 真源唯一 = ui-kit 的 styles/vscode-dark-modern.css；
+ *             本文件**不定义任何 `--vscode-*`**（需要新 token 就往真源加，并上报）。
+ *
+ * ⚠️ 本文件不含任何字面色值（无 #hex / rgb() / hsl()），全部经 var() 引用。
+ * ⚠️ 类名沿用 `nm-*` / 新增 `shell-*`（ADR D15：保留类名、只换值）。
+ * ============================================================ */
+
+/* ---------- 宿主根：铺满 + 深色底（不再依赖液态玻璃环境层） ---------- */
+.shell-root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  background-color: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+/* ---------- 顶栏（§5.3.6 titleBar / topBar） ---------- */
+.shell-topbar {
+  position: relative;
+  z-index: 40;
+  display: grid;
+  align-items: center;
+  flex: 0 0 auto;
+  height: 35px;
+  padding: 0 10px;
+  grid-template-columns: 1fr auto 1fr;
+  background-color: var(--vscode-topBar-background);
+  color: var(--vscode-titleBar-activeForeground);
+  border-bottom: 1px solid var(--vscode-titleBar-border);
+}
+
+.shell-topbar-left,
+.shell-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.shell-topbar-left {
+  justify-self: start;
+}
+
+.shell-topbar-right {
+  justify-self: end;
+}
+
+/* 项目名：VS Code 标题栏文字量级 */
+.shell-topbar-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: var(--vscode-titleBar-activeForeground);
+  cursor: pointer;
+  user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+
+@media (min-width: 640px) {
+  .shell-topbar-title {
+    max-width: 220px;
+  }
+}
+
+/* 顶栏图标按钮：VS Code 工具栏悬停底（§5.3.9） */
+.shell-topbar-right .nm-btn-apple-icon-sm,
+.shell-topbar-left .nm-btn-apple-icon-sm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vscode-titleBar-activeForeground);
+  cursor: pointer;
+}
+
+.shell-topbar-right .nm-btn-apple-icon-sm:hover,
+.shell-topbar-left .nm-btn-apple-icon-sm:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.shell-topbar-right .nm-btn-apple-icon-sm:active,
+.shell-topbar-left .nm-btn-apple-icon-sm:active {
+  background-color: var(--vscode-toolbar-activeBackground);
+}
+
+.shell-topbar-right .nm-btn-apple-icon-sm:focus-visible,
+.shell-topbar-left .nm-btn-apple-icon-sm:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+/* 用户徽标：VS Code 状态栏「醒目项」色块（§5.3.5 / §5.3.3） */
+.shell-user-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 6px 1px 2px;
+  border-radius: 10px;
+  background-color: var(--vscode-activityBar-activeBackground);
+  color: var(--vscode-sideBar-foreground);
+}
+
+.shell-user-avatar {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vscode-activityBarBadge-foreground);
+  background-color: var(--vscode-activityBarBadge-background);
+}
+
+.shell-user-name {
+  font-size: 11px;
+  color: var(--vscode-sideBar-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 72px;
+}
+
+@media (max-width: 767px) {
+  .shell-user-name {
+    display: none;
+  }
+}
+
+/* ---------- 主区：DockShell 占满剩余空间 ---------- */
+.shell-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+  z-index: 10;
+  background-color: var(--vscode-editor-background);
+}
+
+.shell-main > .dock-shell {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ---------- 状态栏（§5.3.5） ---------- */
+.shell-statusbar {
+  flex: 0 0 auto;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 8px;
+  background-color: var(--vscode-statusBar-background);
+  color: var(--vscode-statusBar-foreground);
+  border-top: 1px solid var(--vscode-statusBar-border);
+  font-size: 12px;
+}
+
+.shell-statusbar-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* 状态项：悬停 / 按下底（§5.3.5 statusBarItem-*） */
+.shell-statusbar-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+button.shell-statusbar-item {
+  cursor: pointer;
+}
+
+button.shell-statusbar-item:hover {
+  background-color: var(--vscode-statusBarItem-hoverBackground);
+}
+
+button.shell-statusbar-item:active {
+  background-color: var(--vscode-statusBarItem-activeBackground);
+}
+
+.shell-statusbar-item.is-prominent {
+  background-color: var(--vscode-statusBarItem-prominentBackground);
+  color: var(--vscode-statusBar-foreground);
+}
+
+.shell-statusbar-item.is-remote {
+  background-color: var(--vscode-statusBarItem-remoteBackground);
+  color: var(--vscode-statusBar-foreground);
+}
+
+/* ---------- 面板菜单（功能转轮的替代入口，ADR §0.3） ---------- */
+.panel-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.panel-menu-trigger {
+  position: relative;
+}
+
+.panel-menu-caret {
+  margin-left: -1px;
+  opacity: 0.8;
+}
+
+.panel-menu-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 60;
+  min-width: 200px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 4px 0;
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 0;
+  background-color: var(--vscode-menu-background);
+  color: var(--vscode-menu-foreground);
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow);
+}
+
+.panel-menu-header {
+  padding: 4px 12px 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.panel-menu-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 菜单项：VS Code 列表悬停 / 选中（§5.3.12） */
+.panel-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.panel-menu-item:hover {
+  background-color: var(--vscode-list-hoverBackground);
+  color: var(--vscode-list-hoverForeground);
+}
+
+.panel-menu-item.is-active {
+  background-color: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.panel-menu-item:focus-visible {
+  outline: 1px solid var(--vscode-list-focusOutline);
+  outline-offset: -1px;
+}
+
+.panel-menu-item-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  /* 注意：VS Code 的 `--vscode-icon-foreground` 尚未进 token 真源
+     （ui-kit/src/styles/vscode-dark-modern.css），按约定 C-2/C-3
+     不得在此补定义、也不得写兜底 —— 暂用已存在的菜单前景色。 */
+  color: var(--vscode-menu-foreground);
+}
+
+.panel-menu-item-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel-menu-item-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background-color: var(--vscode-activityBarBadge-background);
+}
+
+/* ---------- 应用级 ErrorBoundary 兜底（无水墨字样） ---------- */
+.shell-fatal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100vh;
+  padding: 24px;
+  text-align: center;
+  background-color: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+}
+
+/* ---------- 工作台缺席占位（保留既有降级语义） ---------- */
+.shell-workbench-missing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 100vh;
+  padding: 24px;
+  text-align: center;
+  background-color: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+}

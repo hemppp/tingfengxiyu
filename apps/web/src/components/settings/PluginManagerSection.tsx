@@ -64,12 +64,12 @@ interface PluginListResponse {
 /* ★ 状态色改用项目 token（2026-09-19）
  *
  * 原先硬编码 Tailwind 调色板（`#22c55e` 绿 / `#ef4444` 红 / `#f59e0b` 琥珀 / `#94a3b8` 灰）。
- * 而项目**早就有状态色 token**，而且 **shuimo 主题用「传统色」覆盖了它们**：
- *   --state-idle:    0 0% 45%        （shuimo 下仍是中性）
+ * 而项目**早就有状态色 token**，由主题层统一提供：
+ *   --state-idle:    中性档          （明度区分，不靠色相）
  *   --state-running: 219 45% 32%     （花青）
  *   --state-done:    120 30% 36%     （翠微）
  *   --state-blocked: 355 72% 42%     （大繎）
- * ⇒ 硬编码就等于**绕过主题**，切到 shuimo 后仍是 Tailwind 绿/红/琥珀。
+ * ⇒ 硬编码就等于**绕过主题**，换主题后仍是 Tailwind 绿/红/琥珀。
  *
  * ★ 写法用 `var(--token, 原色)` —— 与项目既有先例一致
  *   （见 `ai/SkillSwitch.tsx`：`hsl(var(--state-done, 142 71% 45%))`）：
@@ -77,7 +77,7 @@ interface PluginListResponse {
  *
  * ⚠️ 映射说明：项目只有 4 个 state token，而这里的状态有 7 个 ——
  *   `skipped` / `quarantined`（警告）没有专门的 token，映射到 `--state-running`
- *   （shuimo 下是花青蓝，读作"需要注意"），比硬留一个 Tailwind 琥珀更一致。 */
+ *   （语义色读作"需要注意"），比硬留一个 Tailwind 琥珀更一致。 */
 const STATUS_META: Record<PluginItem['status'], { label: string; color: string }> = {
   ok: { label: '运行中', color: 'var(--state-done, #22c55e)' },
   disabled: { label: '已禁用', color: 'var(--state-idle, #94a3b8)' },

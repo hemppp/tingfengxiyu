@@ -1,0 +1,28 @@
+/* ============================================================
+ * dock-tokens.css — 兼容转发层（P2 · t3 原始产物，captain 归并后）
+ *
+ * ## 为什么这个文件还在
+ *   P2（t3）交付 DockShell 时，其 inScope 不含 ui-kit，故在 dock/ 下按
+ *   ADR §5.3 冻结值自足维护了一份 token 副本，以满足「无硬编码」验收。
+ *
+ *   归并时发现：副本与真源**并非逐字一致** —— 两者各缺一部分变量
+ *   （真源 104 个、副本 117 个；副本独有 13 个，含 --vscode-font-* /
+ *   --vscode-menu-* / --vscode-tab-unfocused* 等）。两处都定义 :root，
+ *   而本文件经 DockShell.tsx 在组件内 import（晚于 main.tsx 的真源），
+ *   因此**副本会覆盖真源**，且副本缺真源的变量 —— 这是真实的静默错色，
+ *   不是「待清理的重复」。
+ *
+ *   修复：真源（ADR §5.1 唯一真源）上收副本独有的 13 个定义；
+ *   本文件退化为纯转发，不再自行定义任何 token。
+ *
+ * ## 保留本文件的原因
+ *   ① 不破坏 t3 的 inScope 与既有 import 路径（DockShell.tsx:41 仍引用它）；
+ *   ② 保留一层间接，将来若要拆分 dock 专属 token 有落点；
+ *   ③ @import 在 CSS 中是幂等的 —— 与真源重复加载不会产生副作用。
+ *
+ * ## 约束
+ *   本文件**不得**写入任何 --vscode-* 定义或字面色值。
+ *   一切色值真源：@novel-plugins/ui-kit/styles/vscode-dark-modern.css
+ * ============================================================ */
+
+@import '@novel-plugins/ui-kit/styles/vscode-dark-modern.css';

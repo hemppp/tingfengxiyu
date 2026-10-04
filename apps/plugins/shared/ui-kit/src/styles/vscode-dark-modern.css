@@ -1,0 +1,262 @@
+/* ============================================================
+ * VS Code Dark Modern · 全局主题 token 层（P1 / t2 落地）
+ *
+ * 契约真源：docs/architecture/dock-protocol-adr.md §5（冻结）
+ *   · §5.1 定义位置与作用域：:root 与 html.dark 双写；不得定义在组件作用域
+ *   · §5.2 命名空间：--vscode-<surface>-<role>[-<state>] / --vscode-semantic-<name>
+ *   · §5.3 完整变量清单（13 组 90+ 变量，逐条对齐验收要求）
+ *
+ * ## 为什么放在 ui-kit 而不是 apps/web
+ *   @novel-plugins/ui-kit 是 kernel / manual / auto 三侧共用包，本文件由
+ *   `apps/web/src/main.tsx` 在 globals.css 之前引入。因为 token 定义在
+ *   `:root` / `html.dark`（全局作用域），**任何插件包无需 import 本文件**
+ *   即可在 `var(--vscode-editor-background)` 中拿到值（ADR 约定 C-1）。
+ *
+ * ## 三条硬约定（ADR §5.4，t2/t5/t10 共同验收）
+ *   C-1 继承：token 在 :root / html.dark，插件零配置可用。
+ *   C-2 禁止硬编码：apps/plugins/** 不得出现新的字面色值，一律走 var(--vscode-*)。
+ *   C-3 失败降级：消费点**不许**写 `var(--vscode-x, #fff)` 兜底 —— 兜底会把
+ *       「token 缺失」退化成静默错色；要么直连 token，要么回 ui-kit 补 token。
+ *   C-4 Tailwind：apps/web/tailwind.config.js 的 colors 追加 vscode 子集。
+ *
+ * ## 取值形态（ADR §5.1 冻结）
+ *   一律**完整颜色值**（`hsl(220 13% 13%)`），不用 `H S% L%` 三元组。
+ *   理由：三元组要求每个消费点都记得包 `hsl()`，插件作者极易写成
+ *   `background: var(--vscode-editor-background)` 得到非法值。
+ *   允许用 color-mix() 在派生处做半透明混合。
+ *
+ * ## 为什么 :root 与 html.dark 都写
+ *   VS Code Dark Modern 本身即暗色主题，没有浅色变体，所以 :root 直接就是暗值
+ *   （与主题契约「默认 mode = dark、lockedMode = dark」一致，见 ADR §6.3）。
+ *   双写是为了让 `html.dark` **单独生效**也成立 —— 若将来有页面只挂 .dark
+ *   而不经过 themeStore，外观仍然正确。
+ * ============================================================ */
+
+:root,
+html.dark {
+  /* ==========================================================
+   * 5.3.1 编辑器（编辑器背景 / 前景）
+   * ========================================================== */
+  --vscode-editor-background: hsl(220 13% 13%);
+  --vscode-editor-foreground: hsl(220 14% 85%);
+  --vscode-editor-lineHighlight: hsl(220 13% 18%);
+  --vscode-editor-selection: hsl(207 88% 40% / 0.45);
+  --vscode-editor-inactiveSelection: hsl(220 13% 26% / 0.6);
+  --vscode-editorCursor-foreground: hsl(207 88% 60%);
+  --vscode-editorGroup-border: hsl(220 13% 22%);
+
+  /* ==========================================================
+   * 5.3.2 侧边栏（侧边栏）
+   * ========================================================== */
+  --vscode-sideBar-background: hsl(220 13% 15%);
+  --vscode-sideBar-foreground: hsl(220 14% 78%);
+  --vscode-sideBar-border: hsl(220 13% 20%);
+  --vscode-sideBarSectionHeader-background: hsl(220 13% 18%);
+  --vscode-sideBarSectionHeader-foreground: hsl(220 14% 72%);
+  --vscode-sideBarSectionHeader-border: hsl(220 13% 22%);
+
+  /* ==========================================================
+   * 5.3.3 活动栏（活动栏）
+   * ========================================================== */
+  --vscode-activityBar-background: hsl(220 13% 11%);
+  --vscode-activityBar-foreground: hsl(220 10% 60%);
+  --vscode-activityBar-inactiveForeground: hsl(220 8% 45%);
+  --vscode-activityBar-activeBorder: hsl(220 14% 90%);
+  --vscode-activityBar-activeBackground: hsl(220 13% 15%);
+  --vscode-activityBar-border: hsl(220 13% 18%);
+  --vscode-activityBarBadge-background: hsl(207 88% 46%);
+  --vscode-activityBarBadge-foreground: hsl(0 0% 100%);
+
+  /* ==========================================================
+   * 5.3.4 面板 / 停靠区（面板）
+   * ========================================================== */
+  --vscode-panel-background: hsl(220 13% 13%);
+  --vscode-panel-foreground: hsl(220 14% 80%);
+  --vscode-panel-border: hsl(220 13% 20%);
+  --vscode-panelTitle-activeBackground: hsl(220 13% 13%);
+  --vscode-panelTitle-activeForeground: hsl(220 14% 90%);
+  --vscode-panelTitle-inactiveForeground: hsl(220 8% 55%);
+  --vscode-panelTitle-border: hsl(220 13% 22%);
+  --vscode-panelSectionHeader-background: hsl(220 13% 18%);
+  /* dockview 落区预览底（ADR §5.6 拖拽预览指示器） */
+  --vscode-panel-dropBackground: hsl(207 88% 50% / 0.25);
+
+  /* ==========================================================
+   * 5.3.5 状态栏（状态栏）
+   * ========================================================== */
+  --vscode-statusBar-background: hsl(220 13% 16%);
+  --vscode-statusBar-foreground: hsl(220 14% 82%);
+  --vscode-statusBar-border: hsl(220 13% 22%);
+  --vscode-statusBarItem-hoverBackground: hsl(220 13% 24%);
+  --vscode-statusBarItem-activeBackground: hsl(220 13% 28%);
+  --vscode-statusBarItem-prominentBackground: hsl(207 88% 40%);
+  --vscode-statusBarItem-remoteBackground: hsl(207 88% 46%);
+
+  /* ==========================================================
+   * 5.3.6 标题栏（标题栏）
+   * ========================================================== */
+  --vscode-titleBar-activeBackground: hsl(220 13% 11%);
+  --vscode-titleBar-activeForeground: hsl(220 14% 85%);
+  --vscode-titleBar-inactiveBackground: hsl(220 13% 13%);
+  --vscode-titleBar-border: hsl(220 13% 18%);
+  /* 工作台顶栏（原 ProjectLayout header） */
+  --vscode-topBar-background: hsl(220 13% 13%);
+
+  /* ==========================================================
+   * 5.3.7 标签：活动与非活动（标签活动与非活动）
+   * ========================================================== */
+  --vscode-tab-activeBackground: hsl(220 13% 13%);
+  --vscode-tab-activeForeground: hsl(220 14% 92%);
+  --vscode-tab-activeBorderTop: hsl(207 88% 60%);
+  --vscode-tab-activeBorder: hsl(220 13% 26%);
+  --vscode-tab-inactiveBackground: hsl(220 13% 15%);
+  --vscode-tab-inactiveForeground: hsl(220 8% 58%);
+  --vscode-tab-unfocusedActiveBackground: hsl(220 13% 14%);
+  --vscode-tab-hoverBackground: hsl(220 13% 19%);
+  --vscode-tab-border: hsl(220 13% 20%);
+  --vscode-tab-lastPinnedBorder: hsl(220 13% 30%);
+
+  /* ==========================================================
+   * 5.3.8 边框与聚焦边框（边框 / 聚焦边框）
+   * ========================================================== */
+  --vscode-border: hsl(220 13% 22%);
+  --vscode-divider: hsl(220 13% 20%);
+  --vscode-splitter-background: hsl(220 13% 18%);
+  /* Splitter 悬停 —— 拖拽抓手可见性关键 */
+  --vscode-splitter-hoverBackground: hsl(207 88% 46%);
+  --vscode-splitter-activeBackground: hsl(207 88% 56%);
+  /* 全局聚焦环（键盘焦点） */
+  --vscode-focusBorder: hsl(207 88% 66%);
+  --vscode-widget-border: hsl(220 13% 26%);
+  --vscode-widget-shadow: hsl(0 0% 0% / 0.36);
+
+  /* ==========================================================
+   * 5.3.9 按钮（按钮）
+   * ========================================================== */
+  --vscode-button-background: hsl(207 88% 46%);
+  --vscode-button-foreground: hsl(0 0% 100%);
+  --vscode-button-hoverBackground: hsl(207 88% 52%);
+  --vscode-button-secondaryBackground: hsl(220 13% 26%);
+  --vscode-button-secondaryForeground: hsl(220 14% 88%);
+  --vscode-button-secondaryHoverBackground: hsl(220 13% 32%);
+  --vscode-button-border: hsl(0 0% 100% / 0.08);
+  --vscode-toolbar-hoverBackground: hsl(220 13% 24%);
+  --vscode-toolbar-activeBackground: hsl(220 13% 28%);
+
+  /* ==========================================================
+   * 5.3.10 输入框（输入框）
+   * ========================================================== */
+  --vscode-input-background: hsl(220 13% 11%);
+  --vscode-input-foreground: hsl(220 14% 88%);
+  --vscode-input-border: hsl(220 13% 26%);
+  --vscode-input-placeholderForeground: hsl(220 8% 48%);
+  --vscode-inputOption-activeBorder: hsl(207 88% 60%);
+  --vscode-inputOption-activeBackground: hsl(207 88% 40% / 0.25);
+  --vscode-inputValidation-errorBackground: hsl(0 63% 20%);
+  --vscode-inputValidation-errorBorder: hsl(0 63% 50%);
+  --vscode-dropdown-background: hsl(220 13% 16%);
+  --vscode-dropdown-border: hsl(220 13% 26%);
+
+  /* ==========================================================
+   * 5.3.11 滚动条（滚动条）
+   *   注：themeStore.applyTheme() 已设 el.style.colorScheme，
+   *   原生滚动条会跟随；下列变量用于自定义滚动条 ::-webkit-scrollbar。
+   * ========================================================== */
+  --vscode-scrollbar-shadow: hsl(220 13% 8% / 0.6);
+  --vscode-scrollbarSlider-background: hsl(220 10% 50% / 0.20);
+  --vscode-scrollbarSlider-hoverBackground: hsl(220 10% 55% / 0.42);
+  --vscode-scrollbarSlider-activeBackground: hsl(220 10% 60% / 0.60);
+
+  /* ==========================================================
+   * 5.3.12 列表悬停与选中（列表悬停与选中）
+   * ========================================================== */
+  --vscode-list-hoverBackground: hsl(220 13% 22%);
+  --vscode-list-hoverForeground: hsl(220 14% 88%);
+  --vscode-list-activeSelectionBackground: hsl(220 13% 28%);
+  --vscode-list-activeSelectionForeground: hsl(0 0% 100%);
+  --vscode-list-inactiveSelectionBackground: hsl(220 13% 22%);
+  --vscode-list-inactiveSelectionForeground: hsl(220 14% 82%);
+  --vscode-list-focusOutline: hsl(207 88% 60%);
+  --vscode-list-highlightForeground: hsl(207 88% 70%);
+  /* 拖拽落点行高亮（树 / 大纲重排复用） */
+  --vscode-list-dropBackground: hsl(207 88% 50% / 0.22);
+
+  /* ==========================================================
+   * 5.3.13 error / warning / info 语义色（语义色）
+   *   success 为项目补充（VS Code 无独立 token）
+   * ========================================================== */
+  --vscode-semantic-error: hsl(0 68% 58%);
+  --vscode-semantic-error-background: hsl(0 63% 20%);
+  --vscode-semantic-error-border: hsl(0 63% 50%);
+  --vscode-semantic-warning: hsl(36 90% 58%);
+  --vscode-semantic-warning-background: hsl(36 60% 20%);
+  --vscode-semantic-warning-border: hsl(36 70% 48%);
+  --vscode-semantic-info: hsl(207 88% 66%);
+  --vscode-semantic-info-background: hsl(207 60% 22%);
+  --vscode-semantic-info-border: hsl(207 70% 50%);
+  --vscode-semantic-success: hsl(145 55% 55%);
+  --vscode-semantic-success-background: hsl(145 45% 18%);
+  --vscode-semantic-success-border: hsl(145 50% 42%);
+
+  /* ==========================================================
+   * 5.3.14 字体与浮层（P2 归并补齐）
+   *
+   * 来源：P2（t3）在 inScope 内为 DockShell 自足落地了一份同源 token 副本
+   *   apps/web/src/components/shell/dock/dock-tokens.css。该副本包含以下
+   *   13 个变量而真源当时缺失 —— 若不归并，两个 :root 块按加载顺序互相
+   *   覆盖，会出现「同一 token 取到哪份值取决于 import 顺序」的静默错色。
+   *
+   * 归并方向：真源为唯一真源（ADR §5.1），故把副本独有的定义**上收**到此处；
+   *   副本已改为纯转发（@import 本文件），不再自行定义任何 token。
+   * ========================================================== */
+  --vscode-descriptionForeground: hsl(220 8% 58%);
+  --vscode-editorWidget-background: hsl(220 13% 16%);
+  --vscode-editorWidget-border: hsl(220 13% 26%);
+  --vscode-editorWidget-foreground: hsl(220 14% 85%);
+  --vscode-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', sans-serif;
+  --vscode-font-family-mono: 'Cascadia Code', 'Consolas', 'Menlo', monospace;
+  --vscode-font-size: 13px;
+  --vscode-menu-background: hsl(220 13% 16%);
+  --vscode-menu-foreground: hsl(220 14% 85%);
+  --vscode-sash-hoverBorder: hsl(207 88% 46%);
+  --vscode-tab-unfocusedActiveForeground: hsl(220 14% 86%);
+  --vscode-tab-unfocusedInactiveBackground: hsl(220 13% 14%);
+  --vscode-tab-unfocusedInactiveForeground: hsl(220 8% 54%);
+}
+
+/* ============================================================
+ * shadcn / daisyUI 既有变量映射（ADR §5.3.13 脚注，t2 必须补）
+ *
+ * 为什么必须补：Tailwind 工具类（bg-background / text-foreground /
+ * border-border / ring / bg-primary …）读的是**旧命名空间**的变量。
+ * 只加 --vscode-* 而不映射，工具类仍走旧值 —— 表现为「一半界面是
+ * VS Code、一半还是老配色」。
+ *
+ * ⚠️ 这里**只能有映射**，不得写入新的字面色值：所有值都必须引用
+ *    --vscode-*，保证「单一真源」仍然成立（改一个 token 全站生效）。
+ *
+ * 作用域与 token 层一致（:root + html.dark），因为新主题无浅色变体。
+ * ============================================================ */
+:root,
+html.dark {
+  /* —— 核心语义位（ADR 指定的 8 条映射）—— */
+  --background: var(--vscode-editor-background);
+  --foreground: var(--vscode-editor-foreground);
+  --border: var(--vscode-border);
+  --ring: var(--vscode-focusBorder);
+  --input: var(--vscode-input-background);
+  --destructive: var(--vscode-semantic-error);
+  --primary: var(--vscode-button-background);
+  --muted-foreground: hsl(220 8% 58%);
+
+  /* —— 派生位：保持与核心位自洽（避免旧亮色值残留）—— */
+  --card: var(--vscode-panel-background);
+  --card-foreground: var(--vscode-panel-foreground);
+  --primary-foreground: var(--vscode-button-foreground);
+  --secondary: var(--vscode-button-secondaryBackground);
+  --secondary-foreground: var(--vscode-button-secondaryForeground);
+  --muted: var(--vscode-sideBarSectionHeader-background);
+  --accent: var(--vscode-list-activeSelectionBackground);
+  --accent-foreground: var(--vscode-list-activeSelectionForeground);
+  --destructive-foreground: var(--vscode-button-foreground);
+}

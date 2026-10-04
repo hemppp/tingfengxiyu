@@ -26,6 +26,43 @@
 //   精确到 `workbench` 后，键与 `MODULE_DIRS`（门禁）口径一致，且模块目录缺席即不出现。
 // ============================================================
 
+import type { FloatingPanelDockMeta, DockSlot } from '@/components/shell/dock/types';
+
+/**
+ * ADR §1.4 冻结的 `FloatingPanelDockMeta`（逐字段与 `dock/types.ts` 一致；
+ * 后者是停靠内核的视图层定义，不能反向 import 插件层，故在此收口）。
+ *
+ * ⚠ 本接口**只描述形状**，不含任何缺省值 —— 缺省行为的唯一真源始终是
+ *   `DockShell` 里的 `resolveDockMeta()`（ADR §1.5 冻结）。
+ */
+export interface FloatingPanelDockMetaShape {
+  /** 初始落位建议（可被用户拖拽覆盖）。缺省 → 'right' */
+  slot?: DockSlot;
+  /** 初始启用状态。false = 注册进候选池但默认不显示。缺省 → false */
+  defaultOpen?: boolean;
+  /** 同 key 多实例。缺省 false = 再次 open 只聚焦，不新开 */
+  allowMultiple?: boolean;
+  /** 允许用户关闭（标签上的 ×）。缺省 → true */
+  closable?: boolean;
+  /** 可被拖出为 floating group。缺省 → true */
+  floatable?: boolean;
+  /** 首次作为 floating group 出现时的几何建议值 */
+  floatingSize?: { width: number; height: number };
+  /** 强制最小尺寸。缺省 → {width:240, height:160} */
+  minSize?: { width: number; height: number };
+  /** 打开时抢占中心编辑区。缺省 → false */
+  center?: boolean;
+}
+
+/** 编译期护栏：本镜像类型必须与停靠内核的 `FloatingPanelDockMeta` 逐字段一致。 */
+type _AssertDockMetaShapeMatches = FloatingPanelDockMetaShape extends FloatingPanelDockMeta
+  ? FloatingPanelDockMeta extends FloatingPanelDockMetaShape
+    ? true
+    : never
+  : never;
+const _DOCK_META_SHAPE_IN_SYNC: _AssertDockMetaShapeMatches = true;
+void _DOCK_META_SHAPE_IN_SYNC;
+
 /** 模块目录名（D1：一模块一包，目录即模式事实来源） */
 export type ModuleDir = 'manual' | 'auto';
 

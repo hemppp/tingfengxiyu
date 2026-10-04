@@ -44,8 +44,6 @@ export {
 export { ErrorBoundary } from './ErrorBoundary';
 export { ToastProvider, useToast } from './ToastProvider';
 export type { ToastType, Toast } from './ToastProvider';
-export { InkBackButton } from './InkBackButton';
-export type { InkBackButtonProps } from './InkBackButton';
 export { RightSidebar } from './RightSidebar';
 export { BottomDrawer } from './BottomDrawer';
 export type { BottomDrawerTab, BottomDrawerProps } from './BottomDrawer';

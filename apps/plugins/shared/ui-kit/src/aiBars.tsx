@@ -411,7 +411,7 @@ export function SkillsBar({
           <button
             onClick={onOpenSettings}
             // ★ nm-no-brush：这个按钮用 dashed 表达「还没启用」，边框是装饰性的，
-            //   刻意不穿 shuimo 笔触。显式加类，别依赖「inline border 简写重置 border-image」的副作用。
+            //   刻意不加装饰性外框。显式加类，别依赖「inline border 简写重置 border-image」的副作用。
             className="nm-no-brush w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-medium transition-all hover:scale-[1.02] active:scale-95"
             style={{
               background: 'rgb(var(--glass-tint) / 0.4)',

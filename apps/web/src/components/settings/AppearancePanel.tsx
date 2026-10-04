@@ -4,8 +4,9 @@
 // 两个正交维度：**主题**（色彩性格 / 形态）× **明暗**。
 // 主题清单与状态在 `stores/themeStore.ts`，这里只负责呈现与选择。
 //
-// 说明：换肤改的是 CSS 变量层（globals.css 的语义层 + themes.css 的主题层），
-// 组件本身不需要知道当前是哪个主题 —— 所以新增主题不必碰组件代码。
+// 说明：换肤改的是 CSS 变量层（ui-kit 的 styles/vscode-dark-modern.css 定义
+//   :root/html.dark 的 --vscode-* 真源，globals.css 的语义层引用它），
+//   组件本身不需要知道当前是哪个主题 —— 所以新增主题不必碰组件代码。
 // ============================================================
 
 import { Check, Moon, Sun } from 'lucide-react';

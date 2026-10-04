@@ -37,6 +37,7 @@
       "import": "./src/themeStore.ts",
       "default": "./src/themeStore.ts"
     },
+    "./styles/vscode-dark-modern.css": "./src/styles/vscode-dark-modern.css",
     "./useGlassRipple": {
       "types": "./src/useGlassRipple.ts",
       "import": "./src/useGlassRipple.ts",

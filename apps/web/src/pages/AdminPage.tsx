@@ -11,7 +11,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { InkBackButton } from '@/components/ui/InkBackButton';
 import {
   Shield,
   KeyRound,
@@ -23,6 +22,7 @@ import {
   Users,
   FolderOpen,
   FileText,
+  ArrowLeft,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { adminApi, type AdminUser, type AdminStats } from '@/services/api/authApi';
@@ -159,7 +159,15 @@ export function AdminPage() {
       >
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <InkBackButton onClick={() => navigate('/')} size={18} label="返回首页" />
+            <button
+              type="button"
+              className="nm-btn-apple-icon-sm"
+              onClick={() => navigate('/')}
+              title="返回首页"
+              aria-label="返回首页"
+            >
+              <ArrowLeft size={18} />
+            </button>
             <Shield size={20} style={{ color: 'hsl(var(--mountain-cyan))' }} />
             <h1
               className="text-[20px] font-semibold"
@@ -176,7 +184,7 @@ export function AdminPage() {
                （Login/Register 拿它当整行提交按钮，所以那里是对的）。
                这里顶栏是 `flex justify-between`，`width: 100%` 让它**抢满整行** ——
                实测两个主题下都是 948px 宽、把「管理员后台」挤成两行。
-               shuimo 的笔触框会把这个超宽按钮放大成"巨型笔触"，所以顺手修掉。
+               装饰性外框会把这个超宽按钮放大成"巨型外框"，所以顺手修掉。
                内联 `width: auto` 优先级最高，稳定压过类里的 100%。 */
             style={{ width: 'auto' }}
           >
@@ -399,13 +407,13 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
     /* ★ 改用项目自己的卡片约定 `nm-card`（2026-09-19）
        原先这里是 ad-hoc 内联样式：`background: rgb(var(--glass-tint) / 0.5)`
        + `backdropFilter: blur(16px)` + `border: 1px solid hsl(var(--border) / 0.3)`。
-       问题：shuimo 主题把 `--glass-tint` 设成了**纸色本身**（rgb 247,241,230），
+       问题：浅色主题把 `--glass-tint` 设成了**纸色本身**（rgb 247,241,230），
        而页面底 `--background` 是 rgb(241,238,233) —— 两者只差 6 级；
        再乘 0.5 alpha（填充）和 0.3 alpha（边框），卡面在宣纸上**几乎完全看不见**
        （实测对比度 1.07）。
        ★ 算过：**0.5 alpha 的填充在浅底上根本做不出可见卡面** ——
          即使填纯白，0.5 叠上去也只有 1.07。所以正解不是调色，而是
-         **边框 + 投影**（shuimo 的 11.3 节就是这么定义纸面的：
+         **边框 + 投影**（主题层就是这么定义纸面的：
          纸色 + 宣纸纹理 + 1px 墨线 + 纸感投影 + 直角）。
        换成 `nm-card` 后，两套主题都走同一套卡片语言，也跟设置页保持一致。 */
     <div className="nm-card p-5">

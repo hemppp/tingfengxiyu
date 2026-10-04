@@ -1081,7 +1081,7 @@ export function AddBookModal({ isOpen, onClose, onSubmit, editBook }: AddBookMod
                 marginLeft: 'auto',
                 padding: '8px 18px',
                 borderRadius: 'var(--r-pill)',
-                // ★ 拆长写：`border` 简写会重置 border-image → shuimo 笔触边框画不出来
+                // ★ 拆长写：`border` 简写会重置 border-image 相关长写属性
                 //   （2026-09-18 由弹窗扫描抓出）
                 borderWidth: '0.5px',
                 borderStyle: 'solid',

@@ -19,7 +19,7 @@ import type {
   SelectionActionDef,
   ChatRailDef,
   WorkbenchDef,
-  BuiltinBubbleDef,
+  BuiltinPanelDef,
   WebCapabilityName,
   PluginMode,
 } from './types';
@@ -45,8 +45,14 @@ export interface PluginRegistryState {
   chatRail: ChatRailDef | null;
   /** 模块级工作台根组件（按模式单槽；经 registerWorkbench 注册） */
   workbenches: Record<string, WorkbenchDef>;
-  /** 内核内置气泡浮窗（按 key 键控多槽；经 registerBuiltinBubble 注册） */
-  builtinBubbles: BuiltinBubbleDef[];
+  /**
+   * 内置面板槽（按 key 键控多槽；经 `registerBuiltinPanel` 注册）。
+   *
+   * ★ ADR D9/§3.3：原名 `builtinBubbles`。更名理由 —— 「bubble（气泡）」是本次
+   *   重构**退役的 UI 形态词**，继续用它命名扩展点会让 t5 误以为要保留气泡。
+   *   这些槽位本身作为**扩展点保留**（如 `'chapters'` → LeftSidebar）。
+   */
+  builtinPanels: BuiltinPanelDef[];
   /** 跨模块能力实现（name → impl；经 registerCapability 注册） */
   capabilities: Record<string, unknown>;
 
@@ -61,7 +67,9 @@ export interface PluginRegistryState {
   _registerSkillIcons(icons: Record<string, LucideIcon>): () => void;
   _registerChatRail(def: ChatRailDef): () => void;
   _registerWorkbench(def: WorkbenchDef): () => void;
-  _registerBuiltinBubble(def: BuiltinBubbleDef): () => void;
+  _registerBuiltinPanel(def: BuiltinPanelDef): () => void;
+  /** @deprecated ADR D9：改用 `_registerBuiltinPanel` */
+  _registerBuiltinBubble(def: BuiltinPanelDef): () => void;
   _registerCapability(name: string, impl: unknown): () => void;
   _reset(): void;
 }
@@ -151,8 +159,8 @@ let skillIconMap: Record<string, LucideIcon> = {};
 /** AI 聊天气泡栏（单槽：后注册覆盖前者，注销时回退内置） */
 let chatRailDef: ChatRailDef | null = null;
 
-/** 内核内置气泡浮窗（按 key 键控多槽：chapters / ai-chat 等） */
-let bubbleSlots: Slot<BuiltinBubbleDef>[] = [];
+/** 内核内置面板槽（按 key 键控多槽：chapters / ai-chat 等） */
+let bubbleSlots: Slot<BuiltinPanelDef>[] = [];
 const bubbleSeq: SeqMemo = new Map();
 
 /** 模块级工作台（按模式单槽：'manual' | 'auto' | 'shared' → WorkbenchDef） */
@@ -172,7 +180,7 @@ export const usePluginRegistry = create<PluginRegistryState>((set) => ({
   skillIcons: {},
   chatRail: null,
   workbenches: {},
-  builtinBubbles: [],
+  builtinPanels: [],
   capabilities: {},
 
   _registerProjectPanel: makeRegister<FloatingPanelDef>(
@@ -268,13 +276,18 @@ export const usePluginRegistry = create<PluginRegistryState>((set) => ({
     };
   },
 
-  _registerBuiltinBubble: makeRegister<BuiltinBubbleDef>(
+  _registerBuiltinPanel: makeRegister<BuiltinPanelDef>(
     bubbleSeq,
     (b) => b.key,
-    (b: BuiltinBubbleDef) => b.order ?? DEFAULT_ORDER,
+    (b: BuiltinPanelDef) => b.order ?? DEFAULT_ORDER,
     () => bubbleSlots,
-    (next) => { bubbleSlots = next; set({ builtinBubbles: next.map((s) => s.value) }); },
+    (next) => { bubbleSlots = next; set({ builtinPanels: next.map((s) => s.value) }); },
   ),
+
+  /** @deprecated ADR D9：改用 `_registerBuiltinPanel`。别名保证已发布插件不炸。 */
+  _registerBuiltinBubble(def: BuiltinPanelDef): () => void {
+    return usePluginRegistry.getState()._registerBuiltinPanel(def);
+  },
 
   _registerCapability: (name, impl) => {
     capabilityMap = { ...capabilityMap, [name]: impl };
@@ -313,7 +326,7 @@ export const usePluginRegistry = create<PluginRegistryState>((set) => ({
       skillIcons: {},
       chatRail: null,
       workbenches: {},
-      builtinBubbles: [],
+      builtinPanels: [],
       capabilities: {},
     });
   },
@@ -331,7 +344,10 @@ export const pluginRegistryApi = {
   registerSkillIcons: (icons: Record<string, LucideIcon>) => usePluginRegistry.getState()._registerSkillIcons(icons),
   registerChatRail: (def: ChatRailDef) => usePluginRegistry.getState()._registerChatRail(def),
   registerWorkbench: (def: WorkbenchDef) => usePluginRegistry.getState()._registerWorkbench(def),
-  registerBuiltinBubble: (def: BuiltinBubbleDef) => usePluginRegistry.getState()._registerBuiltinBubble(def),
+  /** 注册内核内置面板槽（ADR D9：原名 `registerBuiltinBubble`） */
+  registerBuiltinPanel: (def: BuiltinPanelDef) => usePluginRegistry.getState()._registerBuiltinPanel(def),
+  /** @deprecated ADR D9：改用 `registerBuiltinPanel` */
+  registerBuiltinBubble: (def: BuiltinPanelDef) => usePluginRegistry.getState()._registerBuiltinPanel(def),
   registerCapability: (name: string, impl: unknown) => usePluginRegistry.getState()._registerCapability(name, impl),
   getCapability: <T = unknown>(name: string): T | null => (capabilityMap[name] as T | undefined) ?? null,
   reset: () => usePluginRegistry.getState()._reset(),

@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useStatsStore } from '@/stores';
-import { Lock, Trash2, Settings2, Palette, Bot, ShieldCheck, Plug, Keyboard, MonitorUp } from 'lucide-react';
-import { InkBackButton } from '@/components/ui/InkBackButton';
+import { Lock, Trash2, Settings2, Palette, Bot, ShieldCheck, Plug, Keyboard, MonitorUp, ArrowLeft } from 'lucide-react';
 import { AppearancePanel } from '@/components/settings/AppearancePanel';
 import { safeConfirm } from '@/utils/safeConfirm';
 import { useNavigate } from 'react-router-dom';
@@ -103,7 +102,15 @@ export function SettingsPage() {
       <div className="max-w-5xl mx-auto px-8 py-10">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <InkBackButton onClick={handleBack} size={18} label="返回项目页" />
+          <button
+            type="button"
+            className="nm-btn-apple-icon-sm"
+            onClick={handleBack}
+            title="返回项目页"
+            aria-label="返回项目页"
+          >
+            <ArrowLeft size={18} />
+          </button>
           <h1
             className="font-serif"
             style={{
@@ -125,8 +132,8 @@ export function SettingsPage() {
                 key={c.key}
                 onClick={() => setCategory(c.key)}
                 /* ★ `nm-nav-item` / `--active` 是给主题的**显式钩子**：
-                   shuimo 下导航项整体不穿笔触（6 个都穿太吵，且导航不是动作按钮），
-                   只让**选中项**穿 —— 作为"当前所在"的墨框标记。见 shuimo.css 11.10。 */
+                   导航项整体不加装饰外框（6 个都加太吵，且导航不是动作按钮），
+                   只让**选中项**有 —— 作为"当前所在"的标记。 */
                 className={`nm-nav-item w-full text-left px-3 py-2.5 rounded-lg transition-colors${
                   category === c.key ? ' nm-nav-item--active' : ''
                 }`}

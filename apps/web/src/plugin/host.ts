@@ -19,7 +19,7 @@ import type {
   SelectionActionDef,
   ChatRailDef,
   WorkbenchDef,
-  BuiltinBubbleDef,
+  BuiltinPanelDef,
   WebCapabilityName,
 } from './types';
 import { pluginRegistryApi } from './registry';
@@ -60,7 +60,16 @@ export function createWebPluginContext(id: string, modes?: PluginMode[]): WebPlu
     return fetch(path, { ...init, headers });
   };
 
-  const ctx: WebPluginContext = {
+  // ★ ADR D9 类型空档（本文件唯一的类型断言，附理由）：
+  //   宿主运行时对象**同时**提供新名 `registerBuiltinPanel` 与 deprecated 别名
+  //   `registerBuiltinBubble`，但 `WebPluginContext`（@novel/core，packages/ 不在本次
+  //   改动范围）只声明了旧名 ⇒ 对象字面量直接写新名会被 TS2353 拒绝。
+  //   故先把 ctx 断言成「含新名可选成员」的交叉类型再赋值；断言在**运行时是恒真**的
+  //   （下方对象确实带了该键），且退场条件明确：@novel/core 补上新名后删掉本断言。
+  type CtxWithNewName = WebPluginContext & {
+    registerBuiltinPanel?: (def: BuiltinPanelDef) => () => void;
+  };
+  const ctx = {
     ...base,
     api,
     registerProjectPanel: (panel) => {
@@ -121,10 +130,22 @@ export function createWebPluginContext(id: string, modes?: PluginMode[]): WebPlu
       bag.add(unregister, `${id}: workbench ${def.key}`);
       return unregister;
     },
+    // ADR D9：扩展点更名 registerBuiltinBubble → registerBuiltinPanel。
+    //   `registerBuiltinPanel` 是**新名（契约推荐名）**，本宿主对象直接实现它。
+    //   `registerBuiltinBubble` 保留为 **deprecated 别名**（同落点），
+    //   保证已发布插件 / AI 生成的落盘插件继续可用。
+    registerBuiltinPanel: (def) => {
+      const concrete = withModes(def as unknown as BuiltinPanelDef, modes);
+      const unregister = pluginRegistryApi.registerBuiltinPanel(concrete);
+      bag.add(unregister, `${id}: builtin-panel ${def.key}`);
+      return unregister;
+    },
+    /** @deprecated ADR D9：改用 `registerBuiltinPanel`。别名保证已发布插件不炸。 */
     registerBuiltinBubble: (def) => {
-      const concrete = withModes(def as unknown as BuiltinBubbleDef, modes);
-      const unregister = pluginRegistryApi.registerBuiltinBubble(concrete);
-      bag.add(unregister, `${id}: builtin-bubble ${def.key}`);
+      const unregister = pluginRegistryApi.registerBuiltinPanel(
+        withModes(def as unknown as BuiltinPanelDef, modes),
+      );
+      bag.add(unregister, `${id}: builtin-panel ${def.key}`);
       return unregister;
     },
     registerCapability: (name, impl) => {
@@ -134,8 +155,36 @@ export function createWebPluginContext(id: string, modes?: PluginMode[]): WebPlu
     },
     getCapability: <T = unknown>(name: WebCapabilityName): T | null =>
       pluginRegistryApi.getCapability<T>(name),
-  };
+  } satisfies CtxWithNewName;
   return ctx;
+}
+
+/**
+ * ADR D9 契约层垫片：**以新名为首选**拿到内置面板注册入口。
+ *
+ * 为什么需要它：宿主对象（上方 `ctx`）已同时实现 `registerBuiltinPanel`（新名）
+ * 与 `registerBuiltinBubble`（deprecated 别名），但**编译期类型**来自
+ * `@novel/core` 的 `WebPluginContext`，而该接口目前只声明了旧名
+ * （`packages/` 不是本任务 inScope）。于是「运行时新名可用」与「类型上只有旧名」
+ * 出现空档，插件侧直接写 `ctx.registerBuiltinPanel(...)` 会被 TS 拒绝。
+ *
+ * 本垫片按 **新名优先、旧名兜底** 解析 —— 新名一旦在 `@novel/core` 落地，
+ * 这里无需改动即自动切到新名；`packages/core` 补齐后本函数可直接删除，
+ * 调用点改回 `ctx.registerBuiltinPanel(...)`。
+ *
+ * ```ts
+ * registerBuiltinPanelAsContext(ctx, { key: 'chapters', Component: LeftSidebar });
+ * ```
+ */
+export function registerBuiltinPanelAsContext(
+  ctx: WebPluginContext,
+  def: BuiltinPanelDef,
+): () => void {
+  const c = ctx as WebPluginContext & {
+    registerBuiltinPanel?: (d: BuiltinPanelDef) => () => void;
+  };
+  const register = c.registerBuiltinPanel ?? ctx.registerBuiltinBubble;
+  return register(def as never);
 }
 
 export interface WebPluginLoadResult {

@@ -1,14 +1,11 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+// ★ VS Code Dark Modern token 层必须**最先**引入：它定义 :root / html.dark 的
+//   全量 --vscode-* 变量，并把旧 shadcn/daisyUI 变量位映射到它们之上。
+//   定义在 :root 意味着**任何插件包无需 import 本文件**即可消费（ADR 约定 C-1）。
+import '@novel-plugins/ui-kit/styles/vscode-dark-modern.css';
 import './styles/globals.css';
-// ★ 主题层在主样式之后引入。非默认主题的选择器写作 html[data-theme="..."]，
-//   特异性高于 .dark，所以不依赖引入顺序即可稳定覆盖 —— 这里只是双保险。
-import './styles/themes.css';
-// ★ 水墨UI（shuimo.design）移植层。全部规则限定在 `html[data-theme="shuimo"]`
-//   或 `.sm-*` 类名下 —— 不挂该主题时对既有样式零影响。
-//   它同时重定义了 76 个 `nm-*` 语义类，所以切到该主题 = 全站换皮（tsx 无需改动）。
-import './styles/shuimo.css';
 import { registerProjectIdGetter, resolveApiUrl } from './services/api/apiClient';
 import { applyStoredTheme } from './stores/themeStore';
 

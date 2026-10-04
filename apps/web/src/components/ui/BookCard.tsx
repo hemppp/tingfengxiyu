@@ -20,7 +20,7 @@ interface BookCardProps {
  *
  * ★ 为什么不直接写 `rgba(255,255,255,.65)`：
  *   封面文字/胶囊/统计条原来全是硬编码白（为"下半部近黑"的封面服务）。
- *   shuimo 把封面换成暖调淡纸后白字只有 4.42:1（不达 AA），必须能整体翻成墨字。
+ *   封面换成暖调淡纸后白字只有 4.42:1（不达 AA），必须能整体翻成墨字。
  *   抽一个 `--cover-fg` + 各档 alpha，主题只换一个值就能翻面。
  *
  * ★ 为什么等价（所以默认主题逐像素不变）：
@@ -100,7 +100,7 @@ const BookCard = memo(function BookCard({ book, onClick, onEdit, onDelete, chapt
         transition: 'transform 0.4s cubic-bezier(0.16,1,0.3,1), box-shadow 0.4s cubic-bezier(0.16,1,0.3,1)',
         // 投影值挂到 CSS 变量上（默认值与原来完全一致，见 fallback）。
         // ★ 为什么不用写死的字符串（2026-09-18）：这是**内联 style**，主题 CSS 压不动 ——
-        //   切到 shuimo（宣纸）主题后，卡片底下一圈黑色投影让它们看着像"贴上去的"，
+        //   换成淡纸底后，卡片底下一圈黑色投影让它们看着像"贴上去的"，
         //   而纸上的卡片本该是轻轻压在纸上。改成变量后主题可以自由改投影，
         //   不必用 !important 硬压内联样式。
         boxShadow: isHovered
@@ -255,7 +255,7 @@ const BookCard = memo(function BookCard({ book, onClick, onEdit, onDelete, chapt
             fontSize: 16,
             fontWeight: 600,
             // ★ 走变量（默认值 = 原硬编码白）—— 主题才能接管。
-            //   起因：shuimo 把封面改成暖调淡纸后，白字实测只有 4.42:1，
+            //   起因：封面改成暖调淡纸后，白字实测只有 4.42:1，
             //   低于项目 4.5:1 的 AA 门槛。详见 globals.css 的 --cover-title 注释。
             color: coverFg('--cover-title-alpha'),
             margin: 0,

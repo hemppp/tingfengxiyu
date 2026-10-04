@@ -6,8 +6,6 @@ import { useAuthStore } from '@/stores/authStore';
 import { startSessionKeepalive } from '@/services/auth/sessionKeepalive';
 import { CommandPalette } from './components/ui/CommandPalette';
 import { ToastProvider } from './components/ui/ToastProvider';
-import { BambooLeafFollow } from './components/effects/BambooLeafFollow';
-import { AmbientBackdrop } from './components/effects/AmbientBackdrop';
 import { PATHS } from './routes/paths';
 import { lazyRoute } from './routes/Lazy';
 import { NotFoundPage } from './routes/NotFoundPage';
@@ -83,40 +81,6 @@ const CommandPaletteHotkey: React.FC = () => {
   }, []);
   if (!open) return null;
   return <CommandPalette isOpen={open} onClose={() => setOpen(false)} onNavigate={navigate} />;
-};
-
-/** 雨效 canvas：始终挂载（避免重新加载卡顿），但仅 active 时绘制 */
-const RainCanvas: React.FC = () => {
-  const [active, setActive] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem('nm-rain-on');
-      return stored === null ? true : stored === '1';
-    } catch {
-      return true;
-    }
-  });
-
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'nm-rain-on') {
-        setActive(e.newValue === '1');
-      }
-    };
-    window.addEventListener('storage', onStorage);
-
-    // 同步同窗口多次更新的按钮
-    const onCustom = (e: Event) => {
-      const detail = (e as CustomEvent<{ active: boolean }>).detail;
-      if (detail) setActive(detail.active);
-    };
-    window.addEventListener('nm:rain-toggle', onCustom as EventListener);
-    return () => {
-      window.removeEventListener('storage', onStorage);
-      window.removeEventListener('nm:rain-toggle', onCustom as EventListener);
-    };
-  }, []);
-
-  return <BambooLeafFollow active={active} />;
 };
 
 /**
@@ -243,8 +207,6 @@ const App: React.FC = () => {
         <ScrollToTop />
         <ToastProvider>
           <div className='relative min-h-screen'>
-            <AmbientBackdrop />
-            <RainCanvas />
             <AppRoutes />
           </div>
           <CommandPaletteHotkey />

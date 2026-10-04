@@ -39,6 +39,8 @@
     "d3-force": "^3.0.0",
     "d3-force-3d": "^3.0.6",
     "date-fns": "^4.1.0",
+    "dockview": "8.4.0",
+    "dockview-react": "8.4.0",
     "dompurify": "^3.4.13",
     "framer-motion": "^12.42.2",
     "gsap": "^3.15.0",
