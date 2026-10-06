@@ -62,14 +62,14 @@
 | 项 | 冻结值 |
 |---|---|
 | 平台 | **仅 `win32` / `x64`**（`pnpm-workspace.yaml:27-31` `supportedArchitectures: {os:[win32], cpu:[x64]}`） |
-| 分发形态 | ① NSIS 安装版 ② 便携版（portable） |
+| 分发形态 | ① NSIS 安装版 ② 标准便携版 zip（解压即用，D4.4） |
 | 应用显示名 `productName` | `NovelMuse` |
 | 应用 ID `appId` | `com.novelmuse.desktop` |
-| 桌面壳包名 | `@novel/desktop`，版本随 `novel-companion` 根版本（当前 `0.1.0`） |
+| 桌面壳包名 | `@novel/desktop`，版本随 `novel-companion` 根版本（当前 `0.2.0`） |
 | 快捷方式名 `shortcutName` | `听风细雨` |
 | 产物输出目录 | `F:\new1.2\release\desktop`（`/release/` 已在 `.gitignore:28`） |
 | NSIS 安装包文件名 | `NovelMuse-Setup-${version}-x64.exe` |
-| 便携版文件名 | `NovelMuse-Portable-${version}-x64.exe` |
+| 便携版文件名 | `NovelMuse-Portable-${version}-x64.zip`（内含顶层 `NovelMuse/`，D4.4） |
 
 **不做**：macOS / Linux / arm64 / Squirrel / MSI / AppX。**不做** macOS/Linux 目标是硬约束（见 D18）。
 
@@ -199,6 +199,8 @@ pnpm install
 
 #### D4.2-修订（2026-10-06，方案 A：启动图 + 裁剪负载）
 
+> **后续状态（同日，D4.4）**：本节新增的 `portable.splashImage` 随 `portable` 目标一并废弃；下文的启动图论述保留为历史记录。裁剪负载两项过滤器**仍然有效**，是当前便携版 zip 体积的基础。
+
 **动机**：便携版（NSIS 自解压）首次启动需把负载解到 `%TEMP%`。实测原负载 **32158 文件 / 240.8 MB**，解压耗时约 **4.5 分钟**且全程无窗口（未配 `splashImage` 时 `portable.nsi:11-13` 会 `SetSilent silent`），用户据此误判为「启动失败」。故做两项改动：
 
 1. **启动图**：`portable.splashImage = build-resources/splash.bmp`（640×400 24-bit BMP，768054 B）。`NsisTarget.js:250` 按 `packager.projectDir` 解析该路径；`portable.nsi:21-24` 走 `BgImage::SetBg` ⇒ 解压全程有可视反馈，且 `!ifndef SPLASH_IMAGE` 不再成立 ⇒ 不进入静默分支。
@@ -244,6 +246,35 @@ pnpm install
 **非运行时**（TS 类型位置，不构成动态 import）：`apps/server/src/plugin/types.ts:27-28`、`apps/server/src/plugin/host.ts:55,551,560,567,583`。
 
 **Mode B 风险等级：中。** 风险点：① 102.8 MB 体积；② `--import tsx` 在 Electron-as-Node 下的可用性（**需人工确认**，t4 冒烟验证）；③ 依赖闭包若漏包则运行期才暴露（**必须** t4 起真机冒烟）。
+
+### D4.4 便携版分发形态：标准绿色 zip（**2026-10-06 决策，取代原 NSIS portable**）
+
+**背景**：原「便携版」= electron-builder 的 `portable` target，产出**单个自解压 exe**。它有两个硬伤：
+
+1. **首启极慢且无反馈**。双击后要把 490 MB 解包内容释放到 `%TEMP%`，耗时以分钟计；未配 `splashImage` 时 `portable.nsi:11-13` 走 `SetSilent silent`，全程无窗口，用户会判定「双击没反应 / 启动失败」。（D4.2-修订 加启动图只是缓解，不改变形态本身非常规。）
+2. **单文件 exe 易被拦**。未签名的自解压 exe 常被邮件网关、网盘与杀软直接拒绝或标记。
+
+**决策**：改用**标准绿色便携版**——一个普通 `.zip`，解压后得到顶层 `NovelMuse/` 目录，进去双击 `NovelMuse.exe` 即运行。删除 `portable` target 与 `portable.splashImage`（连同 `build-resources/splash.bmp`）。
+
+**为什么不直接用 electron-builder 的 `zip` target**：实测它产出的压缩包是**平铺**的——6273 个文件（`chrome_*.pak`、`*.dll`、`NovelMuse.exe`、`locales/`、`resources/` …）直接铺在压缩包根，用户解压会把目标目录炸开一片，不符合「一个文件夹」的绿色版惯例。
+
+**实现**：`apps/desktop/scripts/package-portable-zip.mjs`（新增）。职责：
+
+1. 校验 `release/desktop/win-unpacked/NovelMuse.exe` 存在（否则提示先跑 `--dir`）。
+2. 把 `win-unpacked/` **复制**到 `%TEMP%` 下的干净暂存目录，重命名为顶层 `NovelMuse/`。
+3. 写入 `使用说明.txt`（用法 / 首启较慢提示 / 默认管理员账号 / 数据目录 / 系统要求 / 版本）。
+4. 用 Windows 自带 `tar --format=zip` 打成 `release/desktop/NovelMuse-Portable-<version>-x64.zip`。
+5. 打印体积、耗时与 SHA256；无论成败都清理暂存目录。
+
+**为什么必须先复制到暂存区（关键，勿优化掉）**：直接对 `win-unpacked/` 打包会把该目录树上的 ACL 一并写进 zip。在受限/沙箱环境（如 Codex 沙箱、DSH 工作区）里仓库树会被注入低完整性标签（`Mandatory Label\Low Mandatory Level`、`Everyone:(DENY)(DC)`、`CodexSandboxUsers` 等），解压出来的副本继承这些 ACE 后 **Electron 启动即崩**：加载 V8 snapshot 时 CHECK 失败，stderr 报 `Received fatal exception EXCEPTION_BREAKPOINT`（`electron::fuses::IsLoadBrowserProcessSpecificV8SnapshotEnabled`），退出码 `0x80000003`（= `-2147483645`），且**不写任何日志**——极难定位。复制到 `%TEMP%` 后条目权限是干净的标准 ACL。
+
+> 实测对照（同一份 `win-unpacked`，仅位置不同）：原地 `F:\new1.2\release\desktop\win-unpacked` → 立即崩、无日志；复制到 `F:\ptest2` / `C:\...\Temp\ptest3` / `D:\t6work\ptest` → 正常起窗（5 进程，窗口标题 `听风细雨 - 伴写小说工具`）。三处 `NovelMuse.exe` SHA256 完全一致（`FD3D6AF4…25A45`），排除二进制差异。
+
+**一键入口**：`pnpm -C apps/desktop dist:zip` = `build-server-payload` → `bundle-shell` → `electron-builder --win --x64 --dir` → `package-portable-zip`。
+
+**验收实测（2026-10-06）**：zip **199732376 B（190.48 MB）**，SHA256 `9d59d6ddf9aba8d3f13ffb8f49f6d80dc02ce786bdf136ce370cdb2f4f3b4bc8`，7223 条目，顶层为 `NovelMuse/`；解压 4.8 s；解压后双击 exe → 5 进程、窗口标题 `听风细雨 - 伴写小说工具`、`main.log` 追加 2087 B 正常启动记录。
+
+**数据落点不变**：仍是 `%APPDATA%\NovelMuse`（R13 结论），升级时覆盖文件夹即可保留书稿。
 
 ---
 
@@ -738,11 +769,12 @@ sigint.txt exists: false
 | 生成 server 负载 | `node apps/desktop/scripts/build-server-payload.mjs` |
 | 打包壳代码 | `node apps/desktop/scripts/bundle-shell.mjs` |
 | 快速冒烟打包（不产安装包） | `apps\desktop\node_modules\.bin\electron-builder.cmd --win dir --x64` |
-| 正式打包 | `apps\desktop\node_modules\.bin\electron-builder.cmd --win nsis portable --x64` |
+| 正式打包（安装版） | `apps\desktop\node_modules\.bin\electron-builder.cmd --win nsis --x64` |
+| 打包便携版 zip（一步到位） | `pnpm -C apps/desktop dist:zip`（= 负载 → 壳 → `--dir` → 压 zip，见 D4.4） |
 | 发布工具 | `node apps/desktop/scripts/build-update.mjs` |
 | 打包后恢复开发环境 | `pnpm install`（D8.4 硬性纪律） |
 
-**冻结**：`--win dir --x64` 为**冒烟首选**（快、无需 NSIS）；正式出包才用 `nsis portable`。
+**冻结**：`--win dir --x64` 为**冒烟首选**（快、无需 NSIS）；正式出包用 `nsis`（安装版）与 `pnpm -C apps/desktop dist:zip`（便携版 zip）。
 
 ---
 
@@ -753,10 +785,12 @@ sigint.txt exists: false
 
 ### D16.2 配置块（冻结，逐字）
 
+> **2026-10-06 更新（D4.4）**：`win.target` 移除 `portable`，整个 `portable` 段（含 `artifactName` 与 `splashImage`）删除；`files` 去掉 `!node_modules/**/*`（R7 已实测：该排除会连带压掉 `asarUnpack` 需要的实体，去掉后 electron-builder 按 `asarUnpack` 自行拆分）；`extraResources` 补回 `payload/app-server/node_modules` 一条（D4.2 显式投递 node_modules，不能只靠 `from: payload/app-server` 隐式带出）。以下为**当前实仓逐字**内容。
+
 ```jsonc
 {
   "name": "@novel/desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "NovelMuse 桌面端（Electron 主进程 + 内嵌 server 子进程）",
   "author": "NovelMuse",
@@ -781,8 +815,7 @@ sigint.txt exists: false
     },
     "files": [
       "dist/**/*",
-      "package.json",
-      "!node_modules/**/*"
+      "package.json"
     ],
     "asar": true,
     "asarUnpack": [
@@ -791,14 +824,14 @@ sigint.txt exists: false
       "node_modules/file-uri-to-path/**/*"
     ],
     "extraResources": [
-      { "from": "payload/app-server",  "to": "app-server" },
+      { "from": "payload/app-server", "to": "app-server" },
+      { "from": "payload/app-server/node_modules", "to": "app-server/node_modules" },
       { "from": "../../apps/web/dist", "to": "web-dist" },
       { "from": "payload/seed-plugins", "to": "seed-plugins" }
     ],
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        { "target": "nsis", "arch": ["x64"] }
       ],
       "icon": "build-resources/icon.ico",
       "artifactName": "NovelMuse-${version}-${arch}.${ext}"
@@ -812,19 +845,16 @@ sigint.txt exists: false
       "shortcutName": "听风细雨",
       "artifactName": "NovelMuse-Setup-${version}-${arch}.${ext}",
       "deleteAppDataOnUninstall": false
-    },
-    "portable": {
-      "artifactName": "NovelMuse-Portable-${version}-${arch}.${ext}"
     }
   }
 }
 ```
 
-**关于 `artifactName`**：`win.artifactName` 与 `nsis.artifactName` / `portable.artifactName` 存在覆盖关系。若实测两者冲突，**以 `nsis.artifactName` / `portable.artifactName` 为准**（它们更具体）；`win.artifactName` 为兜底。此优先级关系**需人工确认**（未实测）。
+**关于 `artifactName`**：`win.artifactName` 与 `nsis.artifactName` 存在覆盖关系。若实测两者冲突，**以 `nsis.artifactName` 为准**（它更具体）；`win.artifactName` 为兜底。
 
-**关于 `portable.splashImage`**（2026-10-06 方案 A 新增）：值 `build-resources/splash.bmp`（640×400、24-bit、768054 B）。两点约束：①**必须是 `.bmp`**（`portable.nsi:22` 用 `File /oname=$PLUGINSDIR\splash.bmp` 直接投递该文件，不做格式转换）；②路径按 `packager.projectDir`（= `apps/desktop`）解析（`NsisTarget.js:250`）。生成脚本见 `D:\t6work\make-splash.py`（Pillow，深色渐变 + 品牌图标 + 「正在准备运行环境，请稍候…」）。**移除该项会退回全静默**（`portable.nsi:11-13`），首启表现为「双击后长时间无反应」。
+**关于 `files` 里的 `!node_modules/**/*`（R7 已闭环）**：**已去掉**。该排除会连带压掉 `asarUnpack` 需要的实体；去掉后 electron-builder 按 `asarUnpack` 自行拆分，实测 `app.asar.unpacked` 含 `better-sqlite3` 实体（`better_sqlite3.node` = 1921024 B，ADR F26 期望值 ✓）。
 
-**关于 `files` 里的 `!node_modules/**/*`**：`better-sqlite3` 声明在 `dependencies` 只是为了触发 electron-builder 的 ABI 重建（D8.2），**它的运行期实体不从 asar 读**，而是通过 D8.2 的 junction 指向 `app.asar.unpacked`。若实测该排除导致 `asarUnpack` 失效，则**去掉 `!node_modules/**/*`**，让 electron-builder 自行按 `asarUnpack` 拆分（默认行为）。此分支**需人工确认**。
+**关于便携版 `portable.splashImage`（已废弃）**：见 D4.4。`portable` target 与 `splashImage` 已删除，`build-resources/splash.bmp` 已一并移除；启动图相关的 `portable.nsi` 静默分支论述仅作历史记录保留在 D4.2-修订。
 
 ### D16.3 为什么 `asarUnpack` 必须含 `bindings` 与 `file-uri-to-path`
 `better-sqlite3` 通过 `bindings` 包定位 `.node` 文件，`bindings` 又依赖 `file-uri-to-path`。asar 内动态 `require` 裸说明符实测失败（探针 `Cannot find module 'bindings'`）⇒ 三者必须一起解包。同时 `**/*.node` 本身必须解包（原生模块无法从 asar 内 `dlopen`）。
@@ -933,13 +963,13 @@ release/updates/
 | R4 | **中** | Mode B 依赖闭包完整性（189 packages 基线是否真的够） | t4 起真机冒烟，检查 `server.err.log` 无 `Cannot find package`；并跑一次 AI `/api/ai/gateway` 的 5 个 feature | 按报错补包 |
 | R5 | **中** | tsx 是否把 `.js` 说明符解析到 `.ts`（对 `ai.ts:1351` 的 5 条路由至关重要） | 探针已给 `ABS_JS_TSX_OK`，但**未在打包布局下复现** ⇒ t4 实测 5 个 feature 各调一次 | 若失败，需为 5 个 agent 额外投递 `.js`（需 `tsc` 编译），并回到 captain 修订 D4 |
 | R6 | **中** | `apps/plugins/manual/worldbuilding` 以**实体副本**（解引用 junction）投递后 `import('@novel-plugins/worldbuilding')` 可解析 | t4 检查 `/api/health.plugins[]` 含 `novel.worldbuilding` 且 `status` 正常 | 若失败，在 `app-server/node_modules/@novel-plugins/worldbuilding` 做 junction，或改用 `tsc` 产出 |
-| R7 | **中** | D16.2 中 `files: ["!node_modules/**/*"]` 与 `asarUnpack` 是否互相冲突 | t4 冒烟后检查 `app.asar.unpacked` 是否真的含 better-sqlite3 | 去掉 `!node_modules/**/*`（D16.2 末注） |
-| R8 | **中** | `win.artifactName` 与 `nsis.artifactName` / `portable.artifactName` 的覆盖优先级 | t4 出包后看 `release/desktop/` 实际文件名是否匹配 D1 冻结名 | 以 `nsis.artifactName` / `portable.artifactName` 为准（D16.2 末注） |
+| R7 | **中** | D16.2 中 `files: ["!node_modules/**/*"]` 与 `asarUnpack` 是否互相冲突 | t4 冒烟后检查 `app.asar.unpacked` 是否真的含 better-sqlite3 | **已闭环（2026-10-06）**：实测该排除会连带压掉实体 ⇒ 已从 `files` 去掉；`app.asar.unpacked` 含 `better_sqlite3.node` 1921024 B ✓ |
+| R8 | **中** | `win.artifactName` 与 `nsis.artifactName` 的覆盖优先级 | t4 出包后看 `release/desktop/` 实际文件名是否匹配 D1 冻结名 | 以 `nsis.artifactName` 为准（D16.2 末注）；`portable.artifactName` 随 D4.4 一并删除 |
 | R9 | **中** | `apps/desktop` 的实际解析版本（`yauzl` / `adm-zip`） | `pnpm install` 后读 `pnpm-lock.yaml` | 按实际版本回填本 ADR（须走 captain 修订） |
 | R10 | **低** | 打包后插件 TS 源加载会打印 `[MODULE_TYPELESS_PACKAGE_JSON]` 警告（探针实测 `err4.txt`） | t4 观察 `server.err.log` | 无害，仅记录；若要消除需给插件 `package.json` 加 `"type":"module"`（属插件仓改动，本次不做） |
 | R11 | **低** | 打包后 Electron 主进程 stdout 的 `[Server]` 日志是否完整落盘 | t4 检查 `<userData>/logs/server.err.log` 非空 | 若为空，改由 stdin/临时文件传递 |
 | R12 | **低** | `compareVersions` 对预发布后缀（`1.0.0-beta.1`）的处理 | t6 单测 | 降级为纯数字段比较并记录限制 |
-| R13 | **低** | 便携版（portable）下 `app.getPath('userData')` 的落点是否仍为 `%APPDATA%\NovelMuse` | t6 实跑便携版并读 `updaterGetState().pluginsDir` | 若便携版希望数据随身，需新增 `--data-dir` 参数（**超出本 ADR 范围**，须 captain 决定） |
+| R13 | **低** | 便携版下 `app.getPath('userData')` 的落点是否仍为 `%APPDATA%\NovelMuse` | t6 实跑便携版并读 `updaterGetState().pluginsDir` | **已确认（2026-10-06，D4.4）**：仍为 `%APPDATA%\NovelMuse`；zip 解压版不改变数据落点，升级时覆盖文件夹即可保留书稿 |
 
 **已知的、不修复的既有行为（如实记录，不作为缺陷）**：
 - 未签名安装包会触发 Windows SmartScreen 提示（无证书，D16.4）。

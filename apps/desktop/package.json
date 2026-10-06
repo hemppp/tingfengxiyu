@@ -14,7 +14,8 @@
     "build": "node scripts/build-server-payload.mjs && node scripts/bundle-shell.mjs",
     "type-check": "tsc --noEmit",
     "dist:dir": "node scripts/build-server-payload.mjs && node scripts/bundle-shell.mjs && electron-builder --win dir --x64",
-    "dist": "node scripts/build-server-payload.mjs && node scripts/bundle-shell.mjs && electron-builder --win nsis portable --x64"
+    "dist": "node scripts/build-server-payload.mjs && node scripts/bundle-shell.mjs && electron-builder --win nsis --x64",
+    "dist:zip": "node scripts/build-server-payload.mjs && node scripts/bundle-shell.mjs && electron-builder --win --x64 --dir && node scripts/package-portable-zip.mjs"
   },
   "dependencies": {
     "better-sqlite3": "12.11.1",
@@ -53,8 +54,7 @@
     ],
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        { "target": "nsis", "arch": ["x64"] }
       ],
       "icon": "build-resources/icon.ico",
       "artifactName": "NovelMuse-${version}-${arch}.${ext}"
@@ -68,10 +68,6 @@
       "shortcutName": "听风细雨",
       "artifactName": "NovelMuse-Setup-${version}-${arch}.${ext}",
       "deleteAppDataOnUninstall": false
-    },
-    "portable": {
-      "artifactName": "NovelMuse-Portable-${version}-${arch}.${ext}",
-      "splashImage": "build-resources/splash.bmp"
     }
   }
 }

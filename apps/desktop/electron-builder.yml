@@ -15,7 +15,11 @@
 #     ⇒ 只改本文件 = 没改；只改 package.json = 两份配置漂移。日志里应出现
 #       `loaded configuration { file: 'package.json ("build" field)' }` 作为实证。
 #
-# 目标平台：仅 Windows x64（D1）。分发形态：NSIS 安装版 + 便携版。
+# 目标平台：仅 Windows x64（D1）。分发形态：NSIS 安装版 + 标准便携版 zip。
+#   便携版 zip 不由 electron-builder 的 `zip` target 产出（它是**平铺**的，
+#   6273 个文件直接铺在压缩包根，用户解压会炸开目录）；改由
+#   scripts/package-portable-zip.mjs 加壳（顶层 NovelMuse/ + 使用说明.txt）后压缩。
+#   见 ADR D4.4。`pnpm dist:zip` 一步到位。
 # 不做：macOS / Linux / arm64 / Squirrel / MSI / AppX / 代码签名 / electron-updater。
 
 appId: com.novelmuse.desktop
@@ -72,9 +76,6 @@ win:
     - target: nsis
       arch:
         - x64
-    - target: portable
-      arch:
-        - x64
   icon: build-resources/icon.ico
   artifactName: NovelMuse-${version}-${arch}.${ext}
 
@@ -88,11 +89,7 @@ nsis:
   artifactName: NovelMuse-Setup-${version}-${arch}.${ext}
   deleteAppDataOnUninstall: false
 
-portable:
-  artifactName: NovelMuse-Portable-${version}-${arch}.${ext}
-  # 启动图（D4.2 方案 A 修订，2026-10-06）：未配 SPLASH_IMAGE 时
-  # app-builder-lib/templates/nsis/portable.nsi:11-13 会 `SetSilent silent`
-  # ⇒ 首次启动约 4.5 分钟静默自解压，用户会误判为「启动失败」。
-  # 配图后 .onGUIInit 走 BgImage::SetBg，解压全程有可视反馈。
-  # 路径按 packager.projectDir（= apps/desktop）解析（NsisTarget.js:250），须为 .bmp。
-  splashImage: build-resources/splash.bmp
+# D4.4（2026-10-06）：原 `portable`（NSIS 单文件自解压 exe）已废弃并删除。
+# 它首启要静默自解压 ~4.5 分钟（即便配了 splashImage 仍属非常规形态），
+# 且单文件 exe 会被杀软/邮件网关拦。改用标准绿色便携版 zip：
+#   解压 → 进 NovelMuse/ → 双击 NovelMuse.exe。见 scripts/package-portable-zip.mjs。
