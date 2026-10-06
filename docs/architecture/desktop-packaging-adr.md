@@ -275,7 +275,7 @@ pnpm install
 
 **一键入口**：`pnpm -C apps/desktop dist:zip` = `build-server-payload` → `bundle-shell` → `electron-builder --win --x64 --dir` → `package-portable-zip`。
 
-**验收实测（2026-10-06）**：zip **199732376 B（190.48 MB）**，SHA256 `9d59d6ddf9aba8d3f13ffb8f49f6d80dc02ce786bdf136ce370cdb2f4f3b4bc8`，7223 条目，顶层为 `NovelMuse/`；解压 4.8 s；解压后双击 exe → 5 进程、窗口标题 `听风细雨 - 伴写小说工具`、`main.log` 追加 2087 B 正常启动记录。
+**验收实测（2026-10-06）**：早期构建为 199732376 B / SHA256 `9d59d6ddf9aba8d3f13ffb8f49f6d80dc02ce786bdf136ce370cdb2f4f3b4bc8`（7223 条目）；**最终发布构件**（`release/desktop/NovelMuse-Portable-0.2.0-x64.zip`，即 GitHub v0.2.0 Release 资产）为 **199732384 B（190.48 MB）**，SHA256 `eeaa7a48998e0333c095e78360162fb83dc0386f28c8f6ed8127fc1055e660ec`，**7224 条目**，顶层为 `NovelMuse/`；解压约 5 s；解压后双击 exe → 5 进程、窗口标题 `听风细雨 - 伴写小说工具`、`main.log` 有正常启动记录。
 
 **数据落点不变**：仍是 `%APPDATA%\NovelMuse`（R13 结论），升级时覆盖文件夹即可保留书稿。
 
