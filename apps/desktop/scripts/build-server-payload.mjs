@@ -9,19 +9,23 @@
  *     apps/desktop/payload/app-server/             → extraResources → resources/app-server/
  *     apps/desktop/payload/seed-plugins/{auto,manual,shared}/  → extraResources → resources/seed-plugins/
  *
- * 负载内容（D4.2 冻结清单）：
+ * 负载内容（D4.2 冻结清单，2026-10-06 方案 A 修订后）：
  *   app-server/apps/server/src/**                  server 全部 TS 源码
  *   app-server/packages/{core,db,shared}/**        workspace 包 src + package.json（+ db 的 drizzle/）
  *   app-server/packages/db/drizzle/**              迁移 SQL 与 meta
- *   app-server/node_modules/@novel/{core,db,shared} 实体副本（解引用 junction）
+ *   app-server/node_modules/@novel/{core,db,shared} 实体副本（解引用 junction，排除其 node_modules）
  *   app-server/node_modules/@novel-plugins/worldbuilding  实体副本（builtin.ts:55-65 的动态 import 目标）
  *   app-server/node_modules/<第三方闭包>           运行期依赖闭包（确定性闭包计算，非整目录拷贝）
  *   app-server/node_modules/tsx                     Mode B 的 TS 加载器
  *   app-server/pnpm-workspace.yaml                  仓库根同名文件逐字副本（4 处路径解析依赖该标记）
  *   seed-plugins/{auto,manual,shared}/**            5 个磁盘插件（不含 node_modules）
  *
- * 明确排除（D4.2）：
+ * 明确排除（D4.2，2026-10-06 方案 A 修订）：
  *   - apps/plugins/**\/node_modules/**
+ *   - workspace 包自带的 node_modules（`stripNodeModules`）——它们只是 pnpm 的
+ *     依赖链接，`dereference:true` 会把 web 依赖实体拖进负载
+ *   - web-only 依赖整包（`WEB_ONLY`）——插件 web 面由 vite 构建期收集，server 运行期不读
+ *   - 第三方包内的 .map / .d.ts / .md / LICENSE / 测试目录（`stripFromThirdParty`）
  *   - better-sqlite3 实体（由主进程在运行期建 junction 指向 resources/app.asar.unpacked，
  *     见 D8.2；此处只保留其在 package.json 里的声明，不投递可能 ABI 错误的副本）
  */
@@ -39,6 +43,119 @@ const SEED = path.join(PAYLOAD, 'seed-plugins');
 const ROOT_NM = path.join(REPO, 'node_modules');
 
 const log = (...a) => console.log('[payload]', ...a);
+
+// ---------------------------------------------------------------- 裁剪口径
+// D4.2 修订（2026-10-06，方案 A：启动图 + 裁剪负载）。
+//
+// 便携版（NSIS 自解压）的启动耗时与负载文件数近似线性，裁剪直接缩短首次启动。
+// 两项裁剪互不重叠：①web-only 依赖整包剔除；②第三方包内的文档/源码映射剔除。
+
+/**
+ * Web-only 依赖名单 —— 整包不投递。
+ *
+ * 为什么可以剔除：插件包（`apps/plugins/**`）的 package.json 同时声明 web 面与
+ * server 面依赖，但 **web 面由 vite 在构建 `apps/web` 时收集**
+ * （`apps/web/src/plugin/moduleEntries.ts:71-72` 硬编码 `web/index.tsx` 路径；
+ * `apps/server/src/plugin/local-scanner.ts:18` 注明 web 面是「构建期由 vite glob 收集」），
+ * server 运行期**从不读 webEntry** ⇒ 这些纯前端库进了 server 负载就是死重。
+ *
+ * 判定依据（可复算，见 D:\t6work\analyze-payload.mjs / analyze2.mjs）：
+ *   1. 扫 server 侧全部源码（apps/server/src、packages/{core,db,shared}/src、
+ *      apps/plugins 下各插件的 server 面），本名单中的包 **0 处真实 import**；
+ *   2. `apps/plugins/{auto,manual}/workbench/server/index.ts` 是刻意的**纯 no-op**
+ *      （仅 `import type { ServerPluginContext }`，唯一目的是过 G1 结构门），
+ *      其 12 个面板与编辑器全在 `web/` 目录下；
+ *   3. `apps/server/src/ai/tools/plugin-tools.ts:123-124` 的 `react` / `lucide-react`
+ *      只出现在 `webTemplate()` 返回的**模板字符串内部**（生成给新插件的代码文本），
+ *      不是运行期 import；
+ *   4. `apps/plugins/manual/workbench/stores/index.ts:12` 的 `zustand` 只被 web 面引用。
+ *
+ * ★ 安全前提（由下面 assertNoRetainedDependsOnWebOnly 强制）：
+ *   闭包内**没有任何保留包**把本名单中的包声明为 dependencies/optionalDependencies。
+ *   违反则直接抛错，而不是静默产出坏负载。
+ */
+const WEB_ONLY = new Set([
+  // React 运行时
+  'react',
+  'react-dom',
+  'react-is',
+  'scheduler',
+  'use-sync-external-store',
+  // 图标 / 图形 / 地图 / 力导向
+  'lucide-react',
+  'three',
+  '@xyflow/react',
+  '@xyflow/system',
+  'classcat',
+  'leaflet',
+  'd3-force',
+  'd3-force-3d',
+  'd3-dispatch',
+  'd3-quadtree',
+  'd3-timer',
+  // 富文本编辑器（Tiptap / ProseMirror / 其 markdown 依赖链）
+  '@tiptap/core',
+  '@tiptap/pm',
+  '@tiptap/react',
+  '@tiptap/starter-kit',
+  '@tiptap/extension-character-count',
+  '@tiptap/extension-highlight',
+  '@tiptap/extension-placeholder',
+  '@tiptap/extension-underline',
+  '@remirror/core-constants',
+  'prosemirror-model',
+  'prosemirror-state',
+  'prosemirror-transform',
+  'prosemirror-view',
+  'prosemirror-tables',
+  'prosemirror-commands',
+  'prosemirror-keymap',
+  'prosemirror-schema-list',
+  'prosemirror-schema-basic',
+  'prosemirror-dropcursor',
+  'prosemirror-gapcursor',
+  'prosemirror-history',
+  'prosemirror-inputrules',
+  'prosemirror-collab',
+  'markdown-it',
+  'linkify-it',
+  'mdurl',
+  'uc.micro',
+  'punycode.js',
+  'argparse',
+  'entities',
+  // 其它纯前端工具
+  'date-fns',
+  'dompurify',
+  'html-to-image',
+  'tippy.js',
+  '@popperjs/core',
+  'zustand',
+  'nanoid',
+]);
+
+/**
+ * 第三方包内的非运行期文件 —— 复制时跳过。
+ *
+ * `.d.ts` 只服务 tsc、`.map` 只服务调试器源码映射、`.md`/`LICENSE`/`CHANGELOG`
+ * 只服务人类，node/tsx 运行期一概不读。仅作用于**第三方闭包**；
+ * workspace 包（`@novel/*`、`@novel-plugins/*`）是 TS 源码，原样投递。
+ */
+function stripFromThirdParty(src) {
+  const base = path.basename(src);
+  if (base.endsWith('.map') || base.endsWith('.d.ts')) return false;
+  if (base.endsWith('.md') || base.endsWith('.markdown')) return false;
+  if (base.endsWith('.txt') || base.endsWith('.flow')) return false;
+  if (/^(LICENSE|LICENCE|CHANGELOG|CHANGES|AUTHORS|NOTICE)/i.test(base)) return false;
+  if (base === '.github' || base === '.vscode' || base === '__tests__' || base === '.circleci') return false;
+  if (base === '.nycrc' || base === '.editorconfig' || base === '.eslintrc' || base === '.eslintrc.json') return false;
+  return true;
+}
+
+/** workspace 包实体副本：排除其自带的 node_modules（避免 dereference 把 web 依赖拖进来）。 */
+function stripNodeModules(src) {
+  return !src.includes(`${path.sep}node_modules`);
+}
 
 // ---------------------------------------------------------------- utils
 
@@ -114,15 +231,24 @@ function collectRootDeps() {
   return roots;
 }
 
-/** 广度优先展开传递依赖闭包（只走 dependencies / optionalDependencies）。 */
-function expandClosure(roots) {
+/** 广度优先展开传递依赖闭包（只走 dependencies / optionalDependencies）。
+ *
+ *  `deny` 命中的包**不投递**，且**不再向下展开**（其传递依赖也一并省掉）。
+ */
+function expandClosure(roots, deny) {
   const closure = new Map(); // name -> dir
   const queue = [...roots];
   const missing = new Set();
+  const denied = new Set();
 
   while (queue.length) {
     const name = queue.shift();
     if (closure.has(name)) continue;
+    if (deny && deny.has(name)) {
+      closure.set(name, null);
+      denied.add(name);
+      continue;
+    }
     const dir = resolvePkgDir(name);
     if (!dir) {
       missing.add(name);
@@ -138,7 +264,30 @@ function expandClosure(roots) {
       }
     }
   }
-  return { closure, missing };
+  return { closure, missing, denied };
+}
+
+/**
+ * 安全闸：闭包内任何**保留包**都不得把 web-only 包声明为运行期依赖。
+ * 命中即抛错 —— 宁可打包失败，也不产出运行期会 MODULE_NOT_FOUND 的负载。
+ */
+function assertNoRetainedDependsOnWebOnly(closure, deny) {
+  const violations = [];
+  for (const [name, dir] of closure) {
+    if (!dir) continue; // 已剔除或未解析
+    if (deny.has(name)) continue;
+    const j = readJson(path.join(dir, 'package.json'));
+    for (const field of ['dependencies', 'optionalDependencies']) {
+      for (const dep of Object.keys(j[field] ?? {})) {
+        if (deny.has(dep)) violations.push(`${name} --${field}--> ${dep}`);
+      }
+    }
+  }
+  if (violations.length) {
+    throw new Error(
+      'web-only 剔除名单不安全，以下保留包仍硬依赖被剔除项：\n  ' + violations.join('\n  '),
+    );
+  }
 }
 
 // ---------------------------------------------------------------- main
@@ -171,9 +320,9 @@ function main() {
 
   for (const p of ['core', 'db', 'shared']) {
     const from = path.join(REPO, 'packages', p);
-    copyDir(from, path.join(APP_SERVER, 'packages', p));
-    copyDir(from, path.join(destNm, '@novel', p));
-    log(`packages/${p} → app-server/packages/${p} + node_modules/@novel/${p}`);
+    copyDir(from, path.join(APP_SERVER, 'packages', p), stripNodeModules);
+    copyDir(from, path.join(destNm, '@novel', p), stripNodeModules);
+    log(`packages/${p} → app-server/packages/${p} + node_modules/@novel/${p}（已排除其 node_modules）`);
   }
 
   // packages/db/drizzle 必须存在（better-sqlite3-adapter.ts:488 / project-db.ts:172-173）
@@ -195,19 +344,26 @@ function main() {
 
   // ---- 4) 第三方依赖闭包 ----
   const roots = collectRootDeps();
-  const { closure, missing } = expandClosure(roots);
+  const { closure, missing, denied } = expandClosure(roots, WEB_ONLY);
+  assertNoRetainedDependsOnWebOnly(closure, WEB_ONLY);
+
+  if (denied.size) {
+    log(`web-only 剔除 ${denied.size} 个包（不进负载）：${[...denied].join(', ')}`);
+  }
 
   // better-sqlite3 不投递实体：由主进程运行期建 junction → resources/app.asar.unpacked（D8.2）
   const EXCLUDE_FROM_PAYLOAD = new Set(['better-sqlite3']);
 
   const copied = [];
+  let strippedBytes = 0;
+  let strippedFiles = 0;
   for (const [name, dir] of closure) {
     if (!dir) continue;
     if (EXCLUDE_FROM_PAYLOAD.has(name)) {
       log(`跳过 ${name}（D8.2：由主进程运行期建 junction 指向 app.asar.unpacked）`);
       continue;
     }
-    copyDir(dir, path.join(destNm, name));
+    copyDir(dir, path.join(destNm, name), stripFromThirdParty);
     copied.push(name);
   }
 

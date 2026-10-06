@@ -175,7 +175,7 @@ pnpm install
 |---|---|
 | 负载根 | `resources/app-server/`（`extraResources` 投递） |
 | 负载生成器 | `apps/desktop/scripts/build-server-payload.mjs`（**确定性脚本**，不得手工拷贝） |
-| 体积基线 | **189 packages / 107768288 B（≈102.8 MB）**（F24） |
+| 体积基线 | **189 packages / 107768288 B（≈102.8 MB）**（F24）；**2026-10-06 方案 A 修订后实测 165 包 / 71503210 B（≈68.2 MB）**，见下「D4.2-修订」 |
 | tsx | `<app-server>/node_modules/tsx`（518243 B，F24） |
 | server 入口 | `<app-server>/apps/server/src/index.ts` |
 | 子进程 cwd | `<userData>/app-runtime/app-server` |
@@ -196,6 +196,29 @@ pnpm install
 | `app-server/seed-plugins/{auto,manual,shared}/**` | `apps/plugins/` 下 5 个磁盘插件 | 首次启动播种到 `<userData>/plugins/`（D7） |
 
 **必须排除**：`apps/plugins/**/node_modules/**`（仅 `auto/novel.autowrite` 与 `manual/workbench` 有插件局部 `node_modules`，会污染解析）。
+
+#### D4.2-修订（2026-10-06，方案 A：启动图 + 裁剪负载）
+
+**动机**：便携版（NSIS 自解压）首次启动需把负载解到 `%TEMP%`。实测原负载 **32158 文件 / 240.8 MB**，解压耗时约 **4.5 分钟**且全程无窗口（未配 `splashImage` 时 `portable.nsi:11-13` 会 `SetSilent silent`），用户据此误判为「启动失败」。故做两项改动：
+
+1. **启动图**：`portable.splashImage = build-resources/splash.bmp`（640×400 24-bit BMP，768054 B）。`NsisTarget.js:250` 按 `packager.projectDir` 解析该路径；`portable.nsi:21-24` 走 `BgImage::SetBg` ⇒ 解压全程有可视反馈，且 `!ifndef SPLASH_IMAGE` 不再成立 ⇒ 不进入静默分支。
+2. **裁剪负载**：`build-server-payload.mjs` 新增两道过滤器，均**确定性**、可复算：
+   - `WEB_ONLY` 名单：**整包不投递**且**不再向下展开**。判定依据 = 扫 server 侧全部源码（`apps/server/src`、`packages/{core,db,shared}/src`、各插件 `server/` 目录）本名单包 **0 处真实 import**；插件 web 面由 vite 构建期收集（`apps/web/src/plugin/moduleEntries.ts:71-72`），server 运行期不读 `webEntry`；`plugin-tools.ts:123-124` 的 `react`/`lucide-react` 只在 `webTemplate()` 模板字符串内部；`workbench/stores/index.ts` 的 `zustand` 只被 web 面引用。含 `react`/`react-dom`/`react-is`/`scheduler`/`use-sync-external-store`/`lucide-react`/`three`/`@xyflow/*`/`classcat`/`leaflet`/`d3-force*`/`@tiptap/{core,pm,react,starter-kit,extension-*}`/`@remirror/core-constants`/`prosemirror-*`/`markdown-it`+其链/`date-fns`/`dompurify`/`html-to-image`/`tippy.js`/`@popperjs/core`/`zustand`/`nanoid`。**安全闸** `assertNoRetainedDependsOnWebOnly()`：闭包内任何保留包若把被剔除项声明为 `dependencies`/`optionalDependencies` 即**抛错**，绝不静默产出坏负载。
+   - `stripFromThirdParty`：第三方包内 `.map` / `.d.ts` / `.md` / `.txt` / `LICENSE*` / `CHANGELOG*` / `.github` / `.vscode` / `__tests__` / `.nycrc` / `.editorconfig` / `.eslintrc*` 不复制（仅服务 tsc、调试器与人类，node/tsx 运行期不读）。**仅作用于第三方闭包**；workspace 包是 TS 源，原样投递。
+   - `stripNodeModules`：`packages/{core,db,shared}` 实体副本排除其自带 `node_modules`。原先 `dereference:true` 会把 `packages/core/node_modules/lucide-react`（27 MB）实体拖进负载（`@novel/core` 下 3544 文件即此）。
+
+**实测收益**（`node apps/desktop/scripts/build-server-payload.mjs`）：
+
+| 指标 | 修订前 | 修订后 | 变化 |
+|---|---|---|---|
+| `app-server` 体积 | 252477088 B | **71503210 B** | −71.7% |
+| `app-server` 文件数 | 32158 | **5935** | −81.5% |
+| 第三方闭包包数 | 261 | 165 | −96 包 |
+| `.map`+`.d.ts` 残留 | 13471 文件 / 115.9 MB | **0 / 0** | 全清 |
+
+10 项自检全 ✔（含 D9 冻结的 `sql-wasm.wasm` 659730 B、`tsx/dist/cli.mjs`、`@novel/db` 实体、drizzle 迁移、worldbuilding 实体、`pnpm-workspace.yaml` 标记）。`better-sqlite3` 仍按 D8.2 不投递实体（运行期 junction 指向 `app.asar.unpacked`）。
+
+**保留项说明**：`@tiptap/*` 整族剔除后，`packages/core` 的根 barrel（`index.ts`）**不**再导出 `web.ts`（仅 `./loader.js` 等 server 面），故 web-only 类型不再被 server 模块图拉入；`@novel/core/web` 子路径导出仍由 `package.json` 的 `exports["./web"]` 声明，web 面走 vite 构建，不受影响。
 
 ### D4.3 动态 import 点清单（**验收标准 3 要求**）
 
@@ -798,6 +821,8 @@ sigint.txt exists: false
 ```
 
 **关于 `artifactName`**：`win.artifactName` 与 `nsis.artifactName` / `portable.artifactName` 存在覆盖关系。若实测两者冲突，**以 `nsis.artifactName` / `portable.artifactName` 为准**（它们更具体）；`win.artifactName` 为兜底。此优先级关系**需人工确认**（未实测）。
+
+**关于 `portable.splashImage`**（2026-10-06 方案 A 新增）：值 `build-resources/splash.bmp`（640×400、24-bit、768054 B）。两点约束：①**必须是 `.bmp`**（`portable.nsi:22` 用 `File /oname=$PLUGINSDIR\splash.bmp` 直接投递该文件，不做格式转换）；②路径按 `packager.projectDir`（= `apps/desktop`）解析（`NsisTarget.js:250`）。生成脚本见 `D:\t6work\make-splash.py`（Pillow，深色渐变 + 品牌图标 + 「正在准备运行环境，请稍候…」）。**移除该项会退回全静默**（`portable.nsi:11-13`），首启表现为「双击后长时间无反应」。
 
 **关于 `files` 里的 `!node_modules/**/*`**：`better-sqlite3` 声明在 `dependencies` 只是为了触发 electron-builder 的 ABI 重建（D8.2），**它的运行期实体不从 asar 读**，而是通过 D8.2 的 junction 指向 `app.asar.unpacked`。若实测该排除导致 `asarUnpack` 失效，则**去掉 `!node_modules/**/*`**，让 electron-builder 自行按 `asarUnpack` 拆分（默认行为）。此分支**需人工确认**。
 

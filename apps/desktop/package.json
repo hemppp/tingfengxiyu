@@ -70,7 +70,8 @@
       "deleteAppDataOnUninstall": false
     },
     "portable": {
-      "artifactName": "NovelMuse-Portable-${version}-${arch}.${ext}"
+      "artifactName": "NovelMuse-Portable-${version}-${arch}.${ext}",
+      "splashImage": "build-resources/splash.bmp"
     }
   }
 }
