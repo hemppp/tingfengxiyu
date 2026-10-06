@@ -12,8 +12,11 @@
 ### 新增
 
 - **桌面端（Electron）**：主进程 + 内嵌 server 子进程，内置 server 负载与
-  seed 插件；交付 **Windows x64 便携版（标准绿色 zip，解压后双击 `NovelMuse.exe`
-  即运行）** 与 NSIS 安装版。
+  seed 插件；交付 Windows x64 的**三种形态**：NSIS 安装版、
+  **单文件便携 exe**（`NovelMuse-Portable-0.2.0-x64.exe`，双击即用，
+  首启自解压并显示启动图）与**标准绿色 zip**
+  （`NovelMuse-Portable-0.2.0-x64.zip`，解压后进顶层 `NovelMuse/`
+  双击 `NovelMuse.exe`）。
   首启自动播种数据目录，退出走优雅关闭通道。
 - **停靠式工作台（Dock）**：以 `dockview` 重建项目页布局 —— 活动栏、
   左/中/右三栏与底部细条，面板可拖拽停靠；新增 **文档标签**（DocTabs）
@@ -38,16 +41,23 @@
 ### 修复
 
 - **文档标签重复行**：中心区组头与文档标签曾出现两条重复行，已收敛为一行。
-- **便携版形态改为标准绿色 zip**：原「便携版」是 electron-builder 的 `portable`
-  单文件自解压 exe，双击后需静默解包到 `%TEMP%`、耗时以分钟计且易被安全软件拦截。
-  现改为普通 `.zip`（内含顶层 `NovelMuse/` 目录），解压后直接双击目录内
-  `NovelMuse.exe` 运行；数据仍落在 `%APPDATA%\NovelMuse`，升级覆盖文件夹即可保留书稿。
-- **便携版首启体验**：配套把 server 负载从 **240.8 MB / 32158 文件** 裁剪到
+- **便携版首启无反馈（已修）**：单文件便携 exe 在未配 `portable.splashImage` 时，
+  electron-builder 的 `portable.nsi` 会走 `SetSilent silent` ⇒ 双击后要静默自解压
+  数分钟且全程无窗口，用户据此判定「启动失败」。现已配启动图
+  （`build-resources/splash.bmp`），解压全程可见提示。
+- **便携版负载过大（已修）**：配套把 server 负载从 **240.8 MB / 32158 文件** 裁剪到
   **68.2 MB / 5911 文件**（剔除 web-only 依赖与第三方包内 `.map`/`.d.ts`/文档），
-  便携版 zip 约 **190 MB**，解压约 **5 秒**，双击即起窗。
+  单文件 exe 首启自解压由约 **4.5 分钟**降到约 **1–2 分钟**；绿色 zip 约 **190 MB**，
+  解压约 **5 秒**，双击即起窗。
+- **便携形态二选一**：既提供单文件自解压 exe（双击即用），也提供标准绿色 zip
+  （内含顶层 `NovelMuse/` 目录；electron-builder 原生 `zip` target 会把 6273 个文件
+  平铺在压缩包根，故 zip 由 `scripts/package-portable-zip.mjs` 加壳后压缩）。
+  两种形态数据落点相同：`%APPDATA%\NovelMuse`，升级覆盖文件夹即可保留书稿。
 
 ### 已知限制
 
+- 桌面端产物**未做代码签名**：首次运行会触发 Windows SmartScreen 提示，
+  选择「仍要运行」即可。
 - AI 自动写作模块（`novel.autowrite` 引擎与 `novel.auto.workbench` 界面）
   处于剥离态：打开 `mode=auto` 的项目会显示「AI 写作台未安装」占位，
   这是预期行为，不会崩溃或白屏。
