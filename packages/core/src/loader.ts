@@ -27,7 +27,7 @@
 import type { PluginManifest, PluginMode } from './manifest.js';
 import type { BasePluginContext, PluginModule } from './context.js';
 
-export const HOST_VERSION = '0.1.0';
+export const HOST_VERSION = '0.2.0';
 
 export interface PluginEntry {
   /** 插件 id（对应 manifest.id） */
