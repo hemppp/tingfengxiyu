@@ -1,5 +1,5 @@
 import { EditorContent } from '@tiptap/react';
-import { useChapterStore, useProjectStore } from '@novel-plugins/data-core/stores';
+import { useChapterStore, useProjectStore, useCharacterStore } from '@novel-plugins/data-core/stores';
 import { useChapterJumpStore } from '../stores/chapterJumpStore';
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -17,6 +17,8 @@ import { QuickPhraseBubble, QP_BUBBLE_CLEARANCE } from './panels/QuickPhraseBubb
 import { PluginEditorToolbar } from './PluginEditorToolbar';
 import { EditorPanelRail } from './EditorPanelRail';
 import { useEditorInstance } from './hooks/useEditorInstance';
+import { useAnnotationBlockBridge } from './hooks/useAnnotationBlockBridge';
+import { buildChapterMetaSegments } from './chapterMeta';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useAutoEntityDetection } from '../hooks/useAutoEntityDetection';
 import { useLatestChapterPolling } from '../hooks/useLatestChapterPolling';
@@ -45,6 +47,8 @@ const SUBTITLE_STYLE: React.CSSProperties = {
   color: 'hsl(var(--mountain-deep))',
 };
 
+/** 元信息行的一段；四段全部来自真实数据，缺失时整段不进入数组（不渲染空占位/null） */
+
 export function EditorPage() {
   const [writerMode, setWriterMode] = useState(false);
   const [styleProfile, setStyleProfile] = useState<StyleProfile | null>(null);
@@ -64,6 +68,8 @@ export function EditorPage() {
   const getCurrentChapter = useChapterStore((s) => s.getCurrentChapter);
   const updateChapter = useChapterStore((s) => s.updateChapter);
   const currentProject = useProjectStore((s) => s.currentProject);
+  /** 角色表：用于推导「在场人物」（角色 `chapters` 存的是出场章节的 order 序号） */
+  const characters = useCharacterStore((s) => s.characters);
   const jumpSignal = useChapterJumpStore((s) => s.jumpSignal);
   const jumpAnchor = useChapterJumpStore((s) => s.jumpAnchor);
 
@@ -86,6 +92,7 @@ export function EditorPage() {
 
   const {
     editor,
+    liveWordCount,
     prevWordCount: _prevWordCount,
     resetWordCount,
   } = useEditorInstance({
@@ -467,6 +474,29 @@ export function EditorPage() {
     };
   }, [currentChapterId, editor]);
 
+  // ★ 把「本章未解决批注块数量」发布给外壳（底部细条 N 条问题）。
+  //   刻意声明在章节切换 effect **之后**：切章时 setContent(injectContent, false) 不触发
+  //   editor 'update'，本 effect 排在切换之后才能读到新章内容（hook 内另有下一 macrotask 补发兜底）。
+  useAnnotationBlockBridge(editor, currentChapterId);
+
+  // ★ 章节元信息行（标题下方）：四段全部由真实数据推导，任一段缺失即整段不渲染。
+  //   · 字数：编辑器实时字数（useEditorInstance 的 liveWordCount），未就绪时回落到章节持久化字数
+  //   · 最后修改：chapter.updatedAt
+  //   · 本章标识：chapter.label（真实标签）优先，否则 chapter.order（真实序号）→ D{n}
+  //   · 在场人物：角色-章节关联（character.chapters 里存的是出场章节的 order），不写死
+  const metaSegments = useMemo(
+    () =>
+      buildChapterMetaSegments({
+        wordCount: currentChapter?.wordCount,
+        updatedAt: currentChapter?.updatedAt,
+        label: currentChapter?.label,
+        order: currentChapter?.order,
+        liveWordCount,
+        characters,
+      }),
+    [currentChapter, liveWordCount, characters],
+  );
+
   if (writerMode && editor) {
     return (
       <WriterMode
@@ -562,6 +592,30 @@ export function EditorPage() {
             {currentChapter.label}
           </div>
         )}
+        {/* 元信息行：字数 · 最后修改 · 本章标识 · 在场人物（四段均为真实数据，缺失段不渲染） */}
+        <div
+          className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 mt-2 text-[12px]"
+          style={{ color: 'hsl(var(--ink-pale))' }}
+        >
+          {metaSegments.map((segment, index) => (
+            <span key={segment.key} className="inline-flex items-center gap-2">
+              {index > 0 && <span aria-hidden="true">·</span>}
+              <span title={segment.title}>{segment.text}</span>
+            </span>
+          ))}
+          {metaSegments.length > 0 && <span aria-hidden="true">·</span>}
+          <button
+            type="button"
+            onClick={() => editor?.chain().focus().insertAnnotationBlock().run()}
+            disabled={!editor}
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors hover:bg-[hsl(var(--mist-pale))] disabled:opacity-40"
+            title="在当前段落之后插入批注块（Ctrl+Alt+A）"
+            aria-label="插入批注块"
+          >
+            <Plus size={11} aria-hidden="true" />
+            <span>批注</span>
+          </button>
+        </div>
       </div>
 
       {/* Foreshadow 警告 */}

@@ -9,6 +9,7 @@ import CharacterCount from '@tiptap/extension-character-count';
 import { useEffect, useRef, useCallback, useMemo, useState, useLayoutEffect } from 'react';
 import { nanoid } from 'nanoid';
 import { AnnotationExtension } from '../extensions/AnnotationExtension';
+import { AnnotationBlockExtension } from '../extensions/AnnotationBlockExtension';
 import { LeadCharacterHighlight } from '../extensions/LeadCharacterHighlight';
 import { useChapterStore, useStatsStore, useForeshadowStore, useAnnotationStore, useCharacterStore, cascadeCleanChapterClient } from '@novel-plugins/data-core/stores';
 import { useEditorStore } from '@novel-plugins/data-core/stores';
@@ -216,6 +217,8 @@ export function useEditorInstance({ initialContent, styleProfile }: UseEditorIns
       }),
       CustomHighlight.configure({ multicolor: true }),
       AnnotationExtension,
+      // 块级内嵌批注块（浅灰底 + 左强调条 + 类型徽标 + 自由文本）
+      AnnotationBlockExtension,
       Underline,
       CharacterCount,
       LeadCharacterHighlight.configure({ names: [] }),

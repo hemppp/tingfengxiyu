@@ -26,7 +26,9 @@
   /* 标签条容器（VS Code：活动栏/侧栏色系） */
   --dv-tabs-and-actions-container-background-color: var(--vscode-tab-inactiveBackground);
   --dv-tabs-and-actions-container-font-size: 13px;
-  --dv-tabs-and-actions-container-height: 35px;
+  /* ★ t6 尺寸对齐参考图：把实现渲染到参考图同尺寸（1489×931）后逐行实测，
+   * 参考图标签条带 = 33px（y36..68，含 1px 下边线），原 35px 偏高 2px。 */
+  --dv-tabs-and-actions-container-height: 33px;
 
   /* 标签活动 / 非活动（active group） */
   --dv-activegroup-visiblepanel-tab-background-color: var(--vscode-tab-activeBackground);
@@ -49,8 +51,13 @@
   /* Splitter（sash）—— 8.4.0 语义实测（styles/dockview.css L1447/L1450）：
      · 空闲态  background-color: var(--dv-sash-color, transparent)          → 中性底
      · 悬停/按下 background-color: var(--dv-active-sash-color, transparent)  → 焦点蓝
-     故焦点蓝必须赋给 --dv-active-sash-color，空闲态给中性色（否则空闲 Splitter 被染蓝）。 */
-  --dv-sash-color: var(--vscode-splitter-background);
+     ★ t6 尺寸对齐参考图：空闲态改为 **transparent**（与 dockview 自带主题一致，见 dockview.css:1518/1587/1660…）。
+     原因：参考图那条 1px 分隔线由**分隔伪元素**承担 —— dockview.css:1403-1406
+     `.dv-split-view-container.dv-horizontal > .dv-view-container > .dv-view:not(:first-child)::before { height:100%; width:1px }`
+     加 :1486-1494 以 `--dv-separator-border` 上色；sash 与它各自 1px、中间还隔 1px，
+     两处都上色就成了「双线」（实测 1484 宽下 x285 与 x287 各一条 #d9d9d9）。
+     悬停反馈由 --dv-active-sash-color 与下方 :hover/:active 规则承担，不依赖空闲色。 */
+  --dv-sash-color: transparent;
   --dv-active-sash-color: var(--vscode-sash-hoverBorder);
 
   /* 能力 5：拖拽落点预览指示器（§5.6 冻结） */
@@ -114,6 +121,17 @@
   background-color: var(--vscode-focusBorder);
 }
 
+/* ★ t6 尺寸对齐参考图：头部带的下边线。
+   同尺寸逐行实测（实现与参考图都在 1489×931 渲染，参考图先裁掉 4px 左描边 / 5px 上描边对齐应用区）：
+   · 参考图 y63 在**中栏整列**是深色细线（centre 861/861 像素全中），左/右列没有（1/231、39/336）；
+   · 实现原先 y63 完全无线（centre 5/861），左/右的线反而落在 y66 —— 那是面板自带 h-9(36px) 标题条的 border-b。
+   dockview 的 `.dv-tabs-and-actions-container` 本身就是 `box-sizing: border-box`
+   （styles/dockview.css），故 1px 下边线正好吃掉 33px 的最后一行为 y63，与参考图逐行重合；
+   左/右组的组头在「去层改造」里已被 `header.hidden = true`，该线自然不会出现在它们上面 —— 与参考图一致。 */
+.dv-theme-vscode .dv-tabs-and-actions-container {
+  border-bottom: 1px solid var(--vscode-divider);
+}
+
 /* ---------- 能力 7：Splitter（sash）可拖动 + 视觉反馈 ----------
    dockview@8.4.0 的 sash 只存在于 `.dv-split-view-container .dv-sash-container .dv-sash`；
    `.dv-sash` 的父级永远不是悬浮组外层容器 —— 原先那条以悬浮组外层类名起头的选择器
@@ -125,15 +143,35 @@
   background-color: var(--vscode-sash-hoverBorder);
 }
 
+/* ★ t6 分隔线口径：参考图的分隔是**中性 1px 细线**（实测 #d5d5d5 / #d7d7d7 / #dddddd，
+   x51 / x282 / x1193 各 1px），而 dockview@8.4.0 把 sash 的粗细**写死在 CSS** 里
+   （`dockview.css:1387-1390` 横向 `width:4px`、`:1410-1413` 纵向 `height:4px`；
+   JS 侧 `dockview-core.js:1667 const sashWidth = 4` 只用来算定位中点）。
+   故此处以更高特异性覆盖粗细 —— JS 仍照常定位，只是把 4px 收成 1px。
+   颜色沿用 `--dv-sash-color`（= `--vscode-splitter-background`，已是中性灰）。 */
+.dv-theme-vscode .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash {
+  width: 1px;
+}
+
+.dv-theme-vscode .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash {
+  height: 1px;
+}
+
 /* ---------- 外壳骨架（VS Code 网格） ---------- */
+/* ★ t1（外壳改造）：网格从 7 区收成 3 区 —— 两个**纯占位**侧栏（260px 主侧栏 /
+   240px 辅助侧栏）已删除，真实面板由 dockview 在编辑区内左右停靠（左 240 / 右 340，
+   见 dock/layout.ts:20-31）；状态栏也只剩 ProjectLayout 的通栏一根。
+   余下：活动栏（47px，纵向贯穿到状态栏）+ 编辑区 + 底部面板细条。
+   ★ t6 尺寸对齐参考图：活动栏 48px → 47px。参考图（应用区坐标）活动栏的右分隔线落在
+   x46（内容 x0..45 + 1px 边框），实现原为 x47，整条布局因此比参考图右移 1px；
+   改为 47px 后分隔线同样落在 x46，右侧三个竖栏全部左移 1px 与参考图对齐。 */
 .dock-shell {
   display: grid;
-  grid-template-columns: 48px 260px minmax(0, 1fr) 240px;
-  grid-template-rows: minmax(0, 1fr) minmax(0, auto) 22px;
+  grid-template-columns: 47px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, auto);
   grid-template-areas:
-    'activity sidebar main    aux'
-    'activity sidebar bottom  aux'
-    'status   status  status  status';
+    'activity main'
+    'activity bottom';
   height: 100%;
   width: 100%;
   overflow: hidden;
@@ -153,7 +191,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 10px;
   padding-top: 6px;
   background-color: var(--vscode-activityBar-background);
   color: var(--vscode-activityBar-foreground);
@@ -161,8 +199,10 @@
 }
 
 .dock-activity-item {
-  width: 48px;
-  height: 44px;
+  /* ★ t6 尺寸对齐参考图：参考图活动栏条目实测「43×36，条目间距 10px（节距 46）」，
+   * 原 `48×44 + gap 2px` 节距同为 46 但条目本身比参考图高 8px、宽 5px。 */
+  width: 44px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -184,61 +224,7 @@
   border-left-color: var(--vscode-activityBar-activeBorder);
 }
 
-/* --- 侧边栏 / 辅助侧栏 --- */
-.dock-side-bar {
-  grid-area: sidebar;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-  background-color: var(--vscode-sideBar-background);
-  color: var(--vscode-sideBar-foreground);
-  border-right: 1px solid var(--vscode-sideBar-border);
-}
-
-.dock-aux-bar {
-  grid-area: aux;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-  background-color: var(--vscode-sideBar-background);
-  color: var(--vscode-sideBar-foreground);
-  border-left: 1px solid var(--vscode-sideBar-border);
-}
-
-.dock-side-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
-
-.dock-side-empty {
-  padding: 12px;
-  font-size: 12px;
-  color: var(--vscode-descriptionForeground);
-}
-
-/* --- 分区标题条 --- */
-.dock-section-header {
-  display: flex;
-  align-items: center;
-  height: 22px;
-  padding: 0 10px;
-  flex: 0 0 auto;
-  background-color: var(--vscode-sideBarSectionHeader-background);
-  color: var(--vscode-sideBarSectionHeader-foreground);
-  border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.dock-section-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* --- 分区标题条 / 占位侧栏：★ t1 已随两个占位侧栏一并删除 --- */
 
 /* --- 中心编辑区（dockview 宿主） --- */
 .dock-main {
@@ -278,57 +264,98 @@
   color: var(--vscode-editor-foreground);
 }
 
+/* ★ t6 色板两级层次：参考图里「外壳（顶栏/标签行/左右栏/状态栏）」是 `#fdfdfd`，
+   而**中心编辑区是更低一档的 `#f6f6f6` 灰面**（实测参考中心体 77.87% 为 `#f6f6f6`）。
+   原先中心区与外壳同为纯白，两级层次被抹平。这里把中心面切到
+   `--vscode-editorSurface-background`（`vscode-dark-modern.css:41-42` 新增，
+   亮色 = `hsl(0 0% 96.5%)` ≈ `#f6f6f6`），侧栏面板仍走 `--vscode-panel-background`。 */
+.dock-editor-surface,
+.dock-center-slot {
+  background-color: var(--vscode-editorSurface-background);
+}
+
 .dock-panel-body {
   background-color: var(--vscode-panel-background);
   color: var(--vscode-panel-foreground);
 }
 
-/* --- 底部面板区骨架 --- */
+/* --- 底部面板细条（t1 截图）：折叠 28px / 展开 200px，展开内容区自己滚动 --- */
 .dock-bottom-area {
   grid-area: bottom;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  min-height: 28px;
   overflow: hidden;
   background-color: var(--vscode-panel-background);
   color: var(--vscode-panel-foreground);
   border-top: 1px solid var(--vscode-panel-border);
 }
 
-.dock-bottom-hint {
-  padding: 8px 12px;
-  font-size: 12px;
-  color: var(--vscode-descriptionForeground);
+.dock-bottom-area[data-open='true'] {
+  height: 200px;
 }
 
-/* --- 状态栏 --- */
-.dock-status-bar {
-  grid-area: status;
-  align-self: end;
-  height: 22px;
+.dock-bottom-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+  flex: 0 0 auto;
+  height: 28px;
   padding: 0 8px;
-  background-color: var(--vscode-statusBar-background);
-  color: var(--vscode-statusBar-foreground);
-  border-top: 1px solid var(--vscode-statusBar-border);
   font-size: 12px;
-  z-index: 2;
-}
-
-.dock-status-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.dock-status-item {
   white-space: nowrap;
+}
+
+.dock-bottom-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.dock-bottom-toggle:hover .dock-bottom-title {
+  color: var(--vscode-editor-foreground);
+}
+
+.dock-bottom-title {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.dock-bottom-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--vscode-descriptionForeground);
+}
+
+.dock-bottom-issues {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dock-bottom-kbd {
+  font-family: var(--vscode-font-family);
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.dock-bottom-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+/* --- 状态栏：★ t1 已删除内核自带的第二根（截图只有 ProjectLayout 的通栏一根） --- */
 
 /* --- 能力 4：标签（堆叠标签的视觉，VS Code 对齐） --- */
 .dock-tab {
@@ -382,8 +409,16 @@
   background-color: var(--vscode-toolbar-hoverBackground);
 }
 
-/* 活动标签顶部指示条（VS Code 的蓝线签名） */
-.dv-theme-vscode .dv-active-tab {
+/* 活动标签顶部指示条。
+ * ★ t6 去层修正：中心组的「文档标签行」在 dockview 里是**唯一一个 tab**
+ *   （`singleTabMode="fullwidth"`），于是 `.dv-active-tab` 的上边线会横跨
+ *   整个中栏顶部 —— 实测 y=35 墨线 x289..921（633px = 中栏全宽），
+ *   而参考图口径是「只有活动文档标签自身才有 2px 墨线」（参考图里是
+ *   x286..415 一段）。故仅在**真正多标签**的标签条上保留该指示线；
+ *   单标签时强调由 tabComponent 自己负责（`.shell-doctab.is-active`
+ *   的 border-top，实测落在 y36..37 / x289..374）。
+ */
+.dv-theme-vscode .dv-tabs-container > .dv-active-tab:not(:only-child) {
   border-top: 1px solid var(--vscode-tab-activeBorderTop);
 }
 

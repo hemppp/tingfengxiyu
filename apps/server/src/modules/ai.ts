@@ -44,6 +44,7 @@ import { assertSafeOutboundUrl, assertSafeOutboundUrlDeep } from '../lib/ssrf-gu
 import { verifyProjectOwnership } from '../lib/ownership.js';
 import { buildProjectContext, checkOutlineExists } from '../ai/context-builder.js';
 import { listSkillMetas } from '../ai/agents/skills.js';
+import { getSkillTarget } from '../ai/agents/skill-targets.js';
 // 集中式 Skills 库（docs/architecture/skills-library.md）：库的读写 + 每个智能体的开关
 import {
   listLibrary, listOrphanOwners, installSkill, removeSkill,
@@ -738,6 +739,31 @@ aiRouter.post('/check-outline', requireAuth, ensureConfigMiddleware, async (c) =
   }
 });
 
+/**
+ * chat-stream 的首帧：声明本次流由谁作答。
+ *
+ * 为什么需要：面板要在 AI 消息上显示 **agent 名**，而在此之前的 SSE 帧里
+ * 只有 {thinking}/{chunk}/{tool_call}/{tool_result}/{done}/{error}，
+ * **没有任何身份字段** ⇒ 前端只能硬编码一个名字，多智能体场景下会显示错人。
+ *
+ * 名字真源是 `skill-targets.ts` 的 `chat` 条目（不新造名字）；万一它未注册，
+ * 退回同口径字面量，保证帧结构恒定（前端只依赖结构，不依赖表里有什么）。
+ *
+ * @param mode 实际作答的链路：'chat' 普通对话 / 'tools' 工具调用 / 'agent' SDK Agent
+ */
+function chatStreamAgentFrame(mode: 'chat' | 'tools' | 'agent') {
+  const target = getSkillTarget('chat');
+  return {
+    agent: {
+      id: target?.id ?? 'chat',
+      name: target?.name ?? '对话智能体',
+      short: target?.short ?? '我',
+      color: target?.color ?? '#5B7CFA',
+      mode,
+    },
+  };
+}
+
 // POST /api/ai/chat-stream — 流式对话（SSE）
 // ★ 修复"假流式"问题：之前 /ai/chat 返回完整 JSON，前端 novelChatStream 只是同步包装
 //   现在用 chatStream AsyncGenerator + SSE 逐 chunk 推送，前端可实时渲染打字效果
@@ -791,6 +817,10 @@ aiRouter.post('/chat-stream', requireAuth, ensureConfigMiddleware, aiRateLimit, 
           ];
 
           try {
+            // ★ 首帧：身份帧（前端据此在 AI 消息上显示 agent 名）。放在最前面，
+            //   保证「收到第一帧就知道对面是谁」，不必等正文。
+            send(chatStreamAgentFrame('chat'));
+
             // 阶段一：先输出思考过程（模拟 reasoning_content）
             for (const chunk of thinkingChunks) {
               if (c.req.raw.signal?.aborted) break;
@@ -878,6 +908,12 @@ aiRouter.post('/chat-stream', requireAuth, ensureConfigMiddleware, aiRateLimit, 
           const enableAgent = body.enableAgent === true;
           const enableTools = body.enableTools === true;
           const toolProjectId = project.projectId;
+
+          // ★ 首帧：身份帧（前端据此在 AI 消息上显示 agent 名）。
+          //   mode 取**实际**会走的那条链路，方便前端/诊断区分是谁在回答。
+          send(chatStreamAgentFrame(
+            enableAgent && toolProjectId ? 'agent' : enableTools && toolProjectId ? 'tools' : 'chat',
+          ));
 
           if (enableAgent && toolProjectId) {
             // ★ Agent 模式：基于 OpenAI Agents SDK 的通用 Agent

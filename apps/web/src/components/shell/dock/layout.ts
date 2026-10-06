@@ -16,9 +16,25 @@ import type {
 } from './types';
 import { resolveDockMeta } from './types';
 
-/** 侧栏 / 底部面板的初始尺寸（VS Code 侧栏量级）。 */
-export const DOCK_SIDE_PANEL_DEFAULT_WIDTH = 320;
+/**
+ * 侧栏 / 底部面板的初始尺寸（VS Code 侧栏量级）。
+ *
+ * ★ t1（外壳改造）按截图把「侧栏」**拆成左右两档**：左栏（章节树）、右栏 340px（AI 对话）。
+ *   旧的单一常量 `DOCK_SIDE_PANEL_DEFAULT_WIDTH = 320`
+ *   已删除（全仓 grep 仅本文件引用，无测试依赖）。
+ *
+ * ★ 用户口径（2026-10-05）澄清：先前按「章节UI宽度减少百分之五十」把左栏改成 120px 属**误读** ——
+ *   用户要的是**上下（高）减半**，不是栏宽（见 `LeftSidebar` 的章节行高 + 报告 §十二）。
+ *   栏宽已**改回 240**（VS Code 侧栏量级），`buildPanelSpec` 的最小宽也一并回到通用 minSize。
+ */
+export const DOCK_LEFT_PANEL_DEFAULT_WIDTH = 240;
+export const DOCK_RIGHT_PANEL_DEFAULT_WIDTH = 340;
 export const DOCK_BOTTOM_PANEL_DEFAULT_HEIGHT = 240;
+
+/** 侧栏初始宽度（**按槽取值**）：left → 240 / right → 340。 */
+export function dockSideWidth(slot: 'left' | 'right'): number {
+  return slot === 'left' ? DOCK_LEFT_PANEL_DEFAULT_WIDTH : DOCK_RIGHT_PANEL_DEFAULT_WIDTH;
+}
 
 /** dockview 侧的落位方向（`Direction` 的超集，'within' 用于同 group 堆叠）。 */
 export type DropDirection = 'left' | 'right' | 'above' | 'below' | 'within';
@@ -109,12 +125,13 @@ export function buildPanelSpec(
       slot === 'center'
         ? { direction: 'within', referencePanel: anchorId }
         : { direction: slotToDockDirection(slot), referencePanel: anchorId },
+    // 侧栏最小宽直接用通用 minSize（左 120 的实验已回滚：栏宽回到 240，不再需要收窄最小宽）
     minimumWidth: meta.minSize.width,
     minimumHeight: meta.minSize.height,
   };
   // 侧栏 / 底部面板给一个初始尺寸，避免首个面板占满整屏（VS Code 侧栏量级）
   if (slot === 'left' || slot === 'right') {
-    spec.initialWidth = DOCK_SIDE_PANEL_DEFAULT_WIDTH;
+    spec.initialWidth = dockSideWidth(slot);
   } else if (slot === 'bottom') {
     spec.initialHeight = DOCK_BOTTOM_PANEL_DEFAULT_HEIGHT;
   }
@@ -174,8 +191,14 @@ export function buildLayoutSteps(plan: DockAreaPlan, rootId: string): LayoutStep
     for (const def of plan[slot]) {
       const anchor = anchors[slot] ?? rootId;
       const spec = buildPanelSpec(def, slot, anchor);
-      // 只有第一个 center 面板（或没有 center 时第一个 left 面板）是根
-      const isRoot = anchors[slot] === null && steps.length === 0;
+      // ★ t4（集成接线）：**只有 id 恰为 `rootId` 的面板才是根**（不传 position）。
+      //   原判据 `anchors[slot] === null && steps.length === 0` 会在「首个条目来自侧栏桶」
+      //   时把该侧栏面板判为根 —— 而调用方（DockShell.onReady）**总是先**用
+      //   `CENTER_DEFAULT_PANEL_ID` 建好 grid 根，于是这个「根」会以
+      //   `position: undefined` 落进中心分组，变成与「编辑区」并排的**标签**，
+      //   而不是左右分栏。冷启动时插件面板 def 异步注册（manual 插件晚于 auto），
+      //   plan 里只剩 right 桶 ⇒ 实测右栏并进中心分组（宽 1232 而非 340）。
+      const isRoot = spec.id === rootId && steps.length === 0;
       steps.push({ spec, isRoot });
       anchors[slot] = spec.id;
     }

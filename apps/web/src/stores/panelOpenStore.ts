@@ -130,6 +130,83 @@ export function registerPanelViewSync(fn: ((keys: string[]) => void) | null): vo
   viewSync = fn;
 }
 
+// ---- ★ t4 集成：首屏「默认打开集合」种子 -------------------------------------
+//
+// 为什么需要它（跨区契约，t1 DockShell ↔ t4 接线）：
+//   DockShell 的 `dock.defaultOpen` 只在**非受控**模式生效（DockShell.tsx:291-295
+//   `openKeys ? openKeys : panels.filter(d => resolveDockMeta(d).defaultOpen)`），
+//   而 ProjectLayout.tsx:153 恒以受控 `openKeys={openPanelKeys}` 传入 —— 首屏
+//   `keys: []` 会让目标截图里的三栏（章节树 + 正文 + AI 对话）全部缺席。
+//   真值来源只能是这里（store 是打开集合的唯一真源），所以种子落在此文件。
+
+/**
+ * ★ t4 新增：各项目模式的**首屏默认打开集合**。
+ * 只列「目标截图里一打开就该在位」的面板；其余面板仍由用户/命令式入口打开。
+ */
+export const DEFAULT_OPEN_PANEL_KEYS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  manual: Object.freeze(['chapters', 'ai-chat']),
+  auto: Object.freeze([]),
+});
+
+/** 本会话是否已经播过种（诊断 / 测试用） */
+let seeded = false;
+
+/**
+ * ★ t4 集成：**尚未被视图确认**的种子 key。
+ *
+ * 为什么需要（冷启动实测踩到的真问题）：DockShell 在 `onReady` / `addPanel` /
+ * `removePanel` 时用「视图实际面板集合」回写宿主（`emitOpenChange` → `onOpenChange`
+ * → `_syncFromView`），而 `_syncFromView` 是**整集合覆写**。插件面板是异步注册的
+ * （manual 插件模块图大于 auto，其 `def` 晚到），于是冷启动会出现这样的交错：
+ *
+ *   1. 播种 → store.keys = ['chapters','ai-chat']
+ *   2. auto 的 ai-chat def 先到位 → 受控 effect 加面板 → dockview **异步**派发
+ *      `onDidAddPanel`（微任务）
+ *   3. 微任务落地**之前** manual 的 chapters def 也到位了
+ *   4. 微任务才执行 → 上报集合 = 视图实际 = ['ai-chat'] → store 丢掉 'chapters'
+ *      → 受控 effect 之后只看到 ['ai-chat']，**左栏永久缺席**（实测 groups 只剩
+ *      编辑区 + AI 对话，`openStore.keys=['ai-chat']`）
+ *
+ * 修法：宿主只把「视图确认过」的种子 key 视为已交付；未被确认的种子 key 在回写时
+ * 合并回去（有窗口上限，避免 def 永不出现时留下幽灵 key）。视图一旦上报包含它，
+ * 即确认交付，此后用户手动关闭能正常上报消失（不会再被拉开）。
+ */
+let seedUnconfirmed: string[] = [];
+let seedDeadline = 0;
+
+/** 种子合并窗口：足够覆盖插件异步注册 + 首次布局的抖动 */
+const SEED_MERGE_WINDOW_MS = 15000;
+
+export function hasSeededPanelOpenKeys(): boolean {
+  return seeded;
+}
+
+/**
+ * ★ t4 新增：幂等地把 `keys` 播进「已打开集合」并请求视图层打开。
+ *
+ * · 只播一次（`seeded`）：用户手动关掉面板后不再被重新拉开；
+ * · 合并而非覆写已存 keys（deep-link / 插件提前 open 的请求不丢）；
+ * · 视图层未挂载时 `openOrFocus` 走既有的 pendingOpens 队列，挂载后回放；
+ * · 未被视图确认前由 `_syncFromView` 兜住（见 `seedUnconfirmed` 注释）。
+ *
+ * @returns 是否真的执行了播种（`false` = 已播过 / 无 key 可播）
+ */
+export function seedPanelOpenKeys(keys: readonly string[] | null | undefined): boolean {
+  if (seeded) return false;
+  seeded = true;
+  if (!keys || keys.length === 0) return false;
+  const wanted = keys.filter((k, i) => keys.indexOf(k) === i);
+  const opened = usePanelOpenStore.getState().keys;
+  const missing = wanted.filter((k) => !opened.includes(k));
+  seedUnconfirmed = wanted.slice();
+  seedDeadline = Date.now() + SEED_MERGE_WINDOW_MS;
+  if (missing.length) {
+    usePanelOpenStore.setState({ keys: opened.concat(missing) });
+    for (const key of missing) openOrFocus(key);
+  }
+  return true;
+}
+
 export const usePanelOpenStore = create<PanelOpenState>((set, get) => ({
   keys: [],
   activeKey: null,
@@ -177,11 +254,24 @@ export const usePanelOpenStore = create<PanelOpenState>((set, get) => ({
 
   _setActive: (key) => set({ activeKey: key }),
 
-  _syncFromView: (keys) =>
+  _syncFromView: (keys) => {
+    // ★ t4 集成：把「视图尚未确认交付」的种子 key 合并回去（详见 seedUnconfirmed 注释）。
+    //   确认 = 视图至少上报过一次包含该 key 的集合；确认后不再兜（用户关闭能被正常上报）。
+    let next = keys;
+    if (seedUnconfirmed.length) {
+      const reported = new Set(keys);
+      seedUnconfirmed = seedUnconfirmed.filter((k) => !reported.has(k));
+      if (seedUnconfirmed.length && Date.now() < seedDeadline) {
+        next = keys.concat(seedUnconfirmed.filter((k) => !reported.has(k)));
+      } else if (Date.now() >= seedDeadline) {
+        seedUnconfirmed = [];
+      }
+    }
     set((state) => ({
-      keys,
-      activeKey: state.activeKey && keys.includes(state.activeKey) ? state.activeKey : null,
-    })),
+      keys: next,
+      activeKey: state.activeKey && next.includes(state.activeKey) ? state.activeKey : null,
+    }));
+  },
 }));
 
 /**
@@ -259,4 +349,7 @@ export function _resetPanelOpenStore(): void {
   pendingOpens.length = 0;
   viewOpen = null;
   viewSync = null;
+  seeded = false;
+  seedUnconfirmed = [];
+  seedDeadline = 0;
 }

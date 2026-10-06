@@ -34,10 +34,20 @@
 //   的面板抢占时替换（由 DockShell 内部处理）。
 // ============================================================
 
-import React, { useEffect, useMemo, useCallback, Suspense } from 'react';
+import React, { useEffect, useMemo, useCallback, useState, Suspense } from 'react';
 import { Outlet, useNavigate, useParams } from 'react-router-dom';
-import { Settings, LogOut, User, Shield, AlertTriangle, Loader2, ArrowLeft } from 'lucide-react';
-import { useProjectStore } from '@/stores';
+import {
+  Settings,
+  LogOut,
+  User,
+  Shield,
+  AlertTriangle,
+  Loader2,
+  ArrowLeft,
+  Moon,
+  Sun,
+} from 'lucide-react';
+import { useProjectStore, useChapterStore } from '@/stores';
 import { useReferenceStore } from '@/stores/referenceStore';
 import { useAuthStore } from '@/stores/authStore';
 import { PATHS } from '@/routes/paths';
@@ -54,7 +64,15 @@ import { resolveDockMeta } from '@/components/shell/dock/types';
 import { PanelMenu } from '@/components/shell/PanelMenu';
 import { usePluginRegistry, useProjectMode, filterByProjectMode, entryAppliesToProjectMode } from '@/plugin/registry';
 import { getPanelNavigation, registerPanelViewOpener, registerPanelViewSync, usePanelOpenStore } from '@/stores/panelOpenStore';
+// ★ t4（集成接线）新增：manual 模式首屏三栏种子（chapters / ai-chat）。
+//   受控 openKeys 使 DockShell 的 `dock.defaultOpen` 失效（见 store 内注释），
+//   缺省打开集合的真源只能是 store，故种子从此处驱动。
+import { DEFAULT_OPEN_PANEL_KEYS, seedPanelOpenKeys } from '@/stores/panelOpenStore';
 import type { FloatingPanelDef } from '@/plugin/types';
+// ★ t1（外壳改造）新增：主题档位、文档标签栏、底部细条与状态栏的真实数据源
+import { THEMES, useThemeStore } from '@/stores/themeStore';
+import { BottomIssueList, useIssueCount } from '@/components/shell/issues';
+import { formatWordCount, useClock, useProjectWordCountSync, useSaveState } from '@/components/shell/statusBar';
 import './project-shell.css';
 
 // ★ 面板定义在 src/plugin/builtin.ts 注册（内置 12 面板 + 编辑器面板），
@@ -136,8 +154,9 @@ export function ProjectLayout() {
 
   // 打开状态来自 store（编辑器内的插件面板栏共享同一份，可开关面板）
   var openPanelKeys = usePanelOpenStore(function(s) { return s.keys; });
-  var activeKey = usePanelOpenStore(function(s) { return s.activeKey; });
   var syncFromView = usePanelOpenStore(function(s) { return s._syncFromView; });
+  // 当前活动面板：activeCenterKey 的「激活优先」判据（见下方 useMemo）
+  var activeKey = usePanelOpenStore(function(s) { return s.active(); });
   var setActiveKey = usePanelOpenStore(function(s) { return s._setActive; });
 
   // ★ 插件化：面板列表来自插件注册表（内置 12 面板 + 插件新增面板）
@@ -167,6 +186,10 @@ export function ProjectLayout() {
         height: b.height,
         order: b.order,
         modes: b.modes,
+        // ★ t4（集成接线）：把 `dock` 一起带过去 —— 原来这里只挑 8 个字段，
+        //   `BuiltinPanelDef.dock` 被丢掉，导致 chapters 槽只能落 `slot` 缺省
+        //   ('right')，左栏章节树无法出现在左停靠区（目标截图要求）。
+        dock: b.dock,
       } as FloatingPanelDef);
     }
     for (var j = 0; j < allFloatingPanels.length; j++) {
@@ -246,6 +269,18 @@ export function ProjectLayout() {
     return entryAppliesToProjectMode(def, projectMode) ? def : null;
   }, [workbenchSlots, projectMode]);
 
+  // ============================================================
+  // ★ t4（集成接线）：manual 模式首屏三栏种子
+  //   目标截图是「一打开就在位」：左 240px 章节树 + 中栏正文 + 右 340px AI 对话。
+  //   DockShell 的 `dock.defaultOpen` 在受控 openKeys 下不生效
+  //   （DockShell.tsx:291-295 + ProjectLayout.tsx:153，store 内有详细注释），
+  //   所以默认打开集合只能由这里播进 store；幂等（只播一次，用户关掉后不再拉开）。
+  // ============================================================
+  useEffect(function() {
+    if (projectMode !== 'manual') return;
+    seedPanelOpenKeys(DEFAULT_OPEN_PANEL_KEYS.manual);
+  }, [projectMode]);
+
   // ★ 刷新恢复：URL 带有 :bookId 但 store 已重置（currentProject 为 null 或 id 不匹配）时，
   // 从后端拉取项目元数据写回 store。这样刷新 /project/:bookId/:chapterId 不会丢失书籍。
   useEffect(function() {
@@ -277,6 +312,72 @@ export function ProjectLayout() {
     if (!referenceProjectId) return;
     useReferenceStore.getState().loadBooks(referenceProjectId);
   }, [referenceProjectId]);
+
+  // ============================================================
+  // ★ t1（外壳改造）：顶栏按钮组 / 文档标签栏 / 底部细条 / 状态栏的真实数据
+  // ============================================================
+  // 主题档位（亮 / 暗）：真源是 ui-kit 的 themeStore，`setMode` 同时写 <html> 的
+  // color-scheme 与 localStorage ⇒「夜间」按钮与「刷新后保持」共用同一条路径。
+  var themeMode = useThemeStore(function(s) { return s.mode; });
+  var themeId = useThemeStore(function(s) { return s.theme; });
+  var setThemeMode = useThemeStore(function(s) { return s.setMode; });
+  var themeMeta = useMemo(function() {
+    return THEMES.find(function(t) { return t.id === themeId; }) ?? THEMES[0];
+  }, [themeId]);
+
+  // 当前章节：面包屑标题 / 保存态 / 问题清单都取它。用 chapters + id 派生，
+  // 避免把「每次调用可能返回新引用」的选择器交给 zustand 的相等性判断。
+  var chapters = useChapterStore(function(s) { return s.chapters; });
+  var currentChapterId = useChapterStore(function(s) { return s.currentChapterId; });
+  var currentChapter = useMemo(function() {
+    if (!currentChapterId) return null;
+    return chapters.find(function(c) { return c.id === currentChapterId; }) ?? null;
+  }, [chapters, currentChapterId]);
+
+  // 状态栏：真实保存态（本地缓存 ↔ store 内容）+ 实时时钟；底部细条：真实问题条数
+  var saveState = useSaveState(
+    currentChapter
+      ? {
+          id: currentChapter.id,
+          content: currentChapter.content,
+          updatedAt: currentChapter.updatedAt,
+        }
+      : null,
+  );
+  var clock = useClock();
+  var issueCount = useIssueCount();
+  // ★ t4：状态栏「N 字」的刷新闭环（缺口与修法见 statusBar.ts 的 hook 注释）。
+  //   只在 manual 生效 —— auto 分支不渲染状态栏（下方提前 return），没必要轮询。
+  useProjectWordCountSync(projectMode === 'manual' ? (project?.id ?? null) : null);
+
+  // 动作的可见反馈（截图无此位，放状态栏左组末尾，3s 自动消失）
+  var [rewriteNotice, setRewriteNotice] = useState<string | null>(null);
+
+  // ★ 用户口径（m04040）：顶栏的「手写 / AI 写作」按钮组已删除，随之下线的还有
+  //   `switchProjectMode`（原走真实 `PUT /api/projects/:id { mode }`，是本文件唯一的
+  //   mode 写入口）与它的 `modeNotice` 反馈位 —— 创作模式在开书时由书架页新建向导
+  //   写入，「进入了 AI 写作就是 AI 写作，手写写作就手写写作」，写作途中不再切换。
+
+  /**
+   * ★「重写」= 真实动作（不是死按钮）：
+   *   1) 派发 `nm:rewrite` 事件（detail = 当前章节 id/标题/范围），由 AI 对话面板侧消费；
+   *   2) 若当前模式注册了 `ai-chat` 面板，直接打开该真实面板；
+   *   3) 两种情况都在状态栏给出可见反馈。
+   */
+  var handleRewrite = useCallback(function() {
+    window.dispatchEvent(new CustomEvent('nm:rewrite', {
+      detail: {
+        chapterId: currentChapterId,
+        chapterTitle: currentChapter ? currentChapter.title : null,
+        scope: 'chapter',
+        prompt: '重写当前章节',
+      },
+    }));
+    var hasChat = allShellPanels.some(function(p) { return p.key === 'ai-chat'; });
+    if (hasChat) getPanelNavigation().open('ai-chat');
+    setRewriteNotice(hasChat ? '重写请求已发送给 AI 对话' : '重写请求已发出（当前模式无 AI 对话面板）');
+    window.setTimeout(function() { setRewriteNotice(null); }, 3000);
+  }, [currentChapterId, currentChapter, allShellPanels]);
 
   // ★ 把 store 的开闭状态桥到 DockShell（视图层）：
   //   · 打开路径由 getPanelNavigation() 的「执行器注册 + 排队回放」承担（§2.4）
@@ -345,7 +446,7 @@ export function ProjectLayout() {
   //     本分支只覆盖 mode==='auto'，手写台（manual）路径不受任何影响。
   if ((project?.mode ?? 'manual') === 'auto') {
     var WorkbenchComponent = activeWorkbench?.Component as React.ComponentType<any> | undefined;
-    if (!WorkbenchComponent) return <WorkbenchMissing mode="auto" />;
+    if (!WorkbenchComponent) return <WorkbenchMissing mode="auto" onBack={handleBack} />;
     return (
       <Suspense fallback={<PanelFallback />}>
         <WorkbenchComponent project={project} onBack={handleBack} onProjectDataChanged={reloadProjectData} />
@@ -375,19 +476,58 @@ export function ProjectLayout() {
             >
               <ArrowLeft size={15} aria-hidden="true" />
             </button>
-            <span
-              className="shell-topbar-title"
-              onClick={function() { navigate(backTarget); }}
-              title={backLabel}
-              aria-label={backLabel}
-            >
-              {project ? project.name : '听风细雨'}
-            </span>
+            {/* ★ t1：面包屑「项目名 / 当前章节名」（截图顶栏左端）。
+                · 项目名沿用原 `shell-topbar-title` 的「回书架」语义（点击 = 返回）
+                · 章节名取真实 `Chapter.title`（自带「第N章」前缀）；无章节给中性回落 */}
+            <nav className="shell-breadcrumb" aria-label="面包屑">
+              <button
+                type="button"
+                className="shell-breadcrumb-root"
+                onClick={function() { navigate(backTarget); }}
+                title={backLabel}
+              >
+                {project ? project.name : '听风细雨'}
+              </button>
+              <span className="shell-breadcrumb-sep" aria-hidden="true">
+                /
+              </span>
+              <span
+                className="shell-breadcrumb-leaf"
+                title={currentChapter ? currentChapter.title : '未打开章节'}
+              >
+                {currentChapter ? currentChapter.title : '章节正文'}
+              </span>
+            </nav>
           </div>
 
           <div />
 
           <div className="shell-topbar-right">
+            {/* ★ 用户口径（m04040）：「手写 / AI 写作」模式切换按钮已从顶栏移除 ——
+                创作模式在开书时定下（书架页新建向导写 project.mode），
+                「进入了 AI 写作就是 AI 写作，手写写作就手写写作」，不该在写作途中
+                再摆一组模式按钮。当前模式的被动显示仍在状态栏（手写模式 / AI 写作模式）。 */}
+            <button
+              type="button"
+              className="shell-topbar-text-btn"
+              title="重写当前章节（发送给 AI 对话面板）"
+              aria-label="重写"
+              onClick={handleRewrite}
+            >
+              重写
+            </button>
+            <button
+              type="button"
+              className="shell-topbar-text-btn"
+              title={themeMode === 'dark' ? '切到亮色' : '切到夜间（暗色）'}
+              aria-label={themeMode === 'dark' ? '切到亮色' : '夜间模式'}
+              aria-pressed={themeMode === 'dark'}
+              onClick={function() { setThemeMode(themeMode === 'dark' ? 'light' : 'dark'); }}
+            >
+              {themeMode === 'dark' ? <Sun size={13} aria-hidden="true" /> : <Moon size={13} aria-hidden="true" />}
+              <span>{themeMode === 'dark' ? '日间' : '夜间'}</span>
+            </button>
+            <span className="shell-topbar-divider" aria-hidden="true" />
             {/* ★ 面板菜单 = 退役的功能转轮的替代入口（ADR §0.3） */}
             <PanelMenu panels={floatingPanels} />
             <button
@@ -427,6 +567,10 @@ export function ProjectLayout() {
           </div>
         </header>
 
+        {/* ★ t6 去层：文档标签行不再是一条独立横条 —— 它已并入中心 dock 组的组头
+            （DockShell 的 `dock:doc-tabs` tabComponent），与左「章节」/ 右「AI 对话」
+            共用同一条 35px 头部带，顶部由三层收敛为两层（顶栏 + 头部带）。 */}
+
         {/* 主区：DockShell 承载全部面板（编辑区 + 四区 + 悬浮 + 标签堆叠 + Splitter） */}
         <main className="shell-main">
           <DockShell
@@ -437,22 +581,43 @@ export function ProjectLayout() {
             openKeys={openPanelKeys}
             onOpenChange={syncFromView}
             onActiveChange={setActiveKey}
+            // ★ t1：底部细条 =「N 条问题 Ctrl+J」；N 来自真实批注（见 shell/issues.tsx），
+            //   展开区渲染真实问题清单。
+            bottomPanel={{ issueCount: issueCount, children: <BottomIssueList /> }}
           />
         </main>
 
-        {/* 状态栏（§5.3.5）：VS Code 窄条，颜色全取 --vscode-* */}
+        {/* 状态栏（§5.3.5 / t1）：左「● 已保存 · 总字数 · 当前模式」，右「主题 · 档位 · 时间」。
+            全部取自真实来源：保存态 = 本地缓存 ↔ store 内容比对（shell/statusBar.ts），
+            总字数 = Project.currentWordCount，模式 = project.mode，主题名 = THEMES。 */}
         <footer className="shell-statusbar" role="contentinfo">
           <div className="shell-statusbar-group">
+            <span className="shell-statusbar-item" title="保存态：章节本地缓存与 store 内容比对">
+              <span
+                className={saveState.saved ? 'shell-save-dot is-saved' : 'shell-save-dot'}
+                aria-hidden="true"
+              >
+                ●
+              </span>
+              {saveState.saved ? '已保存' : '保存中…'}
+            </span>
+            <span className="shell-statusbar-item" title="项目总字数（Project.currentWordCount）">
+              {formatWordCount(project ? project.currentWordCount : 0)} 字
+            </span>
+            <span className="shell-statusbar-divider" aria-hidden="true" />
             <span className="shell-statusbar-item is-remote">
               {projectMode === 'auto' ? 'AI 写作模式' : '手写模式'}
             </span>
-            <span className="shell-statusbar-item">
-              {openPanelKeys.length === 0 ? '无打开面板' : openPanelKeys.length + ' 个面板'}
-            </span>
+            {rewriteNotice ? (
+              <span className="shell-statusbar-item is-notice">{rewriteNotice}</span>
+            ) : null}
           </div>
           <div className="shell-statusbar-group">
-            <span className="shell-statusbar-item">
-              {activeKey ? '焦点：' + activeKey : '无活动面板'}
+            <span className="shell-statusbar-item" title="主题与明暗档（来自主题 store）">
+              {themeMeta ? themeMeta.name : '主题'} · {themeMode === 'dark' ? '暗色' : '亮色'}
+            </span>
+            <span className="shell-statusbar-item" title="本机时间">
+              {clock}
             </span>
           </div>
         </footer>

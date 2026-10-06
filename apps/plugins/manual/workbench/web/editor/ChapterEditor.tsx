@@ -15,6 +15,8 @@ import { Loader2, RefreshCw } from 'lucide-react';
  * ★ URL 的 chapterId 只是**进入时的初始值**：左侧章节树切章时只改 store、不改 URL
  *   （见 LeftSidebar 的 handleSelectChapter），所以本组件不能持续把 store 当作 URL 的镜像
  *   去校正 —— 只在"数据就绪但该 id 查无此章"时纠正一次，之后完全交还给 store。
+ *   同理，「路由 id → store」的**写入也只做一次**（见下面的 syncedRouteIdRef）：否则
+ *   syncService 每次把 chapters 换成新数组引用都会重跑本 effect，把用户刚点开的章拉回 URL 那章（F1）。
  */
 export function ChapterEditor() {
   const { bookId, chapterId } = useParams<{ bookId: string; chapterId: string }>();
@@ -25,6 +27,24 @@ export function ChapterEditor() {
   const [loadTimeout, setLoadTimeout] = useState(false);
   // 失效 URL 只纠正一次。之后用户怎么切章（只改 store）都不再被本 effect 干涉。
   const handledInvalidRef = useRef(false);
+  // ★ 「路由 id → store」的同步同样只做一次：记住**已经写进 store 的路由 chapterId**。
+  //
+  //   为什么需要它：左侧章节树切章只改 store、不改 URL（见 LeftSidebar 的
+  //   handleSelectChapter —— 仅 setCurrentChapter）。而本 effect 依赖 chapters，
+  //   syncService 每次刷新都会把 chapters 换成**新数组引用**（内容可能完全一样，
+  //   长度 3 -> 3）⇒ effect 必然重跑。若 exists 分支无条件 setCurrentChapter(chapterId)，
+  //   用户单击切到 B 后（URL 仍是 A）这次重跑就把 store 拉回 A ——
+  //   表现为「第一次点击无效、必须再点一次」，且标题/正文/文档标签/左树高亮/状态栏字数一起回退。
+  //
+  //   判定用「待应用的路由章 id」而不是「本次渲染 chapterId 是否变化」：
+  //   URL 先变成 B、而 chapters 还是空（数据未就绪）时 effect 只进等待分支；
+  //   等数据到达后重跑时 chapterId 相对上一次运行并没有变，但记忆里仍是 A
+  //   ⇒ 仍会同步到 B。若用「变化检测」，这一步会被漏掉，store 会永远停在 A。
+  //
+  //   chapters 依赖必须保留（不能为省重跑而删掉）：它是「数据就绪 / URL 失效 / 仍在加载」
+  //   三种状态的唯一信号——删掉后 effect 只在路由变化时跑一次，加载态永远清不掉、
+  //   失效 URL 也永远等不到 chapters 到达。它带来的多余重跑由本 ref 吸收（exists 分支变 no-op）。
+  const syncedRouteIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!chapterId) return;
@@ -33,7 +53,13 @@ export function ChapterEditor() {
       const exists = chapters.some((ch) => ch.id === chapterId);
 
       if (exists) {
-        setCurrentChapter(chapterId);
+        // 同一个路由 chapterId 只写一次 store；之后 chapters 引用怎么换都不回写，
+        // store 是唯一事实来源。路由 chapterId 真的变化（外壳按 URL 跳转、手改地址栏、
+        // 打开书签）时会重新同步一次。
+        if (syncedRouteIdRef.current !== chapterId) {
+          syncedRouteIdRef.current = chapterId;
+          setCurrentChapter(chapterId);
+        }
         setIsWaitingForData(false);
         setLoadTimeout(false);
         return;

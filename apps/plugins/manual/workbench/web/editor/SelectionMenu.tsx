@@ -185,6 +185,31 @@ export function SelectionMenu({ editor }: SelectionMenuProps) {
     };
   }, []);
 
+  // ★ t6 F-4：滚动即关闭。
+  //
+  // 菜单用 `position: fixed` 钉在**视口坐标**（`.selection-menu-anchor`，见 globals.css
+  // 的 z-index:9999），但锚点只在选区变化时算一次。编辑器内部滚动（`.nm-editor-scroll-host`）
+  // 时选区文本随之上移，菜单却原地不动 —— 实测：选区 y 688 → 468（滚动 220px），
+  // 菜单 y 恒为 641，于是悬停在无关内容（第 2+ 个批注块）之上并挡住它的按钮。
+  //
+  // 选区菜单跟随滚动没有意义（拖选已经结束），主流编辑器一律「滚动即收起」，
+  // 故这里在**捕获阶段**监听 scroll（内层滚动容器不冒泡，必须 capture）关掉菜单。
+  useEffect(() => {
+    if (!isVisible) return;
+    const handleScroll = (event: Event) => {
+      // 菜单自身内部滚动（如未来的长列表）不应关闭它。
+      const t = event.target as Node | null;
+      if (menuRef.current && t && menuRef.current.contains(t)) return;
+      closeMenu();
+    };
+    document.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleScroll);
+    return () => {
+      document.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [isVisible]);
+
   // Esc 关闭（含表单态）
   useEffect(() => {
     if (!isVisible && !showForeshadowForm) return;

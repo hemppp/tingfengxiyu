@@ -35,7 +35,10 @@
   display: grid;
   align-items: center;
   flex: 0 0 auto;
-  height: 35px;
+  /* ★ t6 尺寸对齐参考图：把实现渲染到参考图同尺寸（1489×931）后逐行实测，
+   * 参考图顶栏内容带 = 31px（y5..35，含 1px 下边线），原 35px 偏高 4px。
+   * 缩到 31px 后「顶栏 31 + 头部带 33 = 64」，与参考图正文面起点（y69 → 64）完全同节奏。 */
+  height: 31px;
   padding: 0 10px;
   grid-template-columns: 1fr auto 1fr;
   background-color: var(--vscode-topBar-background);
@@ -171,7 +174,11 @@
 /* ---------- 状态栏（§5.3.5） ---------- */
 .shell-statusbar {
   flex: 0 0 auto;
-  height: 22px;
+  /* ★ t6 尺寸对齐参考图：参考图状态栏 21px。
+     判据不是「目测边界」而是**文字墨迹位置**：参考图应用区状态栏文字墨迹落在
+     y909..918（10 行），墨迹中心 913.5，而状态栏底边固定在 y924 ——
+     反推条高 = (924 - 913.5) * 2 = 21px。原 19px 会让文字比参考图低 2.5px。 */
+  height: 21px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -354,4 +361,317 @@ button.shell-statusbar-item:active {
   text-align: center;
   background-color: var(--vscode-editor-background);
   color: var(--vscode-editor-foreground);
+}
+
+/* ============================================================
+   ★ t1（外壳改造）：面包屑 / 模式按钮组 / 文档标签栏 / 底部问题清单 / 状态栏新增位
+   颜色一律取 --vscode-* token（约定 C-3：不写字面色值兜底）。
+   亮色档（light-dark 的第一档）下这些底色即白底，无需额外的亮色覆写。
+   ============================================================ */
+
+/* ---------- 顶栏面包屑：项目名 / 当前章节名 ---------- */
+.shell-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.shell-breadcrumb-root {
+  flex: 0 0 auto;
+  max-width: 140px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--vscode-titleBar-activeForeground);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-breadcrumb-root:hover {
+  color: var(--vscode-editor-foreground);
+  text-decoration: underline;
+}
+
+.shell-breadcrumb-sep {
+  flex: 0 0 auto;
+  color: var(--vscode-descriptionForeground);
+}
+
+.shell-breadcrumb-leaf {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--vscode-descriptionForeground);
+}
+
+/* ---------- 顶栏按钮组：重写 · 夜间 ----------
+   ★ 用户口径（m04040）：「手写 / AI 写作」模式切换按钮组已从顶栏移除
+   （创作模式在开书时定下，写作途中不再切换）⇒ 原 `.shell-mode-switch` /
+   `.shell-mode-btn` / `.shell-mode-btn:hover` / `.shell-mode-btn.is-active`
+   四条规则随之删除，避免留下无人消费的死样式。 */
+
+.shell-topbar-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background-color: var(--vscode-titleBar-border);
+}
+
+.shell-topbar-text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vscode-titleBar-activeForeground);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.shell-topbar-text-btn:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+/* ---------- 文档标签行 ----------
+   ★ t6 去层（用户口径「上栏多了一层」）：这一行**不再是顶栏之下的独立横条**。
+   它现在渲染在**中心 dock 组的组头**里（dockview 的 `dock:doc-tabs` tabComponent），
+   于是左「章节」/ 中三张文档标签 / 右「AI 对话」共享同一条 35px 头部带 ——
+   顶部由「顶栏 + 独立标签行 + 组头」三层收敛为「顶栏 + 头部带」两层。
+   高度交给组头容器（`--dv-tabs-and-actions-container-height`），本容器只负责横向排布。 */
+.shell-doctabs {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* 标签多时横向滚动：隐藏滚动条，不撑出页面级滚动 */
+.shell-doctabs-list {
+  display: flex;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.shell-doctabs-list::-webkit-scrollbar {
+  height: 0;
+}
+
+.shell-doctab {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  max-width: 220px;
+  height: 100%;
+  padding: 0 4px 0 10px;
+  border-right: 1px solid var(--vscode-panel-border);
+  border-top: 2px solid transparent;
+  color: var(--vscode-tab-inactiveForeground);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.shell-doctab.is-active {
+  /* ★ t6 去自加蓝：参考图口径下，活动文档标签是**顶部 2px 中性深灰**强调线
+     （实测参考图 x286..415 / y36-37 是深灰 `#383838`，不是 VS Code 蓝）。
+     原值 `var(--vscode-focusBorder)` 是蓝色，属 remodel 自己引入的蓝。 */
+  border-top-color: var(--vscode-tab-activeBorderTop);
+  background-color: var(--vscode-tab-activeBackground);
+  color: var(--vscode-tab-activeForeground);
+}
+
+.shell-doctab-main {
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.shell-doctab-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shell-doctab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.shell-doctab:hover .shell-doctab-close,
+.shell-doctab.is-active .shell-doctab-close {
+  opacity: 0.7;
+}
+
+.shell-doctab-close:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+  opacity: 1;
+}
+
+.shell-doctabs-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 0 6px;
+}
+
+.shell-doctab-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--vscode-tab-inactiveForeground);
+  cursor: pointer;
+}
+
+.shell-doctab-add:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+  color: var(--vscode-editor-foreground);
+}
+
+/* 「+」下拉菜单：**portal 到 <body> 的固定定位浮层**（F2 修复）。
+   它是 body 的直接子节点，没有任何带 overflow 的祖先 ⇒ 不会被
+   `.shell-doctabs{overflow:hidden}` 裁成几个像素（t1 首版是 absolute 子节点，
+   真实鼠标点不中）。top/right 由 DocTabs 在打开时按「+」按钮的 rect 内联计算，
+   故这里不写死坐标；z-index 高于停靠内核面板，暗色下用同一套 token 反色。 */
+.shell-doctab-menu {
+  position: fixed;
+  z-index: 2000;
+  min-width: 132px;
+  padding: 4px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 5px;
+  background-color: var(--vscode-menu-background);
+  color: var(--vscode-menu-foreground);
+  box-shadow: 0 2px 8px var(--vscode-widget-shadow);
+}
+
+.shell-doctab-menu-item {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.shell-doctab-menu-item:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+/* ---------- 底部细条展开后的问题清单（DockShell 的 .dock-bottom-body 内） ---------- */
+.shell-bottom-body {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ★ t4：把「N 条问题」的算法来源摊开（与细条同一份批注块计数） */
+.shell-bottom-blocks {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.shell-bottom-empty {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.shell-bottom-issues {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shell-bottom-issue {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.shell-bottom-issue-type {
+  flex: 0 0 auto;
+  color: var(--vscode-descriptionForeground);
+}
+
+.shell-bottom-issue-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 状态栏新增位：保存点 / 分隔线 / 动作提示 ---------- */
+.shell-save-dot {
+  font-size: 9px;
+  line-height: 1;
+  color: var(--vscode-descriptionForeground);
+}
+
+.shell-save-dot.is-saved {
+  color: var(--vscode-statusBar-foreground);
+}
+
+.shell-statusbar-divider {
+  width: 1px;
+  height: 12px;
+  margin: 0 4px;
+  background-color: var(--vscode-statusBar-border);
+}
+
+.shell-statusbar-item.is-notice {
+  font-style: italic;
+  text-decoration: underline dotted;
 }

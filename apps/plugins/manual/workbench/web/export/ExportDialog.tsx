@@ -10,6 +10,8 @@ export function ExportDialog() {
   const [range, setRange] = useState<'all' | 'selected'>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
+  /** 过滤批注块：开启 = 导出内容不含正文里的内嵌批注块（类型徽标 + 批注文字） */
+  const [filterAnnotations, setFilterAnnotations] = useState(false);
 
   const handleExport = async () => {
     setExporting(true);
@@ -26,6 +28,7 @@ export function ExportDialog() {
           content: ch.content,
         })),
         format,
+        filterAnnotations,
       });
     } catch (e) {
       console.error('导出失败:', e);
@@ -121,6 +124,22 @@ export function ExportDialog() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* 批注块过滤 */}
+      <div>
+        <label className="mc-fs-item flex items-center gap-2 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={filterAnnotations}
+            onChange={(e) => setFilterAnnotations(e.target.checked)}
+            className="mc-checkbox"
+          />
+          过滤批注块
+        </label>
+        <p className="text-xs text-muted-foreground mt-1">
+          {filterAnnotations ? '导出内容不含正文中的批注块' : '导出内容包含正文中的批注块'}
+        </p>
       </div>
 
       {/* 导出按钮 */}

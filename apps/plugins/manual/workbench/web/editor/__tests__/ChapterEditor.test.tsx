@@ -17,8 +17,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { render, waitFor, fireEvent, screen } from '@testing-library/react';
 import { ChapterEditor } from '../ChapterEditor';
+import { useChapterStore } from '@novel-plugins/data-core/stores';
 
 // ---- router mock：可控 params / 记录 navigate ----
 const navigateMock = vi.fn();
@@ -30,14 +31,23 @@ vi.mock('react-router-dom', () => ({
 }));
 
 // ---- store mock：可控 chapters，并记录 setCurrentChapter 的实参 ----
-const setCurrentChapterMock = vi.fn();
+// ★ setCurrentChapter 同时扮演「真实 store 的写入」：它更新 storeCurrentChapterId，
+//   这样测试能断言「单击切章后 currentChapterId 有没有被 effect 拉回」。
+let storeCurrentChapterId: string | null = null;
+const setCurrentChapterMock = vi.fn((id: string | null) => {
+  storeCurrentChapterId = id;
+});
 let chapters: Array<{ id: string; content: string }> = [];
 
 // ★ t4：ChapterEditor 的 store 实现已迁到共享包（@novel-plugins/data-core/stores），
 //   mock 必须对准**真实导入说明符**，否则 mock 失效 → 真 store 发起网络请求（fetch failed）。
 vi.mock('@novel-plugins/data-core/stores', () => ({
   useChapterStore: (selector: (s: unknown) => unknown) =>
-    selector({ chapters, setCurrentChapter: setCurrentChapterMock }),
+    selector({
+      chapters,
+      currentChapterId: storeCurrentChapterId,
+      setCurrentChapter: setCurrentChapterMock,
+    }),
 }));
 
 // EditorPage 是本测试的无关下游，stub 掉避免拉起 tiptap 全家桶
@@ -59,9 +69,28 @@ const CHAPTER_RECENT = 'probe-ch-2';
 
 const mkChapter = (id: string, updatedAt: number, content = 'x') => ({ id, updatedAt, content });
 
+/**
+ * 探针：以「章节树的形状」暴露 store 的当前章，并提供一个只改 store 的单击入口
+ * （与 LeftSidebar.handleSelectChapter 同语义：setCurrentChapter(id)，不碰 URL）。
+ * 它让回归测试能走「DOM click → store → 后台 chapters 刷新」这条真实时序。
+ */
+function ChapterProbe() {
+  const currentChapterId = useChapterStore((s) => s.currentChapterId);
+  const setCurrentChapter = useChapterStore((s) => s.setCurrentChapter);
+  return (
+    <div>
+      <span data-testid="current-chapter">{currentChapterId ?? 'none'}</span>
+      <button type="button" data-testid="tree-item-2" onClick={() => setCurrentChapter(CHAPTER_RECENT)}>
+        02
+      </button>
+    </div>
+  );
+}
+
 beforeEach(() => {
   navigateMock.mockClear();
   setCurrentChapterMock.mockClear();
+  storeCurrentChapterId = null;
   chapters = [
     mkChapter(CHAPTER_FIRST, 1000),
     mkChapter(CHAPTER_RECENT, 2000), // ← 最近编辑
@@ -74,6 +103,98 @@ describe('ChapterEditor · URL 章节 id 校验', () => {
     params = { bookId: BOOK, chapterId: CHAPTER_FIRST };
     render(<ChapterEditor />);
     await waitFor(() => expect(setCurrentChapterMock).toHaveBeenCalledWith(CHAPTER_FIRST));
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('★ 核心回归（F1）：chapters 数组被替换不会把当前章拉回路由章 —— 单击一次即生效', async () => {
+    params = { bookId: BOOK, chapterId: CHAPTER_FIRST };
+    const { rerender } = render(<ChapterEditor />);
+    await waitFor(() => expect(setCurrentChapterMock).toHaveBeenCalledWith(CHAPTER_FIRST));
+    expect(setCurrentChapterMock).toHaveBeenCalledTimes(1);
+    expect(storeCurrentChapterId).toBe(CHAPTER_FIRST);
+
+    // 用户在左侧章节树单击另一章：LeftSidebar.handleSelectChapter 只改 store、不改 URL
+    storeCurrentChapterId = CHAPTER_RECENT;
+    setCurrentChapterMock.mockClear();
+
+    // syncService 刷新把 chapters 换成新数组引用（同 id、同数量 —— verifier 观测到的 3->3）
+    chapters = [mkChapter(CHAPTER_FIRST, 1000), mkChapter(CHAPTER_RECENT, 2000)];
+    rerender(<ChapterEditor />);
+
+    // 修复前：exists 分支无条件 setCurrentChapter(chapterId) ⇒ 这里被拉回 CHAPTER_FIRST
+    expect(setCurrentChapterMock).not.toHaveBeenCalled();
+    expect(storeCurrentChapterId).toBe(CHAPTER_RECENT);
+
+    // 再刷新两次（每次都是新数组引用，其中一次还多了新章）仍然不回写：store 是唯一事实来源
+    chapters = [mkChapter(CHAPTER_FIRST, 1000), mkChapter(CHAPTER_RECENT, 2000)];
+    rerender(<ChapterEditor />);
+    chapters = [...chapters, mkChapter('probe-ch-3', 500)];
+    rerender(<ChapterEditor />);
+    expect(setCurrentChapterMock).not.toHaveBeenCalled();
+    expect(storeCurrentChapterId).toBe(CHAPTER_RECENT);
+  });
+
+  it('路由 chapterId 真的变化时仍会同步一次到 store（不是「同步过一次就永久失效」）', async () => {
+    params = { bookId: BOOK, chapterId: CHAPTER_FIRST };
+    const { rerender } = render(<ChapterEditor />);
+    await waitFor(() => expect(setCurrentChapterMock).toHaveBeenCalledWith(CHAPTER_FIRST));
+
+    params = { bookId: BOOK, chapterId: CHAPTER_RECENT };
+    rerender(<ChapterEditor />);
+    await waitFor(() => expect(setCurrentChapterMock).toHaveBeenCalledWith(CHAPTER_RECENT));
+    expect(storeCurrentChapterId).toBe(CHAPTER_RECENT);
+  });
+
+  it('URL 章 id 在数据未就绪时先变化，数据到达后仍同步到 URL 的那一章', async () => {
+    // 覆盖「若改用『本次渲染 chapterId 是否变化』判定就会漏掉」的那条路径：
+    // 第一次运行 chapters 为空 → 只进等待分支；chapterId 换成 B；数据到达后重跑，
+    // 此时 chapterId 相对上一次运行并没有变，但仍必须同步到 B。
+    chapters = [];
+    params = { bookId: BOOK, chapterId: CHAPTER_FIRST };
+    const { rerender } = render(<ChapterEditor />);
+
+    params = { bookId: BOOK, chapterId: CHAPTER_RECENT };
+    rerender(<ChapterEditor />);
+
+    chapters = [mkChapter(CHAPTER_FIRST, 1000), mkChapter(CHAPTER_RECENT, 2000)];
+    rerender(<ChapterEditor />);
+
+    await waitFor(() => expect(storeCurrentChapterId).toBe(CHAPTER_RECENT));
+  });
+
+  it('★ DOM 单击重复 verifier 的时序：click 树条目 → 后台 chapters 刷新 → 当前章不被拉回', async () => {
+    // 注意：这里的 store mock 没有订阅能力（真实 store 会因 currentChapterId 变化自动重渲染），
+    // 所以每次 store 写入后用 rerender 显式驱动一次重渲染，其余时序与真实 app 一致。
+    // ★ 每次都要新建元素（同一元素引用会被 React 的 bailout 优化跳过重渲染）。
+    params = { bookId: BOOK, chapterId: CHAPTER_FIRST };
+    const renderTree = () => (
+      <>
+        <ChapterEditor />
+        <ChapterProbe />
+      </>
+    );
+    const { rerender } = render(renderTree());
+    await waitFor(() => expect(storeCurrentChapterId).toBe(CHAPTER_FIRST));
+    rerender(renderTree()); // effect 写完 store 后让探针读到
+    expect(screen.getByTestId('current-chapter').textContent).toBe(CHAPTER_FIRST);
+
+    setCurrentChapterMock.mockClear();
+    navigateMock.mockClear();
+
+    // 单击章节树里的另一章：只写 store（LeftSidebar.handleSelectChapter 不改 URL）
+    fireEvent.click(screen.getByTestId('tree-item-2'));
+    expect(storeCurrentChapterId).toBe(CHAPTER_RECENT);
+    expect(setCurrentChapterMock).toHaveBeenCalledTimes(1); // 这一次就是用户点击本身
+    rerender(renderTree());
+
+    // syncService 后台刷新把 chapters 换成新数组引用（verifier 观测到的 3 -> 3）
+    chapters = [mkChapter(CHAPTER_FIRST, 1000), mkChapter(CHAPTER_RECENT, 2000)];
+    rerender(renderTree());
+
+    // 当前章仍是用户点的那一章；effect 没有再写 store（没有第二次调用、更没有被拉回路由章），也没有动 URL
+    expect(screen.getByTestId('current-chapter').textContent).toBe(CHAPTER_RECENT);
+    expect(setCurrentChapterMock).toHaveBeenCalledTimes(1);
+    expect(setCurrentChapterMock).not.toHaveBeenCalledWith(CHAPTER_FIRST);
     expect(navigateMock).not.toHaveBeenCalled();
   });
 

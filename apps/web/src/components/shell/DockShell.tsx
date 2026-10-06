@@ -37,6 +37,7 @@ import {
   type TabDragEvent,
 } from 'dockview';
 import { DockviewReact } from 'dockview-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import 'dockview/dist/styles/dockview.css';
 import './dock/dock-tokens.css';
 import './dock/dock-theme.css';
@@ -48,20 +49,26 @@ import {
   type DockPanelParams,
 } from './dock/DockPanelContent';
 import { CenterGraphPanel } from './dock/CenterGraphPanel';
+// ★ t6 去层：中心组头渲染「文档标签行」（原先顶栏之下的独立 30px 横条）
+import { DocTabsHeader } from './DocTabs';
 import {
   CENTER_DEFAULT_PANEL_ID,
+  DOCK_BOTTOM_PANEL_DEFAULT_HEIGHT,
   DOCK_PANEL_COMPONENT_ID,
   buildLayoutSteps,
   centerPanelInstanceId,
+  dockSideWidth,
   isCenterPanelInstanceId,
   panelInstanceId,
   panelKeyFromInstanceId,
   planDockAreas,
   slotToDockDirection,
+  type DockPanelSpec,
 } from './dock/layout';
 import {
   resolveDockMeta,
   type DockAreaSlot,
+  type DockSlot,
   type DockPanelDef,
   type DockShellApi,
   type DockShellProps,
@@ -134,6 +141,15 @@ export const VSCODE_DOCK_THEME: DockviewTheme = {
 const DOCK_TAB_COMPONENT_ID = 'dock:tab';
 
 /**
+ * ★ t6 去层：中心组的组头渲染器 id。
+ *
+ * 中心组（章节编辑器出口）的组头不再显示一个「编辑区」标签，而是渲染**文档标签行**
+ * （`.shell-doctabs`：章节正文 / 人物设定 / 大纲 · 卷一 / +）。这样左「章节」、
+ * 中三张文档标签、右「AI 对话」共享同一条组头带，顶部由三层收敛为两层。
+ */
+const DOCK_DOC_TABS_TAB_COMPONENT_ID = 'dock:doc-tabs';
+
+/**
  * 自定义标签渲染器：
  *   1. 读取 `params.def` 的 `resolveDockMeta().closable` —— 能力 4 的标签堆叠里，
  *      只有 `closable !== false` 的面板才显示 × （dockview 无内建 per-panel closable）。
@@ -156,7 +172,7 @@ function DockTab(props: IDockviewPanelHeaderProps<DockPanelParams>) {
         <button
           type="button"
           className="dock-tab-close"
-          aria-label={`关闭 ${def?.label ?? ''}`}
+          aria-label={`关闭 ${def?.label ?? (typeof props.api.title === 'string' ? props.api.title : '')}`}
           onClick={(e) => {
             e.stopPropagation();
             props.api.close();
@@ -182,6 +198,10 @@ const ALL_COMPONENTS = {
 /** 标签渲染器注册表（能力 4：堆叠标签的 × 受 `dock.closable` 控制）。 */
 const ALL_TAB_COMPONENTS = {
   [DOCK_TAB_COMPONENT_ID]: DockTab as unknown as React.ComponentType<
+    IDockviewPanelHeaderProps<never>
+  >,
+  // ★ t6 去层：中心组头 = 文档标签行（不再是一条独立横条）
+  [DOCK_DOC_TABS_TAB_COMPONENT_ID]: DocTabsHeader as unknown as React.ComponentType<
     IDockviewPanelHeaderProps<never>
   >,
 };
@@ -213,7 +233,8 @@ function ActivityBar({
             aria-pressed={active}
             onClick={() => onSelect(it.key)}
           >
-            <Icon size={22} />
+            {/* ★ t6 尺寸对齐参考图：参考图条目内图标墨迹实测 ~15×10（≈18px lucide），原 22px 偏大。 */}
+            <Icon size={18} />
           </button>
         );
       })}
@@ -221,25 +242,12 @@ function ActivityBar({
   );
 }
 
-/** 侧边栏 / 辅助侧栏 / 底部面板区的**分区标题条**。 */
-function SectionHeader({ title, children }: { title: string; children?: ReactNode }) {
-  return (
-    <div className="dock-section-header">
-      <span className="dock-section-title">{title}</span>
-      {children}
-    </div>
-  );
-}
-
-/** 状态栏（Status Bar）：底部窄条。 */
-function StatusBar({ left, right }: { left: ReactNode; right: ReactNode }) {
-  return (
-    <footer className="dock-status-bar">
-      <div className="dock-status-group">{left}</div>
-      <div className="dock-status-group">{right}</div>
-    </footer>
-  );
-}
+// ★ t1（外壳改造）已删除两个**纯占位**骨架与内核自带的第二根状态栏：
+//   · `SectionHeader`（侧栏 / 辅助侧栏 / 底部面板区的分区标题条）
+//   · `StatusBar`（`.dock-status-bar`，与 ProjectLayout 的通栏状态栏重复）
+//   真实面板由 dockview 在中心区内左右停靠渲染，占位骨架（`.dock-side-bar` /
+//   `.dock-aux-bar`）只会白占 260px + 240px，使截图里的 240/340 侧栏无法成立。
+//   截图只有**一根通栏状态栏**，由 ProjectLayout 的 `footer.shell-statusbar` 承担。
 
 // ---- 主体 -----------------------------------------------------------------
 
@@ -254,11 +262,34 @@ export const DockShell = forwardRef<DockShellApi, DockShellProps>(function DockS
   props,
   ref,
 ) {
-  const { panels, centerDefault, activeCenterKey, openKeys, onOpenChange, onActiveChange } = props;
+  const {
+    panels,
+    centerDefault,
+    activeCenterKey,
+    openKeys,
+    onOpenChange,
+    onActiveChange,
+    bottomPanel,
+  } = props;
 
   const apiRef = useRef<DockviewApi | null>(null);
   const [ready, setReady] = useState(false);
   const [activeKey, setActiveKey] = useState<string | null>(null);
+  /** ★ t1：底部面板细条的展开态（Ctrl+J / 点击左端标题切换）。 */
+  const [bottomOpen, setBottomOpen] = useState(false);
+
+  // ★ t1：Ctrl+J 展开/收起底部面板。监听挂 window（与编辑器快捷键解耦），
+  //   并 preventDefault 掉浏览器把 Ctrl+J 当「下载」的默认行为。
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (e.key !== 'j' && e.key !== 'J') return;
+      e.preventDefault();
+      setBottomOpen((v) => !v);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   // 候选池：key → def。外部数组变化时整体重建（t4 会按 project.mode 过滤后传入）。
   const defByKey = useMemo(() => {
@@ -303,7 +334,11 @@ export const DockShell = forwardRef<DockShellApi, DockShellProps>(function DockS
     apiRef.current = dock;
 
     const all = defByKeyRef.current;
-    const wanted = new Set(initialOpenKeys);
+    // ★ t4（集成接线）：`onReady` 是 `useCallback(…, [])`，`initialOpenKeys` 是**首帧**
+    //   闭包值；受控模式下首帧往往还是空集合（宿主播种 / 插件面板注册都发生在其后的
+    //   effect 里）。故优先取 propsRef 里的**最新**受控集合；非受控时仍回落
+    //   first-render 的 `defaultOpen` 推导，语义不变。
+    const wanted = new Set(propsRef.current.openKeys ?? initialOpenKeys);
     // ★ 单一所有者：声明 `dock:{center:true}` 的面板**不进初始布局** —— 它只由下方
     //   activeCenterKey effect 经中心替换槽 id（`nm-center:<key>`）建立。
     //   若在此处也建一份，它会用 `buildPanelSpec` 的普通 id（`nm-panel:<key>`），
@@ -321,6 +356,8 @@ export const DockShell = forwardRef<DockShellApi, DockShellProps>(function DockS
       id: CENTER_DEFAULT_PANEL_ID,
       component: CENTER_DEFAULT_COMPONENT_ID,
       title: '编辑区',
+      // ★ t6 去层：中心组头渲染文档标签行（`.shell-doctabs`），不再是「编辑区」标签
+      tabComponent: DOCK_DOC_TABS_TAB_COMPONENT_ID,
       params: { centerDefault: propsRef.current.centerDefault },
       // 不传 position：它建立 grid 根
       minimumWidth: 320,
@@ -433,7 +470,75 @@ export const DockShell = forwardRef<DockShellApi, DockShellProps>(function DockS
       if (api.getPanel(panelInstanceId(key))) continue;
       api.addPanel(buildAddSpec(def, meta.slot));
     }
-  }, [openKeys, ready]);
+    // ★ t4（集成接线）：deps 必须包含 `defByKey` —— 插件面板是**异步注册**的。首屏播种
+    //   时 `openKeys` 里可能已有某 key，但它的 def 还没进候选池（模块仍在加载），
+    //   上面的循环 `if (!def) continue` 会跳过；若 deps 只有 `[openKeys, ready]`，
+    //   def 到达后 openKeys 未变化 ⇒ 该面板**永久不会被打开**（冷启动实测左栏缺席）。
+    // ★ t6 F-2：移除面板后 dockview 会**均分**网格空间（`initialWidth` 只在 addPanel
+    //   生效），必须在这里重放左右列宽，否则「开→关」一次就把 240/636/340 变成
+    //   405/405/406 且不可恢复。
+    reapplySideWidths(api, defByKeyRef.current);
+  }, [openKeys, ready, defByKey]);
+
+  // ---- ★ t6 去层：只保留中心组的组头，其余组的组头一律隐藏 ------------------
+  //
+  // 用户口径「上栏多了一层」：参考图顶部只有**两条带** —— 顶栏 + 一条分栏头
+  // （左「章节」/ 中三张文档标签 / 右「AI 对话」，三者同在 y36..68 这一行）。
+  // 而 dockview 给**每个组**各配一条 35px 组头，于是左右列出现
+  // 「dock 组头 + 面板内 h-9 标题条」两层，顶部总共三层。
+  //
+  // 中心组的组头渲染文档标签行（`DOCK_DOC_TABS_TAB_COMPONENT_ID`），必须保留；
+  // 其余组的组头是多余的 —— 隐藏后 `.dv-groupview` 的 flex 布局会把空间还给内容：
+  //   `dockview.css:885-891 .dv-groupview{display:flex;flex-direction:column}`
+  //   `dockview.css:895-899 .dv-groupview > .dv-content-container{flex-grow:1;min-height:0}`
+  // 另需 `relayout()` 让组的 `_cachedHeaderSize` 失效并按新头高重排内容
+  //   （`dockview-core.js:9989 set hidden` → `display:none`；
+  //    `:11297-11299 relayout()` → `invalidateHeaderSize()` → `contentDimensions()` 读到 0）。
+  //
+  // 为什么不用 `hideHeader`：它只存在于 `CoreGroupOptions`
+  // （`dockviewGroupPanelModel.d.ts:27-35`），**不在** `AddPanelOptions` 里
+  // （`options.d.ts:741-775`，grep `hideHeader` = 0 命中），无法经 `addPanel` 传入。
+  useEffect(() => {
+    const api = apiRef.current;
+    if (!ready || !api) return;
+
+    const apply = () => {
+      for (const group of api.groups) {
+        // 中心组 = 承载「中心默认面板」或任一中心替换槽实例（`nm-center:<key>`）的组。
+        const isCenter = group.panels.some(
+          (p) => p.id === CENTER_DEFAULT_PANEL_ID || isCenterPanelInstanceId(p.id),
+        );
+        const wantHidden = !isCenter;
+        const header = group.model.header;
+        if (header.hidden !== wantHidden) {
+          header.hidden = wantHidden;
+          group.relayout();
+        }
+      }
+    };
+
+    // 订阅回调可能在 dockview 自身的一次布局过程中触发；延到微任务再改，避免重入。
+    let queued = false;
+    const schedule = () => {
+      if (queued) return;
+      queued = true;
+      queueMicrotask(() => {
+        queued = false;
+        apply();
+      });
+    };
+
+    apply();
+    const disposables = [
+      api.onDidAddGroup(schedule),
+      api.onDidRemoveGroup(schedule),
+      api.onDidAddPanel(schedule),
+      api.onDidRemovePanel(schedule),
+    ];
+    return () => {
+      for (const d of disposables) d.dispose();
+    };
+  }, [ready, openKeys, activeCenterKey]);
 
   // ---- §2.4 DockShellApi：命令式控制句柄（t4 消费） ----
   const api: DockShellApi = useMemo(
@@ -473,6 +578,10 @@ export const DockShell = forwardRef<DockShellApi, DockShellProps>(function DockS
         if (!a) return;
         const p = a.getPanel(panelInstanceId(key)) ?? a.getPanel(centerPanelInstanceId(key));
         if (p) a.removePanel(p);
+        // ★ t6 F-2：dockview 移除面板后会**均分**腾出的网格空间，且不会恢复
+        //   `initialWidth`（那只在 addPanel 时生效）。这里显式把左右列宽重放一次，
+        //   保证「开→关」后仍是 240 / 636 / 340。
+        reapplySideWidths(a, defByKeyRef.current);
       },
       focusPanel(key: string) {
         const a = apiRef.current;
@@ -546,16 +655,8 @@ export const DockShell = forwardRef<DockShellApi, DockShellProps>(function DockS
   return (
     // 能力 8：VS Code 式外壳骨架；.dv-theme-vscode 是 §5.5 冻结的 --dv-* → --vscode-* 映射层
     <div className="dock-shell dv-theme-vscode">
-      {/* 活动栏（最左窄条） */}
+      {/* 活动栏（最左窄条）：条目由**候选池**派生，故图标集合 = 当前模式真实面板集合 */}
       <ActivityBar items={activityItems} activeKey={activeKey} onSelect={onActivitySelect} />
-
-      {/* 侧边栏骨架（主侧栏） */}
-      <aside className="dock-side-bar" aria-label="侧边栏">
-        <SectionHeader title="资源管理器" />
-        <div className="dock-side-body">
-          <div className="dock-side-empty">面板由插件注册，经候选池注入此处。</div>
-        </div>
-      </aside>
 
       {/* 中心：dockview（编辑区 + 四个 dock area + 悬浮 + 标签堆叠 + Splitter） */}
       <main className="dock-main" aria-label="编辑区">
@@ -577,25 +678,38 @@ export const DockShell = forwardRef<DockShellApi, DockShellProps>(function DockS
         />
       </main>
 
-      {/* 辅助侧栏骨架（右侧，scope==='editor' 面板的落点） */}
-      <aside className="dock-aux-bar" aria-label="辅助侧栏">
-        <SectionHeader title="辅助侧栏" />
-        <div className="dock-side-body">
-          <div className="dock-side-empty">编辑器面板在此堆叠。</div>
+      {/* 底部面板细条（t1 截图）：左端「底部面板」、右端「N 条问题 Ctrl+J」。
+          常驻 DOM（原骨架即常驻，测试按该契约断言），展开高度由 CSS 控制，
+          条数与展开内容由调用方注入（见 DockShellProps.bottomPanel）。 */}
+      <section
+        className="dock-bottom-area"
+        data-open={bottomOpen ? 'true' : 'false'}
+        aria-label="底部面板"
+      >
+        <div className="dock-bottom-bar">
+          <button
+            type="button"
+            className="dock-bottom-toggle"
+            onClick={() => setBottomOpen((v) => !v)}
+            aria-expanded={bottomOpen}
+            title={bottomOpen ? '收起底部面板（Ctrl+J）' : '展开底部面板（Ctrl+J）'}
+          >
+            {bottomOpen ? (
+              <ChevronDown size={12} aria-hidden="true" />
+            ) : (
+              <ChevronRight size={12} aria-hidden="true" />
+            )}
+            <span className="dock-bottom-title">底部面板</span>
+          </button>
+          <div className="dock-bottom-right">
+            <span className="dock-bottom-issues" title="当前章节未解决批注（问题清单）条数">
+              {bottomPanel?.issueCount ?? 0} 条问题
+            </span>
+            <kbd className="dock-bottom-kbd">Ctrl+J</kbd>
+          </div>
         </div>
-      </aside>
-
-      {/* 底部面板区骨架：与 dockview 的 bottom dock area 同一视觉带 */}
-      <section className="dock-bottom-area" aria-label="底部面板区">
-        <SectionHeader title="面板" />
-        <div className="dock-bottom-hint">拖拽标签到此处即吸附为底部停靠区。</div>
+        {bottomOpen ? <div className="dock-bottom-body">{bottomPanel?.children}</div> : null}
       </section>
-
-      {/* 状态栏（最底窄条） */}
-      <StatusBar
-        left={<span className="dock-status-item">停靠内核 · dockview</span>}
-        right={<span className="dock-status-item">{activeKey ?? '无活动面板'}</span>}
-      />
     </div>
   );
 });
@@ -609,10 +723,64 @@ function keyOfPanel(p: IDockviewPanel): string | null {
   return panelKeyFromInstanceId(p.id);
 }
 
+/**
+ * ★ t6 F-2：把左右停靠列宽重放回设计值（左 240 / 右 340）。
+ *
+ * 背景：`initialWidth` **只在 `addPanel` 那一刻**被 dockview 采用；一旦某列的面板被
+ * 移除，网格会按剩余视图**均分**腾出的空间，且没有任何机制恢复原宽。实测
+ * `48:240 | 288:636 | 924:340` → 开「人物设定」→ 用标签 × 关掉 →
+ * `48:405 | 453:405 | 858:406`，且再开关也回不去。
+ *
+ * 公开杠杆是 `group.api.setSize({ width })`
+ * （`api/dockviewGroupPanelApi.d.ts:80-86`；`dockview-core.js:5616-5618` 它只 fire
+ * `onDidSizeChange`，由 splitview 的 pane `onDidChange` → `resize`/`distributeEmptySpace`
+ * 真正落位）。中心列**不设宽**：它是剩余空间的接收者，两侧收窄后会自动补回。
+ */
+export function reapplySideWidths(
+  api: Pick<DockviewApi, 'groups'>,
+  defByKey: Map<string, DockPanelDef>,
+) {
+  // 第一遍：把每个「单一槽位」的组归到它所属的停靠列。
+  const bySlot = new Map<'left' | 'right', { group: (typeof api.groups)[number] }[]>();
+  for (const group of api.groups) {
+    const slots = new Set<DockSlot>();
+    for (const p of group.panels) {
+      const key = keyOfPanel(p);
+      const def = key ? defByKey.get(key) : undefined;
+      if (!def) continue;
+      const meta = resolveDockMeta(def);
+      if (meta.center) continue;
+      slots.add(meta.slot);
+    }
+    // 混合槽位的组（用户拖拽后的结果）不参与，避免与用户意图打架。
+    if (slots.size !== 1) continue;
+    const slot = [...slots][0];
+    if (slot !== 'left' && slot !== 'right') continue;
+    const bucket = bySlot.get(slot) ?? [];
+    bucket.push({ group });
+    bySlot.set(slot, bucket);
+  }
+
+  // 第二遍：**只有该停靠列恰好一个组**时才重放设计宽度。
+  //
+  // 为什么必须这样收窄：打开第二个同槽面板时（实测：开「人物设定」后右槽同时有
+  // 「角色」与「AI 对话」两个组），dockview 会把新组按 `initialWidth` 放到 340、
+  // 把老组压到 240 —— 这是**它自己的合理分配**。此时若按设计值强推，两个组都会被
+  // 拉到 340，右列总宽翻倍、中栏被挤没。所以：多组状态交给 dockview 自己管，
+  // 本函数只负责「某列被关空/关回单组后，宽度退回设计值」这一种情形。
+  for (const [slot, bucket] of bySlot) {
+    if (bucket.length !== 1) continue;
+    const { group } = bucket[0]!;
+    const target = dockSideWidth(slot);
+    if (Math.abs(group.width - target) < 1) continue;
+    group.api.setSize({ width: target });
+  }
+}
+
 /** 构造吸附到指定 dock area 的 addPanel 规格。 */
 function buildAddSpec(def: DockPanelDef, slot: 'left' | 'right' | 'bottom' | 'center') {
   const meta = resolveDockMeta(def);
-  return {
+  const spec: DockPanelSpec = {
     id: panelInstanceId(def.key),
     component: DOCK_PANEL_COMPONENT_ID,
     title: def.label,
@@ -624,6 +792,14 @@ function buildAddSpec(def: DockPanelDef, slot: 'left' | 'right' | 'bottom' | 'ce
     minimumWidth: meta.minSize.width,
     minimumHeight: meta.minSize.height,
   };
+  // ★ t1：命令式 `openPanel()` 也必须拿到与初始布局**同一份**尺寸（左 240 / 右 340 / 底 240），
+  //   否则 dockview 给侧栏组一个缺省宽度 ⇒ 截图里的左右栏宽度只在首屏成立、点开后变味。
+  if (slot === 'left' || slot === 'right') {
+    spec.initialWidth = dockSideWidth(slot);
+  } else if (slot === 'bottom') {
+    spec.initialHeight = DOCK_BOTTOM_PANEL_DEFAULT_HEIGHT;
+  }
+  return spec;
 }
 
 /** ADR 槽位名 → dockview `Position`（用于 `panel.api.moveTo`）。 */

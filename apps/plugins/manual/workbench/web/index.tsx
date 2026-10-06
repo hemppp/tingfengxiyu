@@ -48,9 +48,18 @@ export function apply(ctx: WebPluginContext): void {
     label: '章节',
     icon: BookOpen,
     Component: LeftSidebar,
-    width: 320,
+    // ★ 240：截图口径（左栏固定 240px 量级）。这不是纯外观参数 —— DockShell 用它设
+    //   addPanel 的初始宽度与 minimumWidth（DockShell.tsx:389-390 / dock/types.ts:76），
+    //   320 会让初始三栏直接挤掉中栏正文的可读宽度。
+    width: 240,
     height: 640,
     modes: ['manual'],
+    // ★ t4（集成接线）：显式声明落**左**停靠区。
+    //   不声明时 `resolveDockMeta` 缺省 `slot:'right'`（dock/types.ts:60-70），
+    //   左栏章节树会跑到右侧与 AI 对话抢同一停靠区 —— 目标截图要求左栏在左。
+    //   尺寸真源仍是上面的 width/height + dock/layout.ts 的 DOCK_LEFT_PANEL_DEFAULT_WIDTH，
+    //   这里不重复声明宽度。
+    dock: { slot: 'left' },
   });
 }
 

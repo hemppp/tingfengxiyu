@@ -1,0 +1,65 @@
+{
+  // ============================================================
+  // apps/plugins/auto/workbench/tsconfig.typecheck.json
+  //
+  // ★ t4（跨区集成）：**模块内部专用**类型检查配置，与 manual 侧
+  //   `apps/plugins/manual/workbench/tsconfig.typecheck.json` 对称。
+  //
+  // 为什么需要它：`pnpm --filter @novel/web type-check` = `tsc --noEmit` +
+  //   `apps/web/tsconfig.json` 的 `include: ["src"]`，`apps/plugins/**` 一个文件都不进
+  //   tsc 程序 ⇒ 那一步看不见模块内部的死导入 / 悬空引用。
+  //   本次 t4 改到了 `web/index.tsx`（ai-chat 面板注册）与新增的 `web/ai/**`，
+  //   需要一份**可复现**的配置把这份改动纳入类型检查。
+  //
+  // 用法（仓库根执行）：
+  //   pnpm exec tsc -p apps/plugins/auto/workbench/tsconfig.typecheck.json --noEmit
+  //
+  // 说明（与 manual 侧保持同一套口径）：
+  //   · `exclude` 掉测试文件 —— 本仓 `apps/web/tsconfig.json` 的 `types` 未含
+  //     `@testing-library/jest-dom`，纳入测试文件会冒出
+  //     `TS2339: Property 'toBeInTheDocument' does not exist` 噪声（既有配置缺口、非真缺陷）。
+  //   · 对 kernel **源码**零依赖；唯一纳入的 kernel 树文件是
+  //     `apps/web/src/types/d3-force-3d.d.ts`（第三方库最小环境声明）。
+  //   · 不改动任何既有门禁：没有任何 `pnpm -r` 脚本引用本文件，它是**按需**证据。
+  // ============================================================
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "types": ["vite/client", "node"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["../../../web/src/*"],
+      "@novel-plugins/ui-graph": ["../../shared/ui-graph/src"],
+      "@novel-plugins/ui-graph/*": ["../../shared/ui-graph/src/*"],
+      "@novel-plugins/ui-kit": ["../../shared/ui-kit/src"],
+      "@novel-plugins/ui-kit/*": ["../../shared/ui-kit/src/*"],
+      "@novel-plugins/data-core": ["../../shared/data-core/src"],
+      "@novel-plugins/data-core/*": ["../../shared/data-core/src/*"],
+      "@novel-plugins/auto-workbench": ["./web/index.tsx"],
+      "@novel-plugins/auto-workbench/*": ["./*"]
+    }
+  },
+  "include": ["web/**/*", "server/**/*", "../../../web/src/types/d3-force-3d.d.ts"],
+  "exclude": [
+    "node_modules",
+    "**/__tests__/**",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx"
+  ]
+}

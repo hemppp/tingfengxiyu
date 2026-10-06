@@ -215,9 +215,14 @@ export interface WorkbenchDef {
  *   **UI 形态词**（ADR §0.3：功能转轮退役），继续用它命名扩展点会让下游
  *   误以为要保留气泡。类型更名，槽位本身作为扩展点保留。
  *
- * 字段集是 `FloatingPanelDef` 的**真子集**（少 `scope/rail/group/dock`），
+ * 字段集是 `FloatingPanelDef` 的**真子集**（少 `scope/rail/group`），
  * 因此合池时无需 `as unknown as FloatingPanelDef` 双断言（ADR §3.2）。
- * 按 key 键控多槽：`'chapters'`（manual 模块）、`'ai-chat'`（auto 模块，待补）。
+ * 按 key 键控多槽：`'chapters'`（manual 模块）、`'ai-chat'`（auto 模块）。
+ *
+ * ★ t4（集成接线）新增 `dock`：内置槽原先无法声明停靠位置 ⇒ `'chapters'`
+ *   只能落 `resolveDockMeta` 的缺省 `slot:'right'`，左栏章节树到不了左停靠区。
+ *   补上后与 `FloatingPanelDef.dock` 同源（缺省行为的真源仍是 `resolveDockMeta`，
+ *   此处**只透传、不写缺省值**）。
  */
 export interface BuiltinPanelDef {
   key: string;
@@ -228,6 +233,8 @@ export interface BuiltinPanelDef {
   height?: number;
   order?: number;
   modes?: PluginMode[];
+  /** ★ t4：停靠布局元数据（全字段可选，语义与 `FloatingPanelDef.dock` 一致） */
+  dock?: FloatingPanelDockMeta;
 }
 
 /** @deprecated ADR D9：改名 `BuiltinPanelDef`。别名仅为兼容已发布插件。 */

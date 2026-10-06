@@ -18,7 +18,8 @@
     "verify:memory": "node scripts/tools/memory-sample-check.mjs",
     "verify:all": "node scripts/verify/verify-all.mjs",
     "verify:modes": "node scripts/verify/verify-plugin-mode-separation.mjs",
-    "e2e:modes": "node scripts/e2e/e2e-mode-separation.mjs"
+    "e2e:modes": "node scripts/e2e/e2e-mode-separation.mjs",
+    "e2e:ui": "node scripts/e2e/e2e-ui-integration.mjs"
   },
   "engines": {
     "node": ">=24"

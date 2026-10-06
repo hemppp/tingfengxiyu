@@ -3,17 +3,20 @@
   ★ 首屏初始 data-theme 写 vscode-dark-modern：
     与 themeStore 的默认主题（DEFAULT_THEME）保持一致，避免"先按错误主题画一帧
     再被 JS 改掉"的闪烁。该主题即 :root 本身（ADR §6.1），所以即便本属性缺失，
-    首屏也会直接落到 VS Code Dark Modern 的 token 上。
-    ⚠️ 若用户在 localStorage 里选了别的值，applyStoredTheme() 会覆盖本属性，无需改这里。
+    首屏也会直接落到 VS Code Modern 的 token 上。
+  ★ color-scheme 决定亮/暗档：token 真源里每个颜色都是 light-dark(浅, 深)，
+    按本元素的 color-scheme 解析。静态写 light 与 DEFAULT_MODE 一致（首屏白底）；
+    ⚠️ 若用户在 localStorage 里选了别的值，applyStoredTheme() 会覆盖 class 与
+    本行内联 color-scheme，无需改这里。
 -->
-<html lang="zh-CN" data-theme="vscode-dark-modern" class="dark">
+<html lang="zh-CN" data-theme="vscode-dark-modern" style="color-scheme: light">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>听风细雨 - 伴写小说工具</title>
 
-    <!-- 主题固定为 VS Code Dark Modern（暗色，无明暗切换） -->
+    <!-- 主题 = VS Code Modern 单档；亮/暗两档由「夜间」按钮或设置页切换 -->
 
     <!-- Noto Serif SC — 中文衬线主字体（文人气质） -->
     <!-- 使用 local() 引用系统字体，避免 Google Fonts 被墙的问题 -->

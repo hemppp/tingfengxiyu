@@ -4,6 +4,7 @@
  */
 
 import DOMPurify from 'dompurify';
+import { stripAnnotationBlocks } from '../../editor/annotationBlocks';
 
 function toText(html: string): string {
   // XSS 防护：先净化 HTML 再提取纯文本
@@ -18,12 +19,25 @@ interface ExportOptions {
   author?: string;
   chapters: { title: string; content: string }[];
   format: 'markdown' | 'html' | 'txt' | 'pdf' | 'docx' | 'epub';
+  /**
+   * 过滤批注块：true = 导出正文不含内嵌批注块（类型徽标 + 批注文字），false/缺省 = 原样包含。
+   * 对所有格式（txt / markdown / html / pdf / docx / epub）生效。
+   */
+  filterAnnotations?: boolean;
+}
+
+/**
+ * 导出前按「过滤批注块」开关预处理章节 HTML。
+ * 关闭过滤时原样返回（不经过 DOM，避免改写正文）。
+ */
+function prepareContent(html: string, options: ExportOptions): string {
+  return options.filterAnnotations ? stripAnnotationBlocks(html) : html;
 }
 
 /**
  * 导出为 TXT
  */
-function exportTXT(options: ExportOptions): string {
+export function exportTXT(options: ExportOptions): string {
   const lines: string[] = [];
   lines.push(`${options.title}`);
   if (options.author) lines.push(`作者：${options.author}`);
@@ -33,7 +47,7 @@ function exportTXT(options: ExportOptions): string {
   for (const ch of options.chapters) {
     lines.push(`## ${ch.title}`);
     lines.push('');
-    lines.push(toText(ch.content));
+    lines.push(toText(prepareContent(ch.content, options)));
     lines.push('');
     lines.push('-'.repeat(40));
     lines.push('');
@@ -45,7 +59,7 @@ function exportTXT(options: ExportOptions): string {
 /**
  * 导出为 Markdown
  */
-function exportMarkdown(options: ExportOptions): string {
+export function exportMarkdown(options: ExportOptions): string {
   const lines: string[] = [];
   lines.push(`# ${options.title}`);
   if (options.author) lines.push(`> 作者：${options.author}`);
@@ -54,7 +68,7 @@ function exportMarkdown(options: ExportOptions): string {
   for (const ch of options.chapters) {
     lines.push(`## ${ch.title}`);
     lines.push('');
-    lines.push(toText(ch.content));
+    lines.push(toText(prepareContent(ch.content, options)));
     lines.push('');
   }
 
@@ -70,7 +84,7 @@ function exportHTML(options: ExportOptions): string {
       (ch) => `
     <section class="chapter">
       <h2>${ch.title}</h2>
-      <div>${ch.content}</div>
+      <div>${prepareContent(ch.content, options)}</div>
     </section>`
     )
     .join('\n');
@@ -165,7 +179,7 @@ function exportDOCX(options: ExportOptions) {
   ${options.author ? `<p style="text-align:center">作者：${options.author}</p>` : ''}
   ${options.chapters
     .map(
-      (ch) => `<h2>${ch.title}</h2>\n<div>${ch.content}</div>`
+      (ch) => `<h2>${ch.title}</h2>\n<div>${prepareContent(ch.content, options)}</div>`
     )
     .join('\n')}
 </body>

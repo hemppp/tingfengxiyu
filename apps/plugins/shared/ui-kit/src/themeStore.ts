@@ -1,12 +1,20 @@
 // ============================================================
-// 主题 store —— VS Code Dark Modern（单档）
+// 主题 store —— VS Code Modern（亮 / 暗双档）
 //
-// 契约真源：docs/architecture/dock-protocol-adr.md §6（冻结）
+// 契约真源：docs/architecture/dock-protocol-adr.md §6
 //   · §6.1 默认主题 = 'vscode-dark-modern'（唯一档），并且就是 :root 本身
 //   · §6.2 老用户 localStorage 里的三档旧主题名一律**静默回落**默认，
 //          不抛错、不提示、不写迁移标记；MIGRATION_KEY 常量整体删除
-//   · §6.3 默认 mode = 'dark'、lockedMode = 'dark'；applyTheme 保留
-//          dataset.theme 写入 + .dark 切换 + style.colorScheme
+//   · §6.3 applyTheme 保留 dataset.theme 写入 + .dark 切换 + style.colorScheme
+//
+// ## t1 外壳改造对 §6.3 的显式修订（明暗解锁）
+//   旧实现把「唯一档 = 暗色」写死成 lockedMode:'dark'，于是 setMode 被提前
+//   return，明暗切换名存实亡。目标界面要求「夜间」按钮即时切换亮/暗，故：
+//     · token 真源把 114 个颜色 token 包成 `light-dark(浅, 深)`（同一 token
+//       仍只有一处定义，单一真源不变量不变），由 color-scheme 决定生效档；
+//     · 本 store 去掉 lockedMode、默认档改为 'light'，setMode 因此真正生效；
+//     · applyTheme 继续写 style.colorScheme —— 它现在不只是「跟随原生控件」，
+//       而是明暗两档的唯一开关（ADR §6.3 的写法正好是关键机制）。
 //
 // ## 与旧实现的关系（水墨化 → VS Code 化的净变化）
 //   旧：ThemeId 是「三档水墨主题」的联合，默认水墨档，
@@ -20,9 +28,11 @@
 //       以免残留的旧标识符污染仓库检索（P1 验收：全仓无水墨残留）。
 //
 // ## 颜色定义在哪
-//   本 store 只负责「把哪个主题写到 <html>」这一件事；
+//   本 store 只负责「把哪个主题、哪一档明暗写到 <html>」这一件事；
 //   具体色值全部在 @novel-plugins/ui-kit 的 styles/vscode-dark-modern.css，
-//   定义在 `:root` / `html.dark`（全局作用域），故所有插件自动继承。
+//   `:root, html.dark` 里每个 token 写成 `light-dark(浅色, 深色)`，
+//   按 <html> 的 computed color-scheme 解析 —— 故亮暗两档共用同一批 token 名，
+//   定义在全局作用域，所有插件自动继承，且「一个 token 只有一处定义」不破。
 // ============================================================
 
 import { create } from 'zustand';
@@ -33,8 +43,11 @@ export type ColorMode = 'light' | 'dark';
 
 /** 唯一主题 id（applyTheme / THEMES 共用，避免散落字面量） */
 export const DEFAULT_THEME: ThemeId = 'vscode-dark-modern';
-/** ADR §6.3：VS Code Dark Modern 是暗色主题，默认与锁定明暗均为 dark */
-export const DEFAULT_MODE: ColorMode = 'dark';
+/**
+ * 默认明暗档 = 'light'（目标界面以极简白底为默认观感）。
+ * 老用户 localStorage 里的 'dark' 会被 readStored 原样读出，不受影响。
+ */
+export const DEFAULT_MODE: ColorMode = 'light';
 
 export interface ThemeMeta {
   id: ThemeId;
@@ -50,15 +63,17 @@ export interface ThemeMeta {
  * 主题清单：**恰好一项**（ADR §6.1）。
  *
  * 为什么保留数组而不是删除：设置页「外观」需要它渲染色卡，
- * 且保留未来加档（例如将来补 VS Code Light+）的扩展位。
+ * 且保留未来加档的扩展位。
+ *
+ * t1：不再设 lockedMode —— 亮/暗两档由同一个主题的 `light-dark()` token 承载，
+ * 因此「主题 id」与「明暗档」正交，明暗切换不再被主题锁死（见文件头 §6.3 修订）。
  */
 export const THEMES: ThemeMeta[] = [
   {
     id: 'vscode-dark-modern',
-    name: 'VS Code Dark Modern',
-    desc: '编辑器深灰底 + 蓝色强调，停靠面板与标签堆叠的原生观感',
-    lockedMode: 'dark',
-    swatch: ['#1f1f1f', '#0078d4', '#4daafc'],
+    name: 'VS Code Modern',
+    desc: '亮 / 暗双档：白底极简与编辑器深灰底共用一套 token，由「夜间」或设置页切换',
+    swatch: ['#ffffff', '#0078d4', '#1f1f1f'],
   },
 ];
 
@@ -109,10 +124,12 @@ function persist(theme: ThemeId, mode: ColorMode): void {
 }
 
 /**
- * 把主题写到 <html>。ADR §6.3：
+ * 把主题写到 <html>。ADR §6.3（t1 修订）：
  *   · 保留 `el.dataset.theme`（值 = 'vscode-dark-modern'）
- *   · 必须继续 toggle `.dark` —— 新 token 同时定义在 :root 与 html.dark，二者任一生效
- *   · 必须继续设 colorScheme —— 让原生滚动条 / 表单控件跟随
+ *   · 必须继续 toggle `.dark` —— 按 class 作用域写的规则仍依赖它
+ *   · 必须继续设 colorScheme —— 现在它是亮/暗两档的开关：token 真源里每个颜色
+ *     都是 `light-dark(浅, 深)`，按本元素的 color-scheme 解析；副作用是原生
+ *     滚动条 / 表单控件也一并跟随
  */
 export function applyTheme(theme: ThemeId, mode: ColorMode): void {
   if (typeof document === 'undefined') return;
@@ -153,8 +170,10 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
 
   setMode: (m) => {
     const { theme } = get();
-    // 锁定明暗的主题忽略切换（VS Code Dark Modern 只有暗色）
+    // 锁定明暗的主题忽略切换（当前唯一档亮/暗皆可，故不会命中）
     if (THEMES.find((x) => x.id === theme)?.lockedMode) return;
+    // 非法入参不接受（不写存储、不改 DOM）—— 与 readStored 同一条不变量
+    if (m !== 'light' && m !== 'dark') return;
     applyTheme(theme, m);
     persist(theme, m);
     set({ mode: m });
