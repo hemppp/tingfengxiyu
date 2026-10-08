@@ -5,7 +5,7 @@ import { getCapability } from '@/plugin/registry';
 //
 // 工作模式：
 // - 始终调用后端 /ai/scan 进行 LLM 扫描，智能提取新实体
-// - 后端不可用时静默返回（scanService 内部已做 try/catch）
+// - 后端不可用时静默返回（能力实现内部已做 try/catch）
 // ============================================================
 
 import { useEffect, useRef, useCallback, useState, useSyncExternalStore } from 'react';
@@ -680,7 +680,7 @@ export function useAutoEntityDetection(
       const plainText = htmlToText(currentChapter.content);
       console.debug(`[AutoEntity] 开始 SSE 扫描，纯文本长度=${plainText.length}（HTML长度=${currentChapter.content.length}）`);
       const scan = aiScan();
-      if (!scan) return; // ai.scan 缺失（auto 模块缺席）：静默 return（设计 §5.3）
+      if (!scan) return; // ai.scan 缺失（无提供方）：静默 return（设计 §5.3）
       const timelinePromise = scan.scanTimelineStream(
         plainText,
         chapterOrder,

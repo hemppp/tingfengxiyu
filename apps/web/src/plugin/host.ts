@@ -149,6 +149,9 @@ export function createWebPluginContext(id: string, modes?: PluginMode[]): WebPlu
       return unregister;
     },
     registerCapability: (name, impl) => {
+      // ★ AI 接口是**两边模块都可引用的共享面**（core 契约：一个模块提供实现、
+      //   另一个模块按名消费，缺席时静默降级），故这里**不**盖宿主模式；
+      //   模式隔离只作用于 UI 扩展点与模块间静态 import。
       const unregister = pluginRegistryApi.registerCapability(name as WebCapabilityName, impl);
       bag.add(unregister, `${id}: capability ${name}`);
       return unregister;

@@ -15,18 +15,44 @@ import {
 import type { FloatingPanelDef } from '@/plugin/types';
 
 // 懒加载保持 chunk 分割（模块内相对路径）
-const ReferenceReader = React.lazy(() => import('./editor/ReferenceReader').then((m) => ({ default: m.ReferenceReader })));
-const OutlinePage = React.lazy(() => import('./outline/OutlinePage').then((m) => ({ default: m.OutlinePage })));
-const CharacterManager = React.lazy(() => import('./knowledge/CharacterManager').then((m) => ({ default: m.CharacterManager })));
-const LocationManager = React.lazy(() => import('./knowledge/LocationManager').then((m) => ({ default: m.LocationManager })));
-const ItemManager = React.lazy(() => import('./knowledge/ItemManager').then((m) => ({ default: m.ItemManager })));
-const StoryMap = React.lazy(() => import('./knowledge/StoryMap').then((m) => ({ default: m.StoryMap })));
-const TimelinePage = React.lazy(() => import('./timeline/TimelinePage').then((m) => ({ default: m.TimelinePage })));
-const ForeshadowManager = React.lazy(() => import('./foreshadow/ForeshadowManager').then((m) => ({ default: m.ForeshadowManager })));
-const NoteManager = React.lazy(() => import('./notes/NoteManager').then((m) => ({ default: m.NoteManager })));
-const WritingDashboard = React.lazy(() => import('./stats/WritingDashboard').then((m) => ({ default: m.WritingDashboard })));
-const RelationGraph = React.lazy(() => import('./knowledge/RelationGraph').then((m) => ({ default: m.RelationGraph })));
-const ExportDialog = React.lazy(() => import('./export/ExportDialog').then((m) => ({ default: m.ExportDialog })));
+//
+// ★ 2026-10-07「跳转画面会加载一下」修复：懒加载的 import() 只在**面板首次渲染**
+//   那一刻才发出 ⇒ 点开面板必然先看到「加载中…」。kernel 看不到这些说明符，
+//   只能在模块自己的入口空闲预取（见文件末尾 preloadPanels 与 index.tsx 的 preload）。
+//   为了让「预取列表」与「React.lazy 实际加载的东西」**永远同一份**（不会各写一遍后漂移），
+//   这里统一经 lazyPanel 登记：谁被 React.lazy 包装，谁就自动进入预取列表。
+const panelLoaders: Array<() => Promise<unknown>> = [];
+
+function lazyPanel<T extends React.ComponentType<any>>(
+  load: () => Promise<{ default: T }>,
+): React.LazyExoticComponent<T> {
+  panelLoaders.push(load);
+  return React.lazy(load);
+}
+
+const ReferenceReader = lazyPanel(() => import('./editor/ReferenceReader').then((m) => ({ default: m.ReferenceReader })));
+const OutlinePage = lazyPanel(() => import('./outline/OutlinePage').then((m) => ({ default: m.OutlinePage })));
+const CharacterManager = lazyPanel(() => import('./knowledge/CharacterManager').then((m) => ({ default: m.CharacterManager })));
+const LocationManager = lazyPanel(() => import('./knowledge/LocationManager').then((m) => ({ default: m.LocationManager })));
+const ItemManager = lazyPanel(() => import('./knowledge/ItemManager').then((m) => ({ default: m.ItemManager })));
+const StoryMap = lazyPanel(() => import('./knowledge/StoryMap').then((m) => ({ default: m.StoryMap })));
+const TimelinePage = lazyPanel(() => import('./timeline/TimelinePage').then((m) => ({ default: m.TimelinePage })));
+const ForeshadowManager = lazyPanel(() => import('./foreshadow/ForeshadowManager').then((m) => ({ default: m.ForeshadowManager })));
+const NoteManager = lazyPanel(() => import('./notes/NoteManager').then((m) => ({ default: m.NoteManager })));
+const WritingDashboard = lazyPanel(() => import('./stats/WritingDashboard').then((m) => ({ default: m.WritingDashboard })));
+const RelationGraph = lazyPanel(() => import('./knowledge/RelationGraph').then((m) => ({ default: m.RelationGraph })));
+const ExportDialog = lazyPanel(() => import('./export/ExportDialog').then((m) => ({ default: m.ExportDialog })));
+
+/**
+ * 面板级预取：把 12 个面板的 chunk 一次性发出去（由模块入口的 `preload()` 调用）。
+ *
+ * 与 React.lazy 共用同一个 import() 说明符 ⇒ 浏览器/打包器命中同一份模块表缓存，
+ * 预取过再打开面板即为**同步命中**，不再走 Suspense fallback。
+ * 失败一律静默：预热坏掉绝不能影响正常打开面板。
+ */
+export function preloadPanels(): void {
+  for (const load of panelLoaders) void load().catch(() => {});
+}
 
 /**
  * 内置面板定义（与原 kernel builtin.ts 完全一致）。

@@ -43,12 +43,23 @@
 | `ctx.registerCapability` | `(name: CapabilityName, impl)` | — |
 | `ctx.getCapability` | `<T>(name): T \| null` | 返回 `null`；消费点必须隐藏入口或本地兜底，**禁止 throw** |
 
+> **2026-10 变更（手写/自动隔离改造）**：`ai-chat` 气泡由 **auto → manual**（见下表 D21）；**能力通道刻意保持不变** ——
+> AI 接口（`ai.scan` / `ai.quickPhrases` / `ai.timelineExtract` / `ai.outlineFill` / `ai.entityRefresh`）
+> 是**两边模块都可引用的共享面**：`ctx.registerCapability` 不盖宿主 `modes`，`getCapability()` 直接返回已注册实现
+> （实现见 `apps/web/src/plugin/registry.ts:311-322` 与内核导出 `:389-391`）。
+> 期间一度试做「能力按模式隔离」（第三参 `modes?` 由 `plugin/host.ts` 按插件目录盖入），**已回退**：
+> 它与本契约上方 `WEB_CAPABILITIES` 的语义（一个模块提供实现、另一个模块按名消费，取代静态 import）直接冲突。
+> 隔离只作用于 **UI 扩展点 / 模块入口**（全部带 `modes`，经 `filterByProjectMode()` 过滤）与 **模块间静态 import**（`scripts/verify/verify-workbench-isolation.mjs` 门禁）。
+> 本仓 5 个能力仍无提供方，降级行为不变。
+
 **`registerBuiltinBubble` 的两条对称注册（D21）**
 
 | 注册方 | `def.key` | `Component` | 缺席时 |
 |---|---|---|---|
 | manual | `chapters` | `LeftSidebar` | 该气泡不渲染 |
-| auto | `ai-chat` | `ChatPanel` | 该气泡不渲染 |
+| ~~auto~~ → **manual** | `ai-chat` | `AiChatPanel`（现位置 `apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx`） | 该气泡不渲染 |
+
+> **2026-10 变更（手写/自动隔离改造）**：`ai-chat` 的注册模块由 **auto 改为 manual** —— 手写台右栏 UI 不应由 AI 写作模块提供（既跨模块，又让同一 key 出现两个注册者：`byKey.set` 后写覆盖、无告警，谁生效取决于 glob 挂载顺序）。现 manual 入口注册 `chapters` + `ai-chat` 两个槽（`apps/plugins/manual/workbench/web/index.tsx:63-96`，后者 `modes:['manual']`，实现 = `web/ai/AiChatPanel.tsx` + `web/ai/sse.ts`），auto 入口（`apps/plugins/auto/workbench/web/index.tsx`，49 行）`inject=[]`、不注册任何槽，其 `web/ai/**` 三个文件仅留档（待有 shell 时删除）。**机制与降级行为不变**：仍按 `def.key` 键控多槽 + `withModes` 条目级优先 + 缺席不渲染。
 
 复用既有 `FloatingPanelDef`（`types.ts:29-50`，无需新字段）；kernel 由注册表**按 key 取 `Component`** 组成 `chapterBubbleDef`/`chatBubbleDef`，并删除 `ProjectLayout.tsx:15` 与 `:23-24,29` 的静态 import。
 

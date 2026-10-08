@@ -31,7 +31,7 @@ import { Layers } from 'lucide-react';
 import { createWebPluginContext, registerBuiltinPanelAsContext } from '@/plugin/host';
 import { pluginRegistryApi, usePluginRegistry } from '@/plugin/registry';
 import { resolveDockMeta, type DockPanelDef } from '@/components/shell/dock/types';
-import { BUILTIN_PANELS } from '../../../../plugins/manual/workbench/web/panels';
+import { BUILTIN_PANELS } from '../panels';
 
 function makeDef(key: string, over: Partial<DockPanelDef> = {}): DockPanelDef {
   return { key, label: key, icon: Layers, Component: () => null, ...over } as DockPanelDef;

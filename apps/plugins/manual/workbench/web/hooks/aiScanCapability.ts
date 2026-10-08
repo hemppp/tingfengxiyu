@@ -1,14 +1,17 @@
 // ============================================================
-// manual 模块内的 AI 扫描能力契约（本地声明，结构兼容 auto 侧 scanService）
+// manual 模块内的 AI 扫描能力契约（本模块自带类型声明，零运行时依赖）
 //
-// 为什么在模块内声明类型而不 import auto 的 scanService：
+// 为什么在模块内声明而不去 import 另一模块的实现：
 //   三层拆分禁止 manual → auto 的静态 import（门禁断言 A 的 M2A）。
-//   模块内只保留「能力形状」的类型声明（纯类型，零运行时依赖），
-//   运行时经 kernel 注册表 getCapability('ai.scan') 取实现；
-//   auto 模块缺席 ⇒ 能力为 null ⇒ 调用点静默 return（设计 §5.3）。
+//   模块内只保留「能力形状」的类型声明，运行时经 kernel 注册表
+//   getCapability('ai.scan') 取**提供方模块注册的共享实现**：
+//   · 能力表（AI 接口）是**两边模块都可引用的共享面**：core 契约写的是
+//     「一个模块提供实现、另一个模块按名消费，缺席时静默降级」，kernel 不按
+//     模块/创作模式隔离它（模式隔离只作用于 UI 扩展点与模块间静态 import）；
+//   · 本仓当前无任何 provider ⇒ 能力为 null ⇒ 调用点静默 return（设计 §5.3）。
 // ============================================================
 
-/** 流式时间线事件（与 auto 侧 scanService.StreamTimelineEvent 结构一致） */
+/** 流式时间线事件（即 `ai.scan` 能力返回的事件结构） */
 export interface StreamTimelineEvent {
   title: string;
   description: string;
@@ -60,7 +63,10 @@ export class ScanSkippedError extends Error {
 }
 
 /**
- * `ai.scan` 能力的形状（auto 模块经 ctx.registerCapability('ai.scan', impl) 提供）。
+ * `ai.scan` 能力的形状：由**提供方模块**经
+ * `ctx.registerCapability('ai.scan', impl)` 注册后，任一模块都可按名取用 ——
+ * AI 接口是两边共享的引用面（kernel 不按模块/创作模式过滤；隔离只作用于
+ * UI 扩展点与模块间静态 import）。
  * 缺失（null）时：自动实体检测 / 最新章节轮询**静默 return**（设计 §5.3）。
  */
 export interface AIScanCapability {
@@ -95,7 +101,7 @@ export interface AIScanCapability {
 }
 
 /**
- * 红石开关面（scanner/extract）—— 与 scanService 同属 `ai.scan` 能力的一部分
+ * 红石开关面（scanner/extract）—— 同属 `ai.scan` 能力的一部分
  * （设计 §5.2 只允许 5 个能力名，故不新造 `ai.redstone` 契约）。
  * 能力缺失时：视为「已启用」，保持原行为（不改变既有语义）。
  */

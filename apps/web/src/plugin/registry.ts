@@ -70,6 +70,14 @@ export interface PluginRegistryState {
   _registerBuiltinPanel(def: BuiltinPanelDef): () => void;
   /** @deprecated ADR D9：改用 `_registerBuiltinPanel` */
   _registerBuiltinBubble(def: BuiltinPanelDef): () => void;
+  /**
+   * 注册 AI 接口（跨模块能力）实现；name 取自 core 常量 `WEB_CAPABILITIES`。
+   *
+   * ★ 这是**两边模块都可引用的共享接口面**（「一个模块提供实现、另一个模块按名
+   *   消费，缺席时静默降级」，见 `packages/core/src/manifest.ts` 的契约注释），
+   *   因此**不**按插件模式 / 项目模式隔离 —— 模式隔离只作用于 UI 扩展点
+   *   （projectPanels / builtinPanels / workbenches …）与模块间静态 import。
+   */
   _registerCapability(name: string, impl: unknown): () => void;
   _reset(): void;
 }
@@ -166,7 +174,18 @@ const bubbleSeq: SeqMemo = new Map();
 /** 模块级工作台（按模式单槽：'manual' | 'auto' | 'shared' → WorkbenchDef） */
 let workbenchMap: Record<string, WorkbenchDef> = {};
 
-/** 跨模块能力实现（name → impl） */
+/**
+ * 跨模块能力实现（name → impl）——**AI 接口的共享面**。
+ *
+ * 语义依据 `packages/core/src/manifest.ts` 的 `WEB_CAPABILITIES` 契约：
+ * 「一个模块提供实现、另一个模块按名消费，缺席时静默降级」，取代模块间静态 import。
+ * 所以本表**不做模式隔离**：manual 与 auto 两边都可以注册与取用同一 AI 接口实现
+ * （同名重复注册为「后写覆盖」，与其它全局槽一致，见 `makeRegister` 的 key 语义）。
+ *
+ * 必须严格隔离的是另外两层（不在此表）：
+ *   · UI 扩展点 / 模块入口 —— 全部按 `modes` 过滤（见文件末尾 `filterByProjectMode`）
+ *   · 模块之间的静态 import —— 由门禁 `scripts/verify/verify-workbench-isolation.mjs` 拦
+ */
 let capabilityMap: Record<string, unknown> = {};
 
 export const usePluginRegistry = create<PluginRegistryState>((set) => ({
@@ -348,8 +367,10 @@ export const pluginRegistryApi = {
   registerBuiltinPanel: (def: BuiltinPanelDef) => usePluginRegistry.getState()._registerBuiltinPanel(def),
   /** @deprecated ADR D9：改用 `registerBuiltinPanel` */
   registerBuiltinBubble: (def: BuiltinPanelDef) => usePluginRegistry.getState()._registerBuiltinPanel(def),
-  registerCapability: (name: string, impl: unknown) => usePluginRegistry.getState()._registerCapability(name, impl),
-  getCapability: <T = unknown>(name: string): T | null => (capabilityMap[name] as T | undefined) ?? null,
+  registerCapability: (name: string, impl: unknown) =>
+    usePluginRegistry.getState()._registerCapability(name, impl),
+  /** 与导出函数 `getCapability` 同判据（AI 接口共享面，不做模式隔离） */
+  getCapability: <T = unknown>(name: string): T | null => getCapability<T>(name as WebCapabilityName),
   reset: () => usePluginRegistry.getState()._reset(),
 };
 
@@ -358,7 +379,13 @@ export function getWorkbenchForMode(mode: ProjectMode): WorkbenchDef | undefined
   return workbenchMap[mode] ?? workbenchMap.shared;
 }
 
-/** 非响应式读取：获取跨模块能力实现（未注册返回 null） */
+/**
+ * 非响应式读取：获取 AI 接口（跨模块能力）实现，未注册返回 null。
+ *
+ * ★ **共享面**：两个模块都可以提供与取用同一个 AI 接口实现，这里不做模式过滤
+ *   （依据 `WEB_CAPABILITIES` 契约：一个模块提供实现、另一个模块按名消费）。
+ *   消费点必须容忍 null（隐藏入口或走本地兜底，禁止 throw）。
+ */
 export function getCapability<T = unknown>(name: WebCapabilityName): T | null {
   return (capabilityMap[name] as T | undefined) ?? null;
 }

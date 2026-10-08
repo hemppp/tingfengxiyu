@@ -217,7 +217,8 @@ export interface WorkbenchDef {
  *
  * 字段集是 `FloatingPanelDef` 的**真子集**（少 `scope/rail/group`），
  * 因此合池时无需 `as unknown as FloatingPanelDef` 双断言（ADR §3.2）。
- * 按 key 键控多槽：`'chapters'`（manual 模块）、`'ai-chat'`（auto 模块）。
+ * 按 key 键控多槽：`'chapters'` 与 `'ai-chat'` **都属 manual 模块**
+ * （2026-10「手写/自动隔离改造」后 AI 对话面板由手写台自注册；此前它由 auto 模块注册）。
  *
  * ★ t4（集成接线）新增 `dock`：内置槽原先无法声明停靠位置 ⇒ `'chapters'`
  *   只能落 `resolveDockMeta` 的缺省 `slot:'right'`，左栏章节树到不了左停靠区。

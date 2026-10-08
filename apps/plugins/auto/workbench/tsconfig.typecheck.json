@@ -8,7 +8,9 @@
   // 为什么需要它：`pnpm --filter @novel/web type-check` = `tsc --noEmit` +
   //   `apps/web/tsconfig.json` 的 `include: ["src"]`，`apps/plugins/**` 一个文件都不进
   //   tsc 程序 ⇒ 那一步看不见模块内部的死导入 / 悬空引用。
-  //   本次 t4 改到了 `web/index.tsx`（ai-chat 面板注册）与新增的 `web/ai/**`，
+  //   本次 t4 新增了 `web/ai/**`（AI 对话面板 + SSE 解析）并把 `web/index.tsx` 改为
+  //   面板注册入口；2026-10「手写/自动隔离改造」后该面板已移交 manual 模块、
+  //   本包入口不再注册任何槽（`web/ai/**` 仅留档，仍纳入本配置的类型检查），
   //   需要一份**可复现**的配置把这份改动纳入类型检查。
   //
   // 用法（仓库根执行）：

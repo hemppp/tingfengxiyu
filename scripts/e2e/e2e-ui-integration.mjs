@@ -821,8 +821,10 @@ async function main() {
 
   // ---- 8) 运行契约：HOST_MODE=all（两套插件同时在场） ----
   section('8) 运行契约：HOST_MODE=all（手写台 + AI 写作台两套插件同时在场）');
-  // 契约④ 的运行前提：ai-chat 面板由 **auto 插件目录**注册，若宿主按 HOST_MODE 过滤，
-  // manual 项目下就不会有它。真源 = 服务端 /api/health（apps/server/src/plugin/host.ts:698）。
+  // 契约④ 的运行前提：本步只断言服务端 /api/health 里的插件在场性（不涉及面板归属）。
+  // 注：ai-chat 面板自 2026-10「手写/自动隔离改造」起由 **manual 插件目录**
+  // （novel.manual.workbench）注册，auto 入口不再注册任何槽。
+  // 真源 = 服务端 /api/health（apps/server/src/plugin/host.ts:698）。
   const host = await evalJs(`(async function(){
     try {
       var j = await (await fetch('/api/health', { credentials: 'include' })).json();

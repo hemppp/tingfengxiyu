@@ -257,6 +257,23 @@ reseeded=true`（buildId `3b4093c6…` → **`484046b7fdc335afe040d4af0f04676b`*
 （`exitCode=0`），无残留进程；书稿库 `novelmuse.db` 442,368 B 与 `data\projects`
 3 个 `.db` 各 352,256 B 完好。
 
+### 变更（2026-10-07 手写/自动隔离改造）
+
+- **AI 对话面板（`ai-chat` 槽）由 `auto` 工作台移交 `manual` 工作台**：面板与 SSE
+  通道实现随 `novel.manual.workbench` 落位（`manual/workbench/web/ai/`），注册
+  modes 由 `['manual','auto']` 收紧为 `['manual']`；`auto` 入口
+  （`novel.auto.workbench`）改为**有意为之的空实现** —— `inject` 清空、
+  `apply()` 只留一条日志、不再注册任何槽，`web/ai/**` 三文件保留留档。
+- **AI 能力通道刻意保持共享**：`ai.scan` / `ai.quickPhrases` / `ai.timelineExtract`
+  / `ai.outlineFill` / `ai.entityRefresh` 是两侧模块都可引用的共享面，
+  `registerCapability` **不盖宿主模式**；曾试做「能力按模式隔离」**已回退**。
+  需要隔离的是 UI 扩展点 / 模块入口（`filterByProjectMode`）与模块间静态 import。
+- **修复隔离门禁红**：`apps/web/src/plugin/__tests__/plugin-dock-adaptation.test.ts`
+  曾以相对路径静态引用 `manual/workbench/web/panels`（rule=K2M / B-ENTRY），
+  违反「kernel 只经模块公开入口」约束。该测试已迁入
+  `apps/plugins/manual/workbench/web/__tests__/`，import 改为 `'../panels'`，
+  `node scripts/verify/verify-workbench-isolation.mjs` 现 **EXIT=0**。
+
 ### 已知限制
 
 - 桌面端产物**未做代码签名**：首次运行会触发 Windows SmartScreen 提示，

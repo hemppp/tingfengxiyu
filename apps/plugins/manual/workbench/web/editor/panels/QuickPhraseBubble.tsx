@@ -192,9 +192,9 @@ export function QuickPhraseBubble({ editor }: QuickPhraseBubbleProps) {
     setIsGenerating(true);
     try {
       const content = editor.getText();
-      // 能力优先；auto 模块缺席时走本地启发式（设计 §5.3：ai.quickPhrases 缺失 → 启发式兜底）
-        const cap = getCapability<{ generate: (c: string, ch: typeof characters) => Promise<string[]> }>('ai.quickPhrases');
-        const aiPhrases = cap ? await cap.generate(content, characters) : extractHeuristicPhrases(content, characters);
+      // AI 接口优先；无提供方时走本地启发式（设计 §5.3：ai.quickPhrases 缺失 → 启发式兜底）
+      const cap = getCapability<{ generate: (c: string, ch: typeof characters) => Promise<string[]> }>('ai.quickPhrases');
+      const aiPhrases = cap ? await cap.generate(content, characters) : extractHeuristicPhrases(content, characters);
       for (const p of aiPhrases) {
         addPhrase({
           text: p,

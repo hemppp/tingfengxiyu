@@ -1,12 +1,9 @@
 // ============================================================
-// ⚠ 已移交（留档）—— SSE 帧解析：`POST /api/ai/chat-stream` 的 `data:` 帧 → 事件对象
+// SSE 帧解析 —— `POST /api/ai/chat-stream` 的 `data:` 帧 → 事件对象
 //
-// ★ 隔离改造：实现真源已**移交手写台**：
-//     apps/plugins/manual/workbench/web/ai/sse.ts（manual 模块 · 与同模块的面板配套）
-//   本文件仍被同目录的 `__tests__/sse.test.ts` 引用（该用例继续覆盖这套纯函数逻辑），
-//   但**产品代码已无引用**（auto 入口不再 import 面板 ⇒ 不再 import 本文件）。
-//   保留的唯一原因是本仓当前没有删除文件的能力；待有 shell 时与
-//   `AiChatPanel.tsx`、`__tests__/sse.test.ts` 一并删除。
+// ★ 归属：本文件是 **manual（手写台）自有**实现，与同目录的 `AiChatPanel.tsx` 配套。
+//   迁移来源：`apps/plugins/auto/workbench/web/ai/sse.ts`（逐行同源，仅本头注不同）。
+//   隔离口径：手写模块的组件只作用在手写模式，且不反向引用 auto（AI 写作）模块。
 //
 // 为什么单独一个文件：这是 AI 面板里**唯一**有独立逻辑、又不依赖
 // React/DOM 的部分。抽成纯函数后才能脱离浏览器跑断言（Node 24 可直

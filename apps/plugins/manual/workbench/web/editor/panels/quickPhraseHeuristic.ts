@@ -3,7 +3,7 @@
 //
 // 从 kernel `apps/web/src/services/ai/quickPhraseService.ts` 的
 // `extractHeuristicPhrases` 原样搬入（t4，D35/D36）：
-//   · `ai.quickPhrases` 能力缺失（auto 模块缺席）时走本函数（设计 §5.3）
+//   · `ai.quickPhrases` 能力缺失（无提供方）时走本函数（设计 §5.3）
 //   · 零 AI 依赖：只用正文文本 + 角色名/别名做包含匹配
 // ============================================================
 

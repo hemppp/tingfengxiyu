@@ -1,16 +1,16 @@
 // ============================================================
-// ⚠ 已移交（留档）—— AI 对话面板（原 auto 模块 · 手写台右栏）
+// AI 对话面板（manual 模块 · 手写台右栏）
 //
-// ★ 隔离改造：本实现的产品归属已**移交手写台**：
-//     apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx（manual 模块 · modes ['manual']）
-//   注册点随之一并移交：`apps/plugins/manual/workbench/web/index.tsx`（key='ai-chat'）。
-//   为什么必须移交：手写台的右栏 UI 不应由 AI 写作（auto）模块提供 —— 既跨模块
-//   （manual 的使用面依赖 auto 包在场），又让同一个 panel key 出现两个注册者
-//   （`byKey.set` 后写覆盖、无告警 ⇒ 谁生效取决于 glob 挂载顺序）。
+// ★ 归属与隔离：本面板是**手写台自己的组件** —— 由
+//   `apps/plugins/manual/workbench/web/index.tsx` 以 key='ai-chat'、
+//   modes:['manual'] 注册；不上移到 auto，也不反向引用 auto（AI 写作）模块。
 //
-//   本文件在仓内**已无任何产品引用**（`apps/plugins/auto/workbench/web/index.tsx`
-//   不再 import 它）。保留的唯一原因是本仓当前没有删除文件的能力；
-//   待有 shell 时请连同 `web/ai/sse.ts`、`web/ai/__tests__/sse.test.ts` 一并删除。
+//   迁移来源：`apps/plugins/auto/workbench/web/ai/AiChatPanel.tsx`（逐行同源，
+//   仅本头注不同）。原注册在 auto 包里、且把 modes 放宽到 ['manual','auto']，
+//   使得「手写台的右栏 UI 由 AI 写作模块提供」，同一个 key 在 ProjectLayout 的
+//   `builtinPanels ∪ projectPanels` 合池里出现两个注册者（`byKey.set` 后写覆盖、
+//   无告警 ⇒ 谁生效取决于 glob 挂载顺序）。本轮收回手写台所有：
+//   auto 侧的同 key 注册已删除，其原文件仅留档（见该文件头注）。
 //
 // t3 ② 契约：消息列表（AI 消息带 agent 名 / 用户消息浅灰底块）
 //   + 底部输入（占位「问点什么...」、Enter 发送 / Shift+Enter 换行）
