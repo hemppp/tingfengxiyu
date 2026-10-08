@@ -285,14 +285,15 @@ reseeded=true`（buildId `3b4093c6…` → **`484046b7fdc335afe040d4af0f04676b`*
 
 ### 文档（2026-10-07 架构可视化）
 
-- **新增 6 张架构可视化图**：`docs/architecture/` 下的 `architecture-map.html`、
+- **新增框架展示树**：`docs/architecture/framework-tree.md` —— 按模块 / 关键目录层级
+  展示仓库骨架，每个模块附一行职责注释，并给出「三条主线」与「模块归属速查」
+  （手写模式 / 自动模式 / 共享库 / 内核）。
+- 该文件取代先前的 6 张架构可视化图（`architecture-map.html`、
   `architecture-plain.html`、`entry-to-end-flow.html`、`flow-current.html`、
-  `mind-map.html`、`project-graph.html` —— 覆盖仓库总览、入口到端到端流程、
-  当前数据流与依赖关系。
-- **新增真实文件树**：`docs/architecture/file-tree.txt`（903 行，由实际仓库生成，
-  含各目录分区计数）。
-- 修正早期图稿把 `ui-kit` / `ui-graph` 误记为 `packages/*` 的包路径
-  （实际在 `apps/plugins/shared/*`）。
+  `mind-map.html`、`project-graph.html`）与逐文件罗列的真实文件树
+  （`file-tree.txt`，903 行）：三者信息重叠，保留一份可维护的框架树即可。
+- 包路径口径保持正确：`ui-kit` / `ui-graph` / `data-core` 在 `apps/plugins/shared/*`，
+  `packages/` 下只有 `core` / `db` / `shared` 三个包。
 
 ### 已知限制
 
