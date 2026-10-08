@@ -216,6 +216,13 @@ Start-Process '…\Programs\NovelMuse\Uninstall NovelMuse.exe' -ArgumentList '/S
 实测确认：便携版运行时 `userData` 落点 = **`C:\Users\1\AppData\Roaming\NovelMuse`**，与安装版**完全相同**，**不是** exe 同目录。`F:\new1.2\release\desktop\` 下未产生任何 NovelMuse 数据目录。`portable.nsi` 只把**运行体**解压到 `$TEMP` 并在退出时删除，不触碰 `userData`；源码中亦**未检出** `PORTABLE_EXECUTABLE*` 环境变量的使用。
 > ⇒ 若「便携 = 数据随身」是期望语义，**当前实现不满足**，需另行设计（例如读 `PORTABLE_EXECUTABLE_DIR` 覆盖 `userData`）。登记为 t6 残余风险 R13。
 
+> ✅ **后续（2026-10-08，ADR D4.7）**：本条已闭合。便携版 zip 现随包提供 `启动便携版.cmd`，
+> 用 Electron 自带的 `--user-data-dir` 把 `userData` 重定向到解压目录内 `portable-data\`，
+> **数据随文件夹走**，且预置运行时使首启零等待（4.1 s）。上述结论对「直接双击
+> `NovelMuse.exe`」的传统模式仍然成立（落点仍是 `%APPDATA%\NovelMuse`）。本节其余内容
+> （单文件 exe 形态、`portable.nsi`）描述的是 D4.5 形态，**该形态已于 D4.6 移除**，
+> 仅作历史记录。
+
 ---
 
 ## 6. 非验收项但必须登记的缺陷：`main.log` EPIPE 自激写盘

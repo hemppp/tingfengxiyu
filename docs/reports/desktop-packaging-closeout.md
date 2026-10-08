@@ -129,6 +129,12 @@
 `[t5]` 实测：便携版运行时 `app.getPath('userData')` = **`C:\Users\1\AppData\Roaming\NovelMuse`**，与安装版**相同**；便携版只把**运行体**解压到 `$TEMP\<随机名>` 并在退出后 `RMDir /r` 清理，不触碰 userData。源码**未检出** `PORTABLE_EXECUTABLE*` 的消费点。
 ⇒ 若产品语义要求「便携 = 数据随身」，**当前实现不满足**，需新增 `--data-dir`/读 `PORTABLE_EXECUTABLE_DIR` 的覆盖逻辑（ADR 明确记为**超出本 ADR 范围，须 captain 决定**）。
 
+> ✅ **后续（2026-10-08，ADR D4.7）**：已闭合。方案不是新增 `--data-dir`，而是复用 Electron
+> 自带的 `--user-data-dir`：便携版 zip 随包提供 `启动便携版.cmd`，把 `userData` 重定向到
+> 解压目录内 `portable-data\`，**应用源码零改动**，数据随文件夹走；同时打包时预置运行时，
+> 便携模式首启零等待（12.4 s → 4.1 s）。本节的结论对「直接双击 `NovelMuse.exe`」的传统
+> 模式仍然成立。
+
 ### 3.4 **R12 — `compareVersions` 预发布后缀（闭环，加强实现）**
 `[本报告]` 用 tsx 直跑 `apps/desktop/src/updater/semver.ts`，**15/15 用例全部 PASS**（`F:\new1.2\.verify-scratch\semver-test.mts` / `.log`）。覆盖：核心段数值比较（`2.0.0 < 10.0.0`、`1.10.0 > 1.9.0`）、`v` 前缀、build metadata 忽略（`1.0.0+build.5 == 1.0.0`）、预发布排序（`1.0.0-beta.1 < 1.0.0`、`beta.10 > beta.9`、`alpha < beta`、数字标识符 < 字母数字标识符、段数少者优先级低）。
 实现按 **semver 2.0.0 §11** 处理（比 ADR 写的「按字符串比较」更严格），属对 ADR 的**加强**；D14.2 的 `appOutdated = compareVersions(manifest.version, appVersion) > 0` 语义不变。
@@ -169,6 +175,11 @@ DEV-01（medium）、DEV-02…DEV-08（low）、DEV-09（medium）、DEV-10（hi
 1. 直接运行 `NovelMuse-Portable-0.1.0-x64.exe`，**无需安装**。
 2. **首启自解压约 3 分钟**（解压到 `%TEMP%\<随机目录>`，退出后自动删除）——期间看不到窗口属正常。
 3. **注意**：便携版 **不**把数据放在 exe 旁边，`userData` 仍为 `%APPDATA%\NovelMuse`（见 §3.3）。如需「数据随身」，须等后续版本的 `--data-dir` 支持。
+
+> ⚠️ **本节描述的是 0.1.0 的单文件便携 exe（D4.5 形态）**，该形态**已于 D4.6 移除**。
+> 0.2.0 起便携版是**绿色 zip**：解压后双击 `启动便携版.cmd`，数据落在解压目录内
+> `portable-data\`（数据随身），首启零等待；直接双击 `NovelMuse.exe` 则是传统模式。
+> 详见 ADR D4.7（2026-10-08）。
 
 ### 4.3 启动注意（本机环境特有）
 - 若在带 `ELECTRON_RUN_AS_NODE=1` 的 shell 里启动（如本机 DSH 终端），Electron 会退化为纯 Node、窗口不出现。**启动前清除该变量**：

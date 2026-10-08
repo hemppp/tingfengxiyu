@@ -332,6 +332,36 @@ reseeded=true`（buildId `3b4093c6…` → **`484046b7fdc335afe040d4af0f04676b`*
   隔离门禁 `verify-workbench-isolation` ✓（210 文件 0 违规）、web vitest
   **245 例 / 21 文件全过**、`pnpm verify:all` ✓。
 
+### 新增（2026-10-08 便携版预置运行时）
+
+- **便携版不再需要首启播种**：`apps/desktop/scripts/package-portable-zip.mjs` 现在在
+  打包时把运行时**预置**进 zip 的 `NovelMuse/portable-data/`，并附带启动器
+  `启动便携版.cmd`（向 Electron 传 `--user-data-dir=<解压目录>\portable-data`）。
+  - **首启零等待**：实测「解压 → 双击启动器 → 就绪探针通过」**4.1 s**（此前需把
+    76 MB / 5994 文件复制到用户目录，实测 12.4 s）。启动日志 `seeded=false，
+    reseeded=false` —— 播种闸门（D7.2/D7.5）被预置的 `version.json` 直接放行。
+  - **数据随身**：数据库、插件、日志、设置全部落在解压目录内的 `portable-data\`，
+    不写 `%APPDATA%`（此前 R13 记录的「便携版不重定向 userData」缺口由此闭合）。
+  - **磁盘不再翻倍**：便携模式不再于用户目录复制一份 76 MB 运行时。
+  - 预置内容与 `resources/` **逐字一致**，`version.json.buildId` 取自
+    `resources/app-server/build-stamp.json`，`appVersion` 取自 `apps/desktop` 的
+    `version` —— 三者与 D7.5 的闸门同源，否则会被判成 `payload-changed` 而重新播种。
+  - **两种模式并存**：直接双击 `NovelMuse.exe` 仍是传统模式（数据在
+    `%APPDATA%\NovelMuse`，首启走 D7.2 播种），两种模式数据互相独立。
+  - 打包脚本新增两道校验：`portable-data/` 关键条目齐备、中文条目名
+    （`使用说明.txt`、`启动便携版.cmd`）均置 UTF-8 标志位（bit 11）。
+  - **修正 `使用说明.txt` 的登录说明**：原写「默认口令 admin / Admin1234!」与实现
+    不符 —— 服务端早已移除固定默认口令（`apps/server/src/index.ts:65-88`，ADR D6.2
+    保留「随机初始密码 + 用户自行修改」语义）。现改为「密码首启随机生成，弹一次性
+    对话框并写入 `logs\initial-admin-password.txt`」。
+  - 实测（`release/desktop/NovelMuse-Portable-0.2.0-x64.zip`，**227893452 B /
+    217.34 MB**，SHA256 `78b15b81ef432a068452710cb1a93f5b24535563a3792013821ef5e002edb0c5`，
+    12466 条目）：解压副本双击启动器 → 4.1 s 就绪、`plugins=27`、
+    `%APPDATA%` 的 `version.json` 与 `novelmuse.db` mtime **零变化**；把旧
+    `%APPDATA%\NovelMuse\data` 覆盖进 `portable-data\data` 后重启，原书稿库
+    （2 个项目）正常列出 ⇒ 迁移路径可用。
+  - 体积变化：zip 由 199.7 MB 增至 217.3 MB（+17.6 MB，即预置运行时的压缩增量）。
+
 ### 已知限制
 
 - 桌面端产物**未做代码签名**：首次运行会触发 Windows SmartScreen 提示，

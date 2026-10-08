@@ -279,6 +279,10 @@ pnpm install
 
 **数据落点不变**：仍是 `%APPDATA%\NovelMuse`（R13 结论），升级时覆盖文件夹即可保留书稿。
 
+> ⚠️ **该结论已由 D4.7（2026-10-08）修订**：直接双击 `NovelMuse.exe` 时落点仍是
+> `%APPDATA%\NovelMuse`；但双击新附带的 `启动便携版.cmd` 时，`userData` 被
+> `--user-data-dir` 重定向到解压目录内的 `portable-data\`，**数据随文件夹走**。
+
 ### D4.5 单文件便携 exe（**2026-10-06 同日追加；与 D4.4 的绿色 zip 并行提供**）
 
 > ⛔ **本节已被 D4.6 取代，仅作历史记录。** `portable` target、`dist:portable` 脚本、
@@ -344,6 +348,88 @@ pnpm install
 **保留项**：便携版 zip 的**文件名不变**，仍叫 `NovelMuse-Portable-<version>-x64.zip` —— 「Portable」描述的是便携形态，**不是** portable target。`package-portable-zip.mjs`、`build-resources/splash.bmp`、`scripts/gen-splash.py` 均保留（splash 只有 exe 形态引用，现为无用资产，但删除与否不影响构建）。
 
 **冒烟纪律 1/2 是否仍需要**：**不再需要为 exe 执行**（该形态已不存在）。纪律 3/4（清 `ELECTRON_RUN_AS_NODE`、先看 `logs\main.log`）对 `win-unpacked\NovelMuse.exe` 仍然有效。
+
+### D4.7 便携版预置运行时（**2026-10-08 决策，闭合 R13；免首启播种**）
+
+**问题**（两个，同源）：
+
+1. **首启要播种**。D7.2 会在首启把 `resources/app-server`（68.1 MB / 5910 文件）与
+   `resources/web-dist`（8.1 MB / 84 文件）复制到 `<userData>/app-runtime/`。
+   实测复制耗时 **12.4 s**，用户看到的是「双击后十几秒才出界面」。
+2. **便携版数据不随身**（R13）。`app.getPath('userData')` 恒为 `%APPDATA%\NovelMuse`，
+   与安装版相同、**不重定向**。⇒ 「拷走文件夹」并不等于「拷走书稿」，
+   「绿色便携」名不副实。D20-R13 自 2026-10-06 起登记为未落地缺口。
+
+**决策**：`package-portable-zip.mjs` 在打包时把运行时**预置**进 zip，并附一个启动器。
+产物仍是同一个 `NovelMuse-Portable-<version>-x64.zip`（文件名不变，D4.6 保留项不变）。
+
+**预置布局（冻结）**：
+
+```
+NovelMuse/
+├─ 启动便携版.cmd          ← 启动器：--user-data-dir="<解压目录>\portable-data"
+├─ 使用说明.txt
+├─ NovelMuse.exe / resources/ …   （electron-builder 的 win-unpacked 原样）
+└─ portable-data/                 ← ★ 新增：预置的 userData
+   ├─ app-runtime/
+   │  ├─ app-server/         ← 逐字复制自 resources/app-server
+   │  ├─ web-dist/           ← 逐字复制自 resources/web-dist
+   │  └─ version.json        ← { appVersion, updatedAt, buildId }
+   └─ plugins/{auto,manual,shared} ← 复制自 resources/seed-plugins/*
+      plugins/local          ← 空目录（D7.2 步骤 4）
+```
+
+**为什么这样就不播种了**：`shouldReseed()`（D7.5）三条触发条件全部不命中 ——
+`version.json` 存在（非 `missing`）、`appVersion` 与外壳**相等**（非 `shell-newer`）、
+`buildId` 与 `build-stamp.json` **一致**（非 `payload-changed`）⇒ 闸门跳过播种，
+直接使用预置运行时。
+
+**★ 指纹必须同源（冻结，改了就会静默回退）**：
+`portable-data/app-runtime/version.json` 的 `buildId` **必须**取自
+`resources/app-server/build-stamp.json` 的 `buildId`，`appVersion` **必须**等于
+`apps/desktop/package.json` 的 `version`。任一不符 ⇒ 判 `payload-changed` ⇒
+清空 `portable-data/app-runtime` 重新播种，用户白等一场（功能仍正常，只是
+「免播种」失效）。打包脚本已内建条目级校验。
+
+**为什么用 `--user-data-dir` 而不是改代码**：Electron 自带该开关，把 `userData`
+（含 `data` / `plugins` / `logs` / 缓存）整体重定向到指定目录。**应用源码零改动**，
+D7.1 布局与 D7.3/D7.4/D8.2 三个 junction 全部照常（`<userData>/app-runtime/app-server/data`
+→ `<userData>/data` 仍成立，只是 `<userData>` 换了根）。这比在 `paths.ts` 里加
+「就地模式」分支更稳：应用内更新器（D14.5）仍写自己的 `app-runtime`，
+不会穿进只读的 `resources/`。
+
+**两种模式并存（冻结）**：
+
+| 启动方式 | userData | 首启 | 数据随文件夹走 |
+|---|---|---|---|
+| 双击 `启动便携版.cmd` | `<解压目录>\portable-data` | **零等待**（预置） | ✅ |
+| 直接双击 `NovelMuse.exe` | `%APPDATA%\NovelMuse` | 走 D7.2 播种（≈12 s） | ❌ |
+
+两种模式数据**互相独立**，`使用说明.txt` 已显式提示不要混用。
+
+**迁移旧书稿**：把旧的 `%APPDATA%\NovelMuse\data` 整个目录覆盖到
+`<解压目录>\portable-data\data` 即可（先关程序）。
+
+**代价**：zip 由 199.7 MB 增至 217.3 MB（+17.6 MB 压缩增量；解压后磁盘多 93.4 MB）。
+换来的是便携模式首启 12.4 s → 4.1 s，且用户目录不再多一份 76 MB。
+
+**验收实测（2026-10-08）**：产物 `release/desktop/NovelMuse-Portable-0.2.0-x64.zip`，
+**227893452 B（217.34 MB）**，SHA256 `78b15b81ef432a068452710cb1a93f5b24535563a3792013821ef5e002edb0c5`，
+12466 条目。解压到 `D:\Temp\nm-f` 后双击启动器：
+- `userData=D:\Temp\nm-f\NovelMuse\portable-data`；
+- `布局：seeded=false，reseeded=false，appServerPresent=true`；
+- `就绪探针通过：status=ok，database=connected，hostMode=all，plugins=27`，**4.1 s**；
+- `%APPDATA%\NovelMuse` 的 `app-runtime\version.json` 与 `data\novelmuse.db`
+  **mtime 零变化** ⇒ 确实没写系统用户目录；
+- 新实例自建**独立**书稿库（`portable-data\data\novelmuse.db`）；
+- 覆盖旧 `data` 后重启，原书稿库（2 个项目）正常列出；
+- 关窗优雅退出（stdin 协议关停 server，exitCode=0），无残留进程。
+
+**`使用说明.txt` 顺带修正**：原写「默认管理员账号 admin / Admin1234!」与实现不符 ——
+服务端早已移除固定默认口令（`apps/server/src/index.ts:65-88`；ADR D6.2 保留
+「随机初始密码 + 用户自行修改」的安全语义）。现改为「密码首启随机生成，
+弹一次性对话框并写入 `logs\initial-admin-password.txt`」。**旧文案属既有缺陷，
+本次一并修正。**
 
 ---
 
@@ -1082,7 +1168,7 @@ release/updates/
 | R10 | **低** | 打包后插件 TS 源加载会打印 `[MODULE_TYPELESS_PACKAGE_JSON]` 警告（探针实测 `err4.txt`） | t4 观察 `server.err.log` | 无害，仅记录；若要消除需给插件 `package.json` 加 `"type":"module"`（属插件仓改动，本次不做） |
 | R11 | **低** | 打包后 Electron 主进程 stdout 的 `[Server]` 日志是否完整落盘 | t4 检查 `<userData>/logs/server.err.log` 非空 | 若为空，改由 stdin/临时文件传递 |
 | R12 | **低** | `compareVersions` 对预发布后缀（`1.0.0-beta.1`）的处理 | t6 单测 | 降级为纯数字段比较并记录限制 |
-| R13 | **低** | 便携版下 `app.getPath('userData')` 的落点是否仍为 `%APPDATA%\NovelMuse` | t6 实跑便携版并读 `updaterGetState().pluginsDir` | **已确认（2026-10-06，D4.4）**：仍为 `%APPDATA%\NovelMuse`；zip 解压版不改变数据落点，升级时覆盖文件夹即可保留书稿 |
+| R13 | **低** | 便携版下 `app.getPath('userData')` 的落点是否仍为 `%APPDATA%\NovelMuse` | t6 实跑便携版并读 `updaterGetState().pluginsDir` | **已确认（2026-10-06，D4.4）**：仍为 `%APPDATA%\NovelMuse`；zip 解压版不改变数据落点，升级时覆盖文件夹即可保留书稿。**已于 2026-10-08 闭合（D4.7）**：便携版新增 `启动便携版.cmd`，用 `--user-data-dir` 把 `userData` 重定向到解压目录内 `portable-data\`，数据随文件夹走；直接双击 exe 的传统模式落点不变 |
 
 **已知的、不修复的既有行为（如实记录，不作为缺陷）**：
 - 未签名安装包会触发 Windows SmartScreen 提示（无证书，D16.4）。
