@@ -13,8 +13,9 @@
 //         · resolveDockMeta / planDockAreas 的缺省行为与 ADR §1.4/§1.5/§1.6 一致
 // ============================================================
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { render, waitFor, fireEvent } from '@testing-library/react';
+import { useState, type Ref } from 'react';
 import { Layers } from 'lucide-react';
 
 // dockview 依赖 ResizeObserver / matchMedia —— jsdom 未内建，测试环境补齐。
@@ -703,5 +704,110 @@ describe('t6 去层 · 只保留中心组组头', () => {
     );
     await settle();
     expect(groupHeaders(container).filter((h) => h.style.display !== 'none').length).toBe(1);
+  });
+});
+
+// ============================================================
+// ★ 2026-10-07 用户口径（m01200「让他点击对应的按钮可以收起来」）：
+//   最左侧活动栏的图标按钮 = 该面板的**开/关开关**。
+//   改造前 `onActivitySelect` 对已打开的面板只 `p.api.setActive()`，
+//   于是「再点一次收起来」永远做不到 —— 用户反馈的就是这个。
+//   下面用**受控宿主**（复刻 ProjectLayout 的 `openKeys` + `onOpenChange`
+//   回写，即 store `_syncFromView` 所在的位置）把开关语义钉死在冒烟层。
+// ============================================================
+describe('活动栏按钮 = 面板开/关开关（2026-10-07 用户口径）', () => {
+  /** 取活动栏里指定 aria-label 的图标按钮 */
+  const activityItem = (container: HTMLElement, label: string): HTMLElement => {
+    const item = Array.from(
+      container.querySelectorAll<HTMLElement>('.dock-activity-item'),
+    ).find((el) => el.getAttribute('aria-label') === label);
+    if (!item) throw new Error(`活动栏里找不到「${label}」按钮`);
+    return item;
+  };
+
+  /** 复刻 ProjectLayout：受控 `openKeys` + `onOpenChange` 回写（= store 的 `_syncFromView` 位置） */
+  function ControlledShell({
+    onOpenChange,
+    apiRef,
+  }: {
+    onOpenChange?: (keys: string[]) => void;
+    apiRef?: Ref<DockShellApi>;
+  }) {
+    const [keys, setKeys] = useState<string[]>(['chapters']);
+    return (
+      <DockShell
+        panels={PANELS}
+        centerDefault={<div />}
+        activeCenterKey={null}
+        openKeys={keys}
+        onOpenChange={(next) => {
+          onOpenChange?.(next);
+          setKeys(next);
+        }}
+        apiRef={apiRef}
+      />
+    );
+  }
+
+  it('点已打开的按钮 ⇒ 收起（视图移除 + 回写集合移除 + 按钮翻成「点击打开」）', async () => {
+    const onOpenChange = vi.fn();
+    const ref = { current: null as DockShellApi | null };
+    const { container } = render(
+      <ControlledShell onOpenChange={onOpenChange} apiRef={ref as never} />,
+    );
+    await waitFor(() => expect(ref.current).toBeTruthy());
+    await settle();
+
+    expect(ref.current!.listPanels()).toContain('chapters');
+    expect(activityItem(container, '章节').getAttribute('aria-pressed')).toBe('true');
+    expect(activityItem(container, '章节').getAttribute('title')).toBe('章节（点击收起）');
+
+    fireEvent.click(activityItem(container, '章节'));
+    await settle();
+
+    // ① 视图层：dockview 里真的没了
+    expect(ref.current!.listPanels()).not.toContain('chapters');
+    // ② 宿主层：回写集合里也没了（store 才有机会把这次收起持久化）
+    expect(onOpenChange).toHaveBeenCalled();
+    const calls = onOpenChange.mock.calls;
+    const last = calls[calls.length - 1]?.[0] as string[] | undefined;
+    expect(last).toBeDefined();
+    expect(last).not.toContain('chapters');
+    // ③ 按钮回到「点击打开」
+    expect(activityItem(container, '章节').getAttribute('aria-pressed')).toBe('false');
+    expect(activityItem(container, '章节').getAttribute('title')).toBe('章节（点击打开）');
+  });
+
+  it('再点一次同一个按钮 ⇒ 重新打开（开关可来回拨）', async () => {
+    const ref = { current: null as DockShellApi | null };
+    const { container } = render(<ControlledShell apiRef={ref as never} />);
+    await waitFor(() => expect(ref.current).toBeTruthy());
+    await settle();
+    expect(ref.current!.listPanels()).toContain('chapters');
+
+    fireEvent.click(activityItem(container, '章节'));
+    await settle();
+    expect(ref.current!.listPanels()).not.toContain('chapters');
+    expect(activityItem(container, '章节').getAttribute('aria-pressed')).toBe('false');
+
+    fireEvent.click(activityItem(container, '章节'));
+    await settle();
+    expect(ref.current!.listPanels()).toContain('chapters');
+    expect(activityItem(container, '章节').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('未打开过的面板按钮点击 ⇒ 打开（不是「只聚焦」）', async () => {
+    const ref = { current: null as DockShellApi | null };
+    const { container } = render(<ControlledShell apiRef={ref as never} />);
+    await waitFor(() => expect(ref.current).toBeTruthy());
+    await settle();
+    // 「势力」初始未打开
+    expect(ref.current!.listPanels()).not.toContain('factions');
+    expect(activityItem(container, '势力').getAttribute('aria-pressed')).toBe('false');
+
+    fireEvent.click(activityItem(container, '势力'));
+    await settle();
+    expect(ref.current!.listPanels()).toContain('factions');
+    expect(activityItem(container, '势力').getAttribute('aria-pressed')).toBe('true');
   });
 });

@@ -8,6 +8,16 @@
 //   §2.3.3    'nm:open-settings' 保留（navigate(PATHS.settings)）
 //   §3.4      候选池合成 = 内置面板槽 ∪ 插件面板槽，按 key 去重
 //   §4.3      MAX_OPEN_PANELS 退役（已在 stores/panelOpenStore.ts 落地）
+//   §4.4      该退役被**修订取代**（2026-10-07 用户口径）：`MAX_OPEN_PANELS = 3`
+//             回归，超限按**最近使用（LRU）**收起最久没用过的那个并抛
+//             `novelmuse:toast-notify` 可见提示（不是静默挤掉）
+//
+// ## 活动栏按钮 = 面板开/关开关（2026-10-07 用户口径）
+//   项目壳把 `openKeys` / `onOpenChange` 受控交给 `DockShell`：`openKeys` = 已打开
+//   面板集合（`usePanelOpenStore`），`onOpenChange` 回写 `_syncFromView`。
+//   因此活动栏图标点击必须走 `closePanel`（而非只 `setActive`），否则按钮只能
+//   聚焦、收不起来；`[aria-pressed]` 反映「是否已打开」，`.is-active` 反映
+//   「是否当前聚焦」—— 两个独立视觉维度。
 //
 // ## 本次净变化（对照 ADR §0.1「现状」表）
 //   ❌ 删除：`useFloatingPanel` / `FloatingPanelWindow` / `ResizeFrame`

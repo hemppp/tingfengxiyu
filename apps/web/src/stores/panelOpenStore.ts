@@ -4,8 +4,12 @@
 // 契约真源：docs/architecture/dock-protocol-adr.md
 //   §2.3.1  PanelNavigation 接口 + getPanelNavigation() 命令式单例（冻结）
 //   §2.3.2  'nm:open-panel' 事件桥迁移（保留监听、回调体改调命令式入口、排队回放）
-//   §4.2    MAX_OPEN_PANELS **删除**：无限打开，容量由 dockview 布局承担
+//   §4.2    MAX_OPEN_PANELS **删除**：无限打开，容量由 dockview 布局承担（**已被 §4.4 修订**）
 //   §4.3    迁移动作清单（1–5）
+//   §4.4    ★ 2026-10-07 修订（用户口径 m01407）：上限**回归 3**，超限淘汰
+//           「最久没用过」的面板（LRU），且淘汰**必须可见**（toast）。
+//           §4.2 否决的是「静默挤掉第一个」里的**静默**，不是上限本身 ——
+//           故 §4.4 保留上限、换掉淘汰依据、补上提示。
 //
 // ## 双入口（ADR §2.3.1 冻结理由）
 //   · React 组件 → `usePanelOpenStore(selector)`（zustand hook，订阅式）
@@ -21,13 +25,18 @@
 //   DockShell 未挂载时（例如书架页、或在插件 apply(ctx) 阶段调用），
 //   `open()` **必须静默排队**、不得抛错，挂载后回放。
 //
-// ## 无上限
-//   打开第 N 个面板**永不关闭**任何已打开面板；可见性由 dockview 的
-//   标签堆叠 / 停靠区分割 / 悬浮组承担。`opened()` 仍返回**打开顺序**，
-//   作为 DockShell 首次构建布局与「最近使用」排序的输入，但顺序不再触发淘汰。
+// ## 上限 3（2026-10-07 用户口径，ADR §4.4）
+//   最多同时打开 `MAX_OPEN_PANELS = 3` 个面板；打开第 4 个时淘汰**最久没用过**
+//   的那一个（LRU：以「被打开 / 被聚焦」的时间为准，见 `touchRecency`）。
+//   `opened()` 仍返回**打开顺序**（DockShell 首次构建布局的输入，顺序本身不再决定淘汰）。
+//   与旧行为的两点区别，都是为了避免「做了但用户不知道」：
+//     · 淘汰依据是**最近使用**而非最早打开 —— 挤掉的永远是你最近没在看的那个；
+//     · 淘汰时抛一条 info toast（`notifyEviction`），用户知道面板去哪了。
 // ============================================================
 
 import { create } from 'zustand';
+
+import { dispatchToastEvent } from '@/utils/errors';
 
 /**
  * 打开状态的形状。
@@ -37,15 +46,15 @@ import { create } from 'zustand';
  * 多标签堆叠时可以有 N 个打开但只有 1 个聚焦。
  */
 export interface PanelOpenState {
-  /** 已打开的 key（按打开顺序；**无上限**，见 ADR §4.2） */
+  /** 已打开的 key（按打开顺序；**上限 `MAX_OPEN_PANELS`**，超限淘汰最久未用者，ADR §4.4） */
   keys: string[];
   /** 当前聚焦（dockview active panel）的 key；无则 null */
   activeKey: string | null;
-  /** 打开或聚焦面板。已打开 ⇒ 只聚焦（不新增、不重排、不关闭任何面板） */
+  /** 打开或聚焦面板。已打开 ⇒ 只聚焦（不新增、不重排）；未打开 ⇒ 打开并按上限淘汰 */
   open: (key: string) => void;
   /** 已打开则聚焦，未打开则打开。语义等同 `open`（保留旧名仅为对称，ADR §2.3.1） */
   focus: (key: string) => void;
-  /** 切换：未打开 → 打开；已打开 → 关闭 */
+  /** 切换：未打开 → 打开（同样受上限约束）；已打开 → 关闭 */
   toggle: (key: string) => void;
   /** 关闭。不存在则 no-op */
   close: (key: string) => void;
@@ -62,7 +71,7 @@ export interface PanelOpenState {
   _setActive: (key: string | null) => void;
   /**
    * 视图层（DockShell 的用户交互：点标签 × 、拖走、关闭组）回写打开集合。
-   * activeKey 只在它仍存在于新集合中时保留。
+   * activeKey 只在它仍存在于新集合中时保留；集合超出上限时同样按 LRU 淘汰。
    */
   _syncFromView: (keys: string[]) => void;
 }
@@ -130,6 +139,84 @@ export function registerPanelViewSync(fn: ((keys: string[]) => void) | null): vo
   viewSync = fn;
 }
 
+// ---- ★ 2026-10-07 修订：打开数量上限（ADR §4.4） ---------------------------
+
+/**
+ * 同时打开的面板数量上限。
+ *
+ * 历史：旧实现 `MAX_OPEN_PANELS = 3` 曾在 ADR §4.2（D10）被**删除**，理由是
+ * 「打开第 4 个时静默挤掉第 1 个」让用户不知道面板去哪了
+ * （`docs/design/ui-tab-workspace-design.md:139` 判定为「做了但用户不知道」的错误）。
+ * 2026-10-07 用户口径（m01407）：上限**要**，但被挤掉的必须是「最久没用过的」，
+ * 而且必须看得见 —— 于是上限回归、淘汰依据改为 LRU、并补一条 toast。
+ */
+export const MAX_OPEN_PANELS = 3;
+
+/**
+ * 「最近使用」顺序（最近用过的在前）。只记 key、不含时间戳 —— 只需要相对顺序。
+ *
+ * 更新时机 = 面板被**打开**或被**聚焦**（`_setActive`）：点活动栏、点标签、
+ * 命令式 `open()` 都算「用过」。长度上限只是防御性裁剪，避免长会话无界增长。
+ */
+const recency: string[] = [];
+const RECENCY_CAP = 64;
+
+function touchRecency(key: string): void {
+  const i = recency.indexOf(key);
+  if (i !== -1) recency.splice(i, 1);
+  recency.unshift(key);
+  if (recency.length > RECENCY_CAP) recency.length = RECENCY_CAP;
+}
+
+/**
+ * 越久没用过排名越大。
+ *
+ * **从未被 touch 过的 key 视为最新（`-1`）**，不是最旧：出现「store 没记过」
+ * 的 key，只可能是活动栏 / 插件走 `DockShellApi.openPanel` 直接 `addPanel`，
+ * 视图刚把它生出来、`_syncFromView` 才第一次见到它。若把它当最旧，裁剪会
+ * 立刻淘汰**刚打开的那个**（表现为「点第 4 个按钮，它自己关了」）。
+ * 宁可淘汰一个已知最旧者，也不要误杀刚打开的。
+ */
+function ageRank(key: string): number {
+  return recency.indexOf(key);
+}
+
+/**
+ * 把打开集合裁到 `MAX_OPEN_PANELS`，返回**新集合**与**被淘汰者**。
+ * 淘汰顺序：最久没用过 → 次久没用过 …；集合自身顺序（= 打开顺序）保持不变。
+ */
+function limitOpenKeys(keys: string[]): { keys: string[]; evicted: string[] } {
+  if (keys.length <= MAX_OPEN_PANELS) return { keys, evicted: [] };
+  const byAge = keys.slice().sort((a, b) => ageRank(b) - ageRank(a));
+  const evicted = byAge.slice(0, keys.length - MAX_OPEN_PANELS);
+  return { keys: keys.filter((k) => !evicted.includes(k)), evicted };
+}
+
+/**
+ * 淘汰提示 —— **可见**是这次修订的一半意义（ADR §4.4），故直接抛 toast。
+ *
+ * 为什么在数据层抛：这是 `window` 级 CustomEvent（`novelmuse:toast-notify`）广播，
+ * 与 store 现有的 `viewOpen` / `viewSync` 桥一样是**非 React** 通道，不引入
+ * React / react-router 依赖（对比本文件末尾「不在 store 里 navigate」的分层理由）。
+ * `ToastProvider` 缺席时无人监听，天然退化为静默 —— 不抛错。
+ *
+ * 去抖：淘汰收敛（视图回写 → store 裁剪 → React 移除面板 → 视图再回写）可能在
+ * 同一批淘汰上触发多次，600ms 内的重复上报只提示一次。
+ */
+let lastEvictNoticeAt = 0;
+
+function notifyEviction(evicted: readonly string[]): void {
+  if (evicted.length === 0 || typeof window === 'undefined') return;
+  const now = Date.now();
+  if (now - lastEvictNoticeAt < 600) return;
+  lastEvictNoticeAt = now;
+  dispatchToastEvent({
+    type: 'info',
+    message: `已收起最久未用的面板（最多同时打开 ${MAX_OPEN_PANELS} 个）`,
+    duration: 2600,
+  });
+}
+
 // ---- ★ t4 集成：首屏「默认打开集合」种子 -------------------------------------
 //
 // 为什么需要它（跨区契约，t1 DockShell ↔ t4 接线）：
@@ -142,6 +229,7 @@ export function registerPanelViewSync(fn: ((keys: string[]) => void) | null): vo
 /**
  * ★ t4 新增：各项目模式的**首屏默认打开集合**。
  * 只列「目标截图里一打开就该在位」的面板；其余面板仍由用户/命令式入口打开。
+ * 条数必须 ≤ `MAX_OPEN_PANELS`，否则首屏就会被自己裁一刀。
  */
 export const DEFAULT_OPEN_PANEL_KEYS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   manual: Object.freeze(['chapters', 'ai-chat']),
@@ -157,15 +245,18 @@ let seeded = false;
  * 为什么需要（冷启动实测踩到的真问题）：DockShell 在 `onReady` / `addPanel` /
  * `removePanel` 时用「视图实际面板集合」回写宿主（`emitOpenChange` → `onOpenChange`
  * → `_syncFromView`），而 `_syncFromView` 是**整集合覆写**。插件面板是异步注册的
- * （manual 插件模块图大于 auto，其 `def` 晚到），于是冷启动会出现这样的交错：
+ * （插件模块图较大 / 面板走 lazy 加载，其 `def` 晚到），于是冷启动会出现这样的交错：
  *
  *   1. 播种 → store.keys = ['chapters','ai-chat']
- *   2. auto 的 ai-chat def 先到位 → 受控 effect 加面板 → dockview **异步**派发
- *      `onDidAddPanel`（微任务）
- *   3. 微任务落地**之前** manual 的 chapters def 也到位了
+ *   2. 较早到位的一个 def 先被加进面板 → dockview **异步**派发 `onDidAddPanel`（微任务）
+ *      （实测当时先到的是 ai-chat —— 它那时由 auto 模块注册、模块图更小）
+ *   3. 微任务落地**之前**另一个 def（chapters）也到位了
  *   4. 微任务才执行 → 上报集合 = 视图实际 = ['ai-chat'] → store 丢掉 'chapters'
  *      → 受控 effect 之后只看到 ['ai-chat']，**左栏永久缺席**（实测 groups 只剩
  *      编辑区 + AI 对话，`openStore.keys=['ai-chat']`）
+ *
+ *   ※ 2026-10「手写/自动隔离改造」后两个槽都由 manual 模块注册（ai-chat 面板已移交
+ *     手写台），「谁先到位」不再由跨模块时序决定，但整集合覆写的机制不变、修法照旧。
  *
  * 修法：宿主只把「视图确认过」的种子 key 视为已交付；未被确认的种子 key 在回写时
  * 合并回去（有窗口上限，避免 def 永不出现时留下幽灵 key）。视图一旦上报包含它，
@@ -200,6 +291,8 @@ export function seedPanelOpenKeys(keys: readonly string[] | null | undefined): b
   const missing = wanted.filter((k) => !opened.includes(k));
   seedUnconfirmed = wanted.slice();
   seedDeadline = Date.now() + SEED_MERGE_WINDOW_MS;
+  // ★ §4.4：种子也进「最近使用」序列（按播种顺序 ⇒ 先播的排在最旧）
+  for (const key of wanted) touchRecency(key);
   if (missing.length) {
     usePanelOpenStore.setState({ keys: opened.concat(missing) });
     for (const key of missing) openOrFocus(key);
@@ -211,27 +304,37 @@ export const usePanelOpenStore = create<PanelOpenState>((set, get) => ({
   keys: [],
   activeKey: null,
 
-  // ADR §4.3-2：已打开 ⇒ 只更新焦点；否则 concat，**不做任何截断**
-  open: (key) =>
-    set((state) => {
-      if (state.keys.includes(key)) return { activeKey: key };
-      return { keys: state.keys.concat(key), activeKey: key };
-    }),
+  // ADR §4.3-2 + §4.4：已打开 ⇒ 只更新焦点；否则 concat 后裁到上限（淘汰最久未用者）
+  open: (key) => {
+    touchRecency(key);
+    const state = get();
+    if (state.keys.includes(key)) {
+      set({ activeKey: key });
+      return;
+    }
+    const limited = limitOpenKeys(state.keys.concat(key));
+    notifyEviction(limited.evicted);
+    set({ keys: limited.keys, activeKey: key });
+  },
 
   // ADR §2.3.1：语义等同 open（保留旧名仅为对称）
   focus: (key) => get().open(key),
 
-  // ADR §4.3-3：已存在 → 关闭；不存在 → concat，**不做任何截断**
-  toggle: (key) =>
-    set((state) => {
-      if (state.keys.includes(key)) {
-        return {
-          keys: state.keys.filter((k) => k !== key),
-          activeKey: state.activeKey === key ? null : state.activeKey,
-        };
-      }
-      return { keys: state.keys.concat(key), activeKey: key };
-    }),
+  // ADR §4.3-3 + §4.4：已存在 → 关闭；不存在 → concat 后裁到上限
+  toggle: (key) => {
+    const state = get();
+    if (state.keys.includes(key)) {
+      set({
+        keys: state.keys.filter((k) => k !== key),
+        activeKey: state.activeKey === key ? null : state.activeKey,
+      });
+      return;
+    }
+    touchRecency(key);
+    const limited = limitOpenKeys(state.keys.concat(key));
+    notifyEviction(limited.evicted);
+    set({ keys: limited.keys, activeKey: key });
+  },
 
   close: (key) =>
     set((state) => ({
@@ -252,7 +355,11 @@ export const usePanelOpenStore = create<PanelOpenState>((set, get) => ({
   opened: () => get().keys,
   active: () => get().activeKey,
 
-  _setActive: (key) => set({ activeKey: key }),
+  // ★ §4.4：被聚焦 = 被「看过」，是 LRU 的主信号
+  _setActive: (key) => {
+    if (key) touchRecency(key);
+    set({ activeKey: key });
+  },
 
   _syncFromView: (keys) => {
     // ★ t4 集成：把「视图尚未确认交付」的种子 key 合并回去（详见 seedUnconfirmed 注释）。
@@ -267,6 +374,12 @@ export const usePanelOpenStore = create<PanelOpenState>((set, get) => ({
         seedUnconfirmed = [];
       }
     }
+    // ★ §4.4：视图可能上报**超过上限**的集合 —— 活动栏走的是 `DockShellApi.openPanel`
+    //   （直接 addPanel，绕过了 store 的 `open`），用户拖标签也会。这里统一裁剪；
+    //   被淘汰的面板由受控 effect（DockShell 的 `openKeys`）从视图移除。
+    const limited = limitOpenKeys(next);
+    notifyEviction(limited.evicted);
+    next = limited.keys;
     set((state) => ({
       keys: next,
       activeKey: state.activeKey && next.includes(state.activeKey) ? state.activeKey : null,
@@ -289,7 +402,7 @@ export interface PanelNavigation {
   close(key: string): void;
   /** 关闭全部；opts.except 内的 key 保留 */
   closeAll(opts?: { except?: string[] }): void;
-  /** 当前已打开 key（打开顺序，**不再有上限**） */
+  /** 当前已打开 key（打开顺序；同时打开数不超过 `MAX_OPEN_PANELS`） */
   opened(): string[];
   /** 当前聚焦 key（dockview active panel），无则 null */
   active(): string | null;
@@ -352,4 +465,6 @@ export function _resetPanelOpenStore(): void {
   seeded = false;
   seedUnconfirmed = [];
   seedDeadline = 0;
+  recency.length = 0;
+  lastEvictNoticeAt = 0;
 }

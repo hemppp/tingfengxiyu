@@ -218,6 +218,27 @@
   color: var(--vscode-activityBar-activeBorder);
 }
 
+/* ★ 2026-10-07 用户口径（m01330）：「打开了的功能按钮需要加深颜色」。
+ *   改造后活动栏按钮是面板的**开关**，于是「已打开」必须自己看得见 ——
+ *   否则章节 / AI 对话这类默认打开的面板，在中心区持有焦点时按钮跟未打开的一模一样。
+ *
+ *   三级视觉（只取既有 token，不新增颜色常量，自动跟随亮 / 暗主题）：
+ *     · 未打开          → 透明底 + 常规图标色
+ *     · 已打开（未聚焦）→ pressed 底 + 提亮图标色           ← 本规则
+ *     · 已打开且聚焦    → .is-active 的实底 + 左侧竖条       （t6 对齐参考图的取值，保持不动）
+ *
+ *   取 `--vscode-toolbar-hoverBackground`（亮 92% / 暗 24%）而不是 `.is-active` 用的
+ *   `--vscode-activityBar-activeBackground`（亮 91% / 暗 15%）：前者在**亮色**主题里
+ *   比活动栏底（99.2%）更深一档，正是「加深」；在**暗色**主题里活动栏底只有 11% 明度，
+ *   再深就只能发黑成一团，故按 VSCode 的按下态惯例取比底色亮一档的实心底。
+ *
+ *   本规则排在 `.is-active` **之前**：两者特异性相同（类+属性 vs 两个类），
+ *   故聚焦时由后面的 `.is-active` 胜出，保留 t6 已按参考图校准的聚焦底色。 */
+.dock-activity-item[aria-pressed='true'] {
+  color: var(--vscode-activityBar-activeBorder);
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
 .dock-activity-item.is-active {
   color: var(--vscode-activityBar-activeBorder);
   background-color: var(--vscode-activityBar-activeBackground);

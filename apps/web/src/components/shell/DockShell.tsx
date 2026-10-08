@@ -208,14 +208,27 @@ const ALL_TAB_COMPONENTS = {
 
 // ---- 外壳骨架的小组件（VS Code 结构，颜色全取变量） ----------------------
 
-/** 活动栏（Activity Bar）：最左侧窄条，图标入口。 */
+/**
+ * 活动栏（Activity Bar）：最左侧窄条，图标入口。
+ *
+ * ★ 2026-10-07 用户口径（m01200「让他点击对应的按钮可以收起来」）：
+ *   每个图标是该面板的**开/关开关** —— 已打开再点 = 收起，未打开点击 = 打开。
+ *   因此这里有两个独立视觉维度，**不能**像改造前那样用 `activeKey` 兼任两者：
+ *     · `is-active`   = 当前**聚焦**的面板（VS Code 活动栏的左缘高亮条语义，沿用）
+ *     · `aria-pressed` = 该面板当前**是否已打开**（开关语义，供读屏与测试判定）
+ *   改造前两者都取 `activeKey`，于是「已打开但未聚焦」的面板按钮显示为未按下，
+ *   点它只会聚焦、永远不会收起 —— 这正是用户反馈的现象。
+ */
 function ActivityBar({
   items,
   activeKey,
+  openKeys,
   onSelect,
 }: {
   items: { key: string; label: string; icon: React.ComponentType<{ size?: number }> }[];
   activeKey: string | null;
+  /** 当前已打开的面板 key（受控集合；用于开关态的 aria-pressed 与提示文案） */
+  openKeys: readonly string[];
   onSelect: (key: string) => void;
 }) {
   return (
@@ -223,14 +236,15 @@ function ActivityBar({
       {items.map((it) => {
         const Icon = it.icon;
         const active = it.key === activeKey;
+        const open = openKeys.includes(it.key);
         return (
           <button
             key={it.key}
             type="button"
             className={active ? 'dock-activity-item is-active' : 'dock-activity-item'}
-            title={it.label}
+            title={open ? `${it.label}（点击收起）` : `${it.label}（点击打开）`}
             aria-label={it.label}
-            aria-pressed={active}
+            aria-pressed={open}
             onClick={() => onSelect(it.key)}
           >
             {/* ★ t6 尺寸对齐参考图：参考图条目内图标墨迹实测 ~15×10（≈18px lucide），原 22px 偏大。 */}
@@ -638,13 +652,32 @@ export const DockShell = forwardRef<DockShellApi, DockShellProps>(function DockS
     [panels],
   );
 
+  /**
+   * ★ 2026-10-07 用户口径（m01200）：活动栏按钮 = 该面板的开/关开关。
+   *   已打开 ⇒ **收起**（不再只 `setActive()`）；未打开 ⇒ 打开。
+   *
+   *   为什么收起走 `api.closePanel()` 而不是自己 `removePanel`：
+   *   它内部还会重放左右列宽（见下方 `closePanel` 实现里的 `reapplySideWidths`），
+   *   否则 dockview 会把腾出的空间均分掉，「开→关」后侧栏宽度回不到 240 / 340。
+   *
+   *   存在性判定与 `closePanel` 保持一致：普通面板是 `nm-panel:<key>`，
+   *   抢占中心区的面板是 `nm-center:<key>`（中心面板也要能收起，如「关系图」）。
+   *
+   *   双向都会经 dockview 的 `onDidAddPanel` / `onDidRemovePanel` → `emitOpenChange`
+   *   → 宿主 `onOpenChange`（= `_syncFromView`）回写 store，故 store 的 `keys`
+   *   与视图始终一致，`aria-pressed` 与提示文案随之更新。
+   *
+   *   注：字段名沿用既有 `onActivitySelect`，仅语义从「打开或聚焦」收窄为「开关」。
+   *   若日后要回到 VS Code 原生的「点未聚焦的已打开项 = 先聚焦、点当前聚焦项 = 收起」，
+   *   把下面的分支改成 `if (p && key === activeKey) closePanel else if (p) setActive else openPanel` 即可。
+   */
   const onActivitySelect = useCallback(
     (key: string) => {
       const a = apiRef.current;
       if (!a) return;
-      const p = a.getPanel(panelInstanceId(key));
+      const p = a.getPanel(panelInstanceId(key)) ?? a.getPanel(centerPanelInstanceId(key));
       if (p) {
-        p.api.setActive();
+        api.closePanel(key);
       } else {
         api.openPanel(key);
       }
@@ -655,8 +688,14 @@ export const DockShell = forwardRef<DockShellApi, DockShellProps>(function DockS
   return (
     // 能力 8：VS Code 式外壳骨架；.dv-theme-vscode 是 §5.5 冻结的 --dv-* → --vscode-* 映射层
     <div className="dock-shell dv-theme-vscode">
-      {/* 活动栏（最左窄条）：条目由**候选池**派生，故图标集合 = 当前模式真实面板集合 */}
-      <ActivityBar items={activityItems} activeKey={activeKey} onSelect={onActivitySelect} />
+      {/* 活动栏（最左窄条）：条目由**候选池**派生，故图标集合 = 当前模式真实面板集合。
+          `openKeys` 只用于按钮的开关态（aria-pressed / 提示文案）；受控缺席时为空集合。 */}
+      <ActivityBar
+        items={activityItems}
+        activeKey={activeKey}
+        openKeys={openKeys ?? []}
+        onSelect={onActivitySelect}
+      />
 
       {/* 中心：dockview（编辑区 + 四个 dock area + 悬浮 + 标签堆叠 + Splitter） */}
       <main className="dock-main" aria-label="编辑区">

@@ -21,7 +21,7 @@
 | 面板定义 | `apps/web/src/plugin/types.ts:28-50` `FloatingPanelDef`；镜像于 `packages/core/src/plugin-context.ts:263` | `icon/label/key/Component/width/height/order/scope/group/rail/modes` |
 | 面板宿主 | `apps/web/src/components/shell/ProjectLayout.tsx`（36 KB）| 自研 `useFloatingPanel` + `FloatingPanelWindow`，绝对定位 + 八向缩放 |
 | 面板入口 | `apps/web/src/components/shell/FloatingBubbles.tsx`（命名与 `BuiltinBubbleDef` 无关）| 「罗盘 + 卫星气泡」转轮，`fixed z-50`，悬停展开 |
-| 打开状态 | `apps/web/src/stores/panelOpenStore.ts` | `MAX_OPEN_PANELS = 3`，超限**静默挤掉最早**的标签 |
+| 打开状态 | `apps/web/src/stores/panelOpenStore.ts` | `MAX_OPEN_PANELS = 3`；超限按**最近使用（LRU）**收起最久没用过的那个并抛 toast（§4.4 修订，取代超限静默挤掉最早的旧行为） |
 | 跨域打开面板 | `window` 事件 `'nm:open-panel'`，`detail.key` | 派发点 5 处（见 §2.1） |
 | 跨域打开设置 | `window` 事件 `'nm:open-settings'` | 派发点 0 处（**已死**，见 §2.2） |
 | 章节 / AI 对话面板 | `ctx.registerBuiltinBubble` 按 `key` 键控 | `'chapters'` 由 manual 模块注册；`'ai-chat'` **全仓无注册点**（见 §3.2） |
@@ -407,6 +407,21 @@ toggle:  next.length > MAX_OPEN_PANELS ? next.slice(next.length - MAX_OPEN_PANEL
 3. `toggle(key)`：已存在 → 关闭；不存在 → `concat`，**不做任何截断**。
 4. 新增 `activeKey` 状态（聚焦面板），与 `keys` 分离 —— 因为「打开」与「聚焦」在 dockview 里是两个独立维度。
 5. `git grep -n "MAX_OPEN_PANELS" -- apps packages` 必须返回空（t4 verify + t9 复核）。
+
+### 4.4 修订（2026-10-07 · 用户口径：上限回归 + 最近使用淘汰 + 可见提示）
+
+**本节取代 §4.1 与 §4.2 中「删除上限 / 无限打开 / 不做任何淘汰」的结论**；§4.2 的其余条目（已打开只聚焦、维护打开顺序、不与用户显式 `closeAll` 混淆）仍然有效。
+
+| 问题 | 现行答案（取代 §4.2 对应行） |
+|---|---|
+| 有没有硬上限？ | **有：`MAX_OPEN_PANELS = 3`**（`apps/web/src/stores/panelOpenStore.ts`，已导出）。依据用户口径「最多只能打开三个功能」：第 4 个面板会把 240/636/340 三段布局挤到不可用宽度 |
+| 淘汰依据？ | **LRU（最近使用）**，不是 §4.1 的「最早打开的」。模块级 `recency` 记录「被打开或**被聚焦**」的相对顺序（`open` / `toggle` / `_setActive` / `seedPanelOpenKeys` 均 touch）；淘汰最久没用过的那个 |
+| 是否静默？ | **不静默 —— 必须可见**：淘汰时抛 `novelmuse:toast-notify`（`dispatchToastEvent`），文案「已收起最久未用的面板（最多同时打开 3 个）」，600 ms 去抖避免收敛过程连弹。§4.2 禁止的是「静默」，不是「淘汰」 |
+| 未知 key 怎么排序？ | 视为**最新**（`ageRank` = `recency.indexOf`，`-1` 即最新）。未知 = 面板由视图侧直接生出（活动栏走 `DockShellApi.openPanel`、插件直接 `addPanel`）、store 还没记过它；当最旧会在 `_syncFromView` 里**误杀刚打开的那个** |
+| 视图上报越限怎么办？ | 活动栏与拖拽绕过 `store.open` ⇒ `_syncFromView` 也统一裁剪；被裁者由 `DockShell` 受控 effect（`openKeys`）从视图移除，收敛后回写 3 个、不再抖动 |
+| 「`git grep MAX_OPEN_PANELS` 必须为空」 | **作废**（§4.2 第 1 行、§4.3 第 1/5 步的反向要求失效）—— 常量回归且导出，供测试与文案引用 |
+
+回归测试：`apps/web/src/stores/__tests__/panelOpenStore.test.ts`（9 例：上限常量、LRU 而非最早打开、重复打开只聚焦、`toggle` 同受限、`_syncFromView` 越限裁剪不误杀新面板、可见提示、同批去抖、`close`/`closeAll` 语义不变）。
 
 ---
 
@@ -834,7 +849,7 @@ return meta ? { theme: meta.id, mode: meta.lockedMode ?? normalizeMode(p.mode) }
 | D7 | `'nm:open-settings'` **保留**，虽当前零派发（公开契约 + 历史文档记载） | 冻结 |
 | D8 | `'chapters'`/`'ai-chat'` 从硬编码 key 查找改为**统一候选池**，顺带修复 `'ai-chat'` 从不渲染的缺陷 | 冻结 |
 | D9 | `BuiltinBubbleDef → BuiltinPanelDef`，`registerBuiltinBubble → registerBuiltinPanel`（保留 deprecated 别名） | 冻结 |
-| D10 | `MAX_OPEN_PANELS` **删除**；改为「无限打开，容量交给 dockview 布局」 | 冻结 |
+| D10 | `MAX_OPEN_PANELS` **删除**；改为「无限打开，容量交给 dockview 布局」 | ~~冻结~~ **已被 §4.4 修订取代（2026-10-07）**：常量回归为 `= 3`，超限按 LRU 收起最久没用过的那个并抛 toast |
 | D11 | 主题 token 前缀 `--vscode-`，值用**完整颜色**，定义在 `:root` + `html.dark` | 冻结 |
 | D12 | `ThemeId` 收缩为 `'vscode-dark-modern'` 单值，默认 `mode='dark'`，`lockedMode='dark'` | 冻结 |
 | D13 | `MIGRATION_KEY` 逻辑删除；老值静默回落，不抛错 | 冻结 |

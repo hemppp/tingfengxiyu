@@ -131,6 +131,98 @@
 （本次删除的代码此前就已被 tree-shaking 排除在包外），仅 chunk 文件名哈希发生漂移；
 因此 `buildId` 会变化，桌面端下次启动会按 D7.5 自动重新播种。
 
+### 修复（2026-10-07 活动栏按钮 = 面板开关）
+
+用户口径：最左侧活动栏里已有的「章节」「AI 对话」图标按钮，**点一下要能把对应面板收起来**。
+
+- **现象与原因**（`apps/web/src/components/shell/DockShell.tsx`）：`onActivitySelect` 对
+  已打开的面板只调 `p.api.setActive()`（= 只聚焦），从未调用 `closePanel` ⇒ 面板一旦打开
+  就**永远收不起来**，只能去点标签上那个悬停才显形的 `×`。
+- **改法**：按钮语义改为该面板的开/关开关 —— 存在性判定与 `closePanel` 同源
+  （普通面板 `nm-panel:<key>`、抢占中心区者 `nm-center:<key>`），存在则 `api.closePanel(key)`，
+  否则 `api.openPanel(key)`。走 `closePanel` 而非自己 `removePanel`，是为了复用它末尾的
+  `reapplySideWidths()`：否则 dockview 会把腾出的空间均分，一次「开→关」就把
+  240 / 636 / 340 变成 405 / 405 / 406 且不可恢复。
+- **`ActivityBar` 拆开两个视觉维度**：`is-active` 仍表示「当前聚焦」（沿用 `activeKey`），
+  新增 `openKeys` 驱动的 `aria-pressed` 表示「是否已打开」，提示文案随之为
+  「点击收起」/「点击打开」。改造前两者都取 `activeKey`，故「已打开但未聚焦」的面板按钮
+  显示为未按下，这正是看起来「点了没反应」的来源。
+- **未改**：标签 `×` 的显隐（`.dock-tab-close` 仍悬停 / 激活才显形）与 `PanelMenu` 的
+  「点击 = 打开或聚焦」都保持原样 —— 本轮只按用户口径改活动栏按钮。
+- **「已打开」自己看得见**（`apps/web/src/components/shell/dock/dock-theme.css`，用户口径
+  m01330「打开了的功能按钮需要加深颜色」）：按钮既然是开关，「已打开」就必须有视觉状态，
+  否则章节 / AI 对话这类默认打开的面板，在中心区持有焦点时跟未打开的按钮一模一样。
+  三级视觉：未打开 = 透明底；**已打开（未聚焦）= `--vscode-toolbar-hoverBackground` 底 +
+  提亮图标色**；已打开且聚焦 = `.is-active` 的实底 + 左侧竖条（t6 已按参考图校准，保持不动）。
+  该规则排在 `.is-active` 之前（同特异性，后者胜出）。取 `toolbar-hoverBackground` 而非
+  `activityBar-activeBackground`：前者在**亮色**主题里比活动栏底（99.2%）更深一档，正是「加深」；
+  **暗色**主题下活动栏底只有 11% 明度，再深就发黑成一团，故按 VSCode 按下态惯例取比底色亮一档的实心底。
+- **回归测试**：`apps/web/src/components/shell/dock/DockShell.smoke.test.tsx` 新增 3 例
+  （点已打开 ⇒ 视图移除 + 回写集合移除 + 按钮翻成「点击打开」；再点 ⇒ 重新打开；
+  未打开 ⇒ 打开而非只聚焦），用受控宿主复刻 `ProjectLayout` 的 `openKeys` + `onOpenChange`
+  回写路径。该文件 **32 例全过**。
+
+验证：`pnpm -r type-check`（14 workspace）✓、`pnpm --filter @novel/web build` ✓（入口
+`index-MgBlOjAu.js`）、`pnpm verify:all` ✓（web vitest **227 例 / 17 文件全过**）、
+桌面端重打包（新 `buildId` `3b4093c67b28d24e8891fd97f46b90a3`）✓。
+真实启动核对：`布局：seeded=true，reseeded=true`、`plugins=27`，且服务端实际发出去的
+`ProjectLayout-DZOm6ZNS.js` 含「（点击收起）」文案、懒加载样式 `ProjectLayout-DO9STjik.css`
+含 `.dock-activity-item[aria-pressed=true]{…}` ⇒ 端到端确认新行为确实到了用户机器上。
+（注：新行为只在**新解压的副本**里生效 —— 旧副本的 `build-stamp.json` 指纹不同，
+从旧副本启动会把运行时**退回**旧载荷，这是 D7.5「同版本号换载荷即重播种」的既定语义。）
+
+### 修复（2026-10-07 同时打开面板上限 = 3）
+
+用户口径（m01407）：**「不能同时打开，增加限制最多只能打开三个功能」**；
+追问超限行为后用户选定：**自动收起「最久没看过的」那个**（即 LRU，其余候选为
+「最早打开的」/「拒绝并提示」，均未选）。
+
+- **背景（这是一次有意的政策回退）**：`docs/architecture/dock-protocol-adr.md` 的
+  **D10 曾冻结「`MAX_OPEN_PANELS` 删除、无限打开」**，理由是旧行为「打开第 4 个
+  **静默**挤掉第 1 个」属于「做了但用户不知道」（`docs/design/ui-tab-workspace-design.md:139`）。
+  本次用户明确要求上限回归，因此问题不在「要不要淘汰」，而在**旧行为既不按最近使用、
+  也不告知用户**。ADR 已增写 **§4.4 修订**并标注 D10 被取代、§4.1/§4.2 部分结论失效。
+- **改法**（`apps/web/src/stores/panelOpenStore.ts`，打开集合的唯一真源）：
+  - `MAX_OPEN_PANELS = 3` 回归并导出；新增模块级 `recency` 顺序（只记 key，
+    `RECENCY_CAP = 64` 防御性裁剪）。
+  - **「用过」= 被打开或被聚焦**：`open` / `toggle` / `_setActive`（点标签、点活动栏、
+    命令式打开都会经过它）与 `seedPanelOpenKeys` 均 `touchRecency`。
+  - `limitOpenKeys(keys)` 在**超出上限时**按 `ageRank` 淘汰最久没用过的若干项，
+    集合自身顺序（= 打开顺序）保持不变。
+  - **未知 key 视为最新**（`ageRank` = `recency.indexOf`，`-1` 即最新）：出现「store
+    没记过」的 key，只可能是活动栏 / 插件走 `DockShellApi.openPanel` 直接 `addPanel`、
+    视图刚把它生出来。若当最旧，`_syncFromView` 会**误杀刚打开的那个**
+    （表现为「点第 4 个按钮，它自己关了」）。
+  - **视图侧也统一裁剪**：活动栏与拖拽绕过 `store.open`，故 `_syncFromView`（整集合
+    覆写）在合并种子后同样走 `limitOpenKeys`；被裁者由 `DockShell` 受控 effect
+    （`openKeys`）从视图移除，收敛后回写 3 个、不再抖动。
+- **淘汰可见（本次修订的一半意义）**：`notifyEviction` 抛 `novelmuse:toast-notify`
+  （`dispatchToastEvent`，数据层直接广播 `window` 级事件，不依赖 React 树），
+  文案「已收起最久未用的面板（最多同时打开 3 个）」，`duration: 2600`；
+  `lastEvictNoticeAt` **600 ms 去抖**，避免「开第 4 个 → store 裁 → 视图回写 → 再裁」
+  的收敛过程连弹两条。
+- **未改**：`close` / `closeAll` / `opened` / `active` / `focus` 语义原样；
+  `DEFAULT_OPEN_PANEL_KEYS`（章节 + AI 对话两个种子）不动，2 个种子远低于上限。
+- **回归测试**：新增 `apps/web/src/stores/__tests__/panelOpenStore.test.ts`，9 例 ——
+  上限常量 = 3 且种子不淘汰 / 开第 4 个裁到 3 且淘汰最久没用过的 / 淘汰依据是
+  「最近使用」而非「最早打开」/ 重复打开只聚焦不淘汰且无提示 / `toggle` 同受限 /
+  `_syncFromView` 越限裁剪且不误杀刚打开的 / 淘汰抛一次 `novelmuse:toast-notify` /
+  `close`·`closeAll` 语义不变 / 同一批淘汰去抖只提示一次。
+
+验证：`pnpm -r type-check`（14 workspace）✓、`pnpm --filter @novel/web exec vitest run`
+（web **236 例 / 18 文件全过**，含新增 9 例）✓、`pnpm verify:all` ✓（plugin 模式分离 +
+manifest 合法性门禁 5/5）✓、`pnpm --filter @novel/web build` ✓（入口
+`index-CxWWzN-B.js`）✓、桌面端重打包 ✓。
+真实启动核对（`release\desktop\win-unpacked\NovelMuse.exe`）：`布局：seeded=true，
+reseeded=true`（buildId `3b4093c6…` → **`484046b7fdc335afe040d4af0f04676b`**）、
+`就绪探针通过：status=ok，database=connected，plugins=27`，端口 `49761`；
+服务端实际发出的 `assets/panelOpenStore-Cxs-N7Gk.js` 里含
+`const m=3,o=[],w=64`（上限 3 / recency / cap 64）与
+``message:`已收起最久未用的面板（最多同时打开 ${m} 个）`,duration:2600``
+以及 `n-A<600||` 去抖 ⇒ 端到端确认新策略确实到了用户机器上。关闭走优雅通道
+（`exitCode=0`），无残留进程；书稿库 `novelmuse.db` 442,368 B 与 `data\projects`
+3 个 `.db` 各 352,256 B 完好。
+
 ### 已知限制
 
 - 桌面端产物**未做代码签名**：首次运行会触发 Windows SmartScreen 提示，
