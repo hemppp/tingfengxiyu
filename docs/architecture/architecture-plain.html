@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NovelMuse · 现在的架构（直白流程版）</title>
+<style>
+  :root{
+    --ink:#1b2130; --sub:#5a6478; --line:#d8dee9; --bg:#f6f7fa; --card:#fff;
+    --ok:#12805c; --okbg:#e6f6f0; --warn:#a16207; --warnbg:#fdf3e0;
+    --bad:#c02942; --badbg:#fdeaee; --link:#2f5fd0; --ghost:#6b7a99;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.75 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;}
+  .wrap{max-width:1140px;margin:0 auto;padding:34px 22px 90px}
+  h1{font-size:27px;margin:0 0 6px;letter-spacing:.4px}
+  h2{font-size:19px;margin:42px 0 12px;padding-left:11px;border-left:5px solid var(--link)}
+  h3{font-size:15px;margin:20px 0 8px;color:var(--sub);letter-spacing:.6px}
+  p{margin:8px 0}
+  .lead{font-size:16px;color:#2a3348;background:#fff;border:1px solid var(--line);
+    border-radius:12px;padding:16px 18px;box-shadow:0 1px 2px rgba(20,30,60,.05)}
+  code{background:#eef1f7;border:1px solid #e0e5ee;border-radius:5px;padding:1px 5px;
+    font:13px/1.6 Consolas,"Courier New",monospace;color:#2a3348}
+  .badge{display:inline-block;font-size:12px;line-height:1.7;padding:0 8px;border-radius:20px;
+    border:1px solid;margin-left:6px;white-space:nowrap;vertical-align:1px}
+  .b-ok{color:var(--ok);background:var(--okbg);border-color:#b7e3d4}
+  .b-warn{color:var(--warn);background:var(--warnbg);border-color:#f0d9a8}
+  .b-bad{color:var(--bad);background:var(--badbg);border-color:#f3c2cc}
+  .b-ghost{color:var(--ghost);background:#eef1f7;border-color:#d5dced}
+
+  /* 竖向流程 */
+  .flow{margin-top:10px}
+  .layer{background:var(--card);border:1px solid var(--line);border-left:6px solid var(--link);
+    border-radius:12px;padding:14px 18px;box-shadow:0 1px 2px rgba(20,30,60,.05)}
+  .layer .t{font-size:16px;font-weight:700}
+  .layer .d{color:var(--sub);font-size:13.5px;margin-top:5px}
+  .arrow{text-align:center;color:#aab3c6;font-size:20px;line-height:1;margin:9px 0}
+
+  /* 两列模式 */
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  @media (max-width:900px){.split{grid-template-columns:1fr}}
+  .mode{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(20,30,60,.05)}
+  .mode > .hd{padding:12px 16px;font-size:17px;font-weight:700;border-bottom:1px solid var(--line)}
+  .mode.manual > .hd{background:#eef5ff}
+  .mode.auto > .hd{background:#fdf3e0}
+  .mode .body{padding:12px 16px}
+  .box{border:1px dashed var(--line);border-radius:9px;padding:9px 12px;margin:10px 0;background:#fbfcfe}
+  .box.solid{border-style:solid}
+  .box .h{font-weight:700;font-size:14.5px}
+  .box .p{color:var(--sub);font-size:13px;margin-top:3px}
+  .tree{margin:7px 0 0;padding:0;list-style:none;font-size:13.5px;color:#2f3850;line-height:1.9}
+  .tree li{white-space:normal}
+  .n{color:#8d97ac}
+  .k{color:#8b5cf6;font-weight:600}
+  .muted{color:var(--sub);font-size:13px}
+
+  table{border-collapse:collapse;width:100%;margin-top:10px;background:#fff;
+    border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13.5px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid #eef1f7;vertical-align:top}
+  th{background:#f2f5fa;font-size:12.5px;letter-spacing:.4px;color:#39445c}
+  tr:last-child td{border-bottom:none}
+  .st{font-size:12px;padding:0 7px;border-radius:20px;border:1px solid;white-space:nowrap}
+  .st.ok{color:var(--ok);background:var(--okbg);border-color:#b7e3d4}
+  .st.warn{color:var(--warn);background:var(--warnbg);border-color:#f0d9a8}
+  .st.no{color:var(--bad);background:var(--badbg);border-color:#f3c2cc}
+  .st.dead{color:#5a6478;background:#eef1f7;border-color:#d5dced}
+  .grp td{background:#f7f9fc;font-weight:700;color:#39445c;font-size:13px}
+  .foot{margin-top:40px;color:var(--sub);font-size:13px;border-top:1px solid var(--line);padding-top:14px}
+  .hl{background:#fff8d8;border-radius:4px;padding:0 3px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>NovelMuse 现在长什么样 · 直白流程版</h1>
+  <p class="muted">按「总 → 两个模式 → 每个模式里有什么」顺着往下读，方块就是能摸到的代码包。</p>
+
+  <p class="lead">
+    一句话：<b>一个桌面程序 + 一套宿主（界面壳 / 本地服务端 / 共享库），宿主上面挂两组插件</b> ——<br>
+    <b>手写模式</b>基本齐全、能正常用；<b>自动模式 = AI 写作</b>只剩骨架，实现被搬出仓库暂存在 <code>F:\new1.2-detached</code>，装回指南在 <code>PLUG-BACK.md</code>。
+  </p>
+
+  <h2>先对一下你的理解</h2>
+  <table>
+    <thead><tr><th style="width:30%">你的写法</th><th style="width:34%">实际</th><th>差在哪</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>总 &gt; 两个大模块</td>
+        <td>总 = <b>1 个宿主</b>（Electron 壳 + Web 界面 + 本地服务端 + 共享库），上面挂<b>两组插件</b>：manual 组、auto 组</td>
+        <td>不是两套独立程序。两组插件<b>共用</b>同一个界面壳、同一套插件注册表、同一个后端、同一个 SQLite；切模式 = 换哪组插件生效。</td>
+      </tr>
+      <tr>
+        <td>手写 &gt; 手写组成的模块</td>
+        <td>✅ 对。手写台一个主插件（12 个面板 + 章节左栏 + 章节编辑器）+ 拆书 + 世界观建造师 + 排印</td>
+        <td>只补一点：手写台的右栏「AI 对话」面板，其实是 <b>auto 包</b>留下的最小入口提供的（见下）。</td>
+      </tr>
+      <tr>
+        <td>AI 写作 &gt; 还未实现</td>
+        <td>⚠ 改成「<b>写过，2026-10-01 实现被剥离出仓</b>，仓内刻意只留骨架」</td>
+        <td>所以现象不是「没这个模块」，而是「入口还在、点开是未安装 / 接口 404」。107 个实现文件 + SHA256 清单暂存在仓外。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>① 运行时：从上到下 5 层</h2>
+  <div class="flow">
+    <div class="layer">
+      <div class="t">① 桌面端 · <code>apps/desktop</code> <span class="badge b-ok">在场</span></div>
+      <div class="d">Electron 外壳。只做三件事：把前端产物 <code>web-dist</code> 和 5 个内置插件 <code>seed-plugins</code> 拷进安装包 → 拉起本地服务端进程 → 开窗口访问它。</div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="layer">
+      <div class="t">② 前端壳 + 插件内核 · <code>apps/web</code> <span class="badge b-ok">在场</span></div>
+      <div class="d">React 应用。项目布局 <code>ProjectLayout</code>、停靠系统 <code>DockShell</code>、插件注册表与扩展点（<code>projectPanels / builtinPanels / chatRail / workbench / settings / capability</code>）、手写/自动模式切换都在这层。<b>插件靠 <code>import.meta.glob</code> 在构建期收集</b>。</div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="layer">
+      <div class="t">③ 共享库 · <code>packages/*</code> + <code>apps/plugins/shared/*</code> <span class="badge b-ok">在场</span></div>
+      <div class="d"><code>packages/</code> 下只有 <code>core</code>（插件系统 + manifest 校验）、<code>db</code>、<code>shared</code> 三个包；<code>ui-kit</code>、<code>ui-graph</code>、<code>data-core</code> 实际在 <code>apps/plugins/shared/</code>（包名 <code>@novel-plugins/ui-kit</code>、<code>@novel-plugins/ui-graph</code>、<code>@novel-plugins/data-core</code>）。两组插件都依赖它们。</div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="layer">
+      <div class="t">④ 本地服务端 · <code>apps/server</code>（Hono） <span class="badge b-ok">在场</span></div>
+      <div class="d">启动时<b>扫一次</b>插件目录 → 挂载各插件路由 → SQLite 双库 → AI 代理（<code>modules/ai.ts</code>，全部 AI 端点都在这）。</div>
+    </div>
+    <div class="arrow">↓</div>
+    <div class="layer">
+      <div class="t">⑤ 数据与旁路 <span class="badge b-ghost">可选</span></div>
+      <div class="d">SQLite 双库（全局 / 项目）；另有 Python 旁路 <code>apps/agents</code>（可独立跑，不在主流程上）。</div>
+    </div>
+  </div>
+
+  <h2>② 模式分叉：宿主上面挂的两组插件</h2>
+  <div class="split">
+
+    <div class="mode manual">
+      <div class="hd">手写模式 manual <span class="badge b-ok">能用</span></div>
+      <div class="body">
+        <div class="box solid">
+          <div class="h">手写台主插件 · <code>apps/plugins/manual/workbench</code> <span class="badge b-ok">在场</span></div>
+          <div class="p">id = <code>novel.manual.workbench</code>，注册 12 个停靠面板 + 1 个左栏 + 编辑器导出。</div>
+          <ul class="tree">
+            <li><span class="n">├</span> 12 个停靠面板：参考书 · 笔记 · 统计 · 大纲 · 时间线 · 角色 · 地点 · 伏笔 · 物品 · 关系图 · 地图 · 导出</li>
+            <li><span class="n">├</span> 章节左栏（<code>chapters</code> 槽 → <code>LeftSidebar</code>，240px，显式落左停靠区）</li>
+            <li><span class="n">├</span> 章节编辑器 <code>ChapterEditor</code> / <code>EditorPage</code> + 编辑器气泡栏（选区菜单 / 查找替换 / 写作模式 / 标注块）</li>
+            <li><span class="n">└</span> 面板里的 AI 触点：文风顾问 <code>StyleAdvisor</code> · 快捷短语 <code>QuickPhraseBubble</code> · 时间线抽取 <code>TimelineView</code> · 角色生成 <code>CharacterManager</code> · 大纲 <code>OutlineManager</code> · 实体扫描 <code>useAutoEntityDetection</code></li>
+          </ul>
+        </div>
+        <div class="box">
+          <div class="h">拆书 · <code>apps/plugins/manual/novel.bookscan</code> <span class="badge b-ok">在场</span></div>
+          <div class="p">有 <code>plugin.json</code>，没有 <code>package.json</code>（不算 pnpm 代码包，靠宿主扫目录发现）。拆书对话并入 AI 对话面板。</div>
+        </div>
+        <div class="box">
+          <div class="h">世界观建造师 · <code>apps/plugins/manual/worldbuilding</code> <span class="badge b-ok">在场</span></div>
+          <div class="p">势力管理 + AI 世界观顾问，是全项目<b>契约最完整的示例插件</b>：4 项服务注入、5 项前端注入。契约写在 <code>package.json#novelMuse</code> 里，没有 <code>plugin.json</code>。</div>
+        </div>
+        <div class="box">
+          <div class="h">排印 · <code>apps/plugins/shared/typography</code> <span class="badge b-ok">在场</span></div>
+          <div class="p">共享模式插件（两组都能用）。</div>
+        </div>
+        <div class="box solid">
+          <div class="h">✓ 右栏「AI 对话」面板现在由手写台自己注册 <span class="badge b-ok">已隔离</span></div>
+          <div class="p">手写台注册两个内置面板槽：<code>chapters</code>（章节）与 <code>ai-chat</code>（AI 对话，<code>modes:['manual']</code>），实现是 <code>apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx</code>（走 <code>POST /api/ai/chat-stream</code> SSE，配 <code>web/ai/sse.ts</code> 分帧解析）。<br>
+          <b>改造前</b>：这个槽由 AI 写作（auto）模块的 <code>apps/plugins/auto/workbench/web/index.tsx</code> 注册、modes 放宽到 <code>['manual','auto']</code> —— 手写台的使用面因此依赖 auto 包在场，同一个 key 出现两个注册者时又是「后写覆盖、无告警」。现在 auto 入口 <code>inject=[]</code>、不再注册任何槽，其 <code>web/ai/*</code> 仅留档（仓内 0 产品引用，实现真源已在 manual 侧）。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode auto">
+      <div class="hd">自动模式 auto ＝ AI 写作 <span class="badge b-warn">只剩骨架</span></div>
+      <div class="body">
+        <div class="box solid">
+          <div class="h">AI 写作台 · <code>apps/plugins/auto/workbench</code> <span class="badge b-warn">最小入口</span></div>
+          <div class="p">id = <code>novel.auto.workbench</code>。plugin.json 声明要注入 6 个扩展点，但仓内<b>实际 0 个注册者</b>（<code>web/index.tsx</code> 已改为 49 行最小入口、<code>inject=[]</code>、<code>apply()</code> 仅打日志）。</div>
+          <ul class="tree">
+            <li><span class="n">├</span> <span class="k">builtinBubble</span>（内置面板槽）：<b>0 注册者</b> —— 原本在这里注册的 <code>ai-chat</code>「AI 对话」面板已在隔离改造中移交手写台</li>
+            <li><span class="n">└</span> <span class="k">workbench</span> / <span class="k">chatRail</span> / <span class="k">settings</span> / <span class="k">capability</span>：<b>0 注册者</b> ⇒ 进 auto 模式看到的是「AI 写作台未安装」占位页</li>
+          </ul>
+        </div>
+        <div class="box solid">
+          <div class="h">自动写作引擎 · <code>apps/plugins/auto/novel.autowrite</code> <span class="badge b-warn">骨架</span></div>
+          <div class="p">仓内只有 3 个文件 + tsconfig：</div>
+          <ul class="tree">
+            <li><span class="n">├</span> <code>plugin.json</code>：契约原样保留（8 个聊天技能 / 状态与流水线路由 / 多代理流水线 / 记忆水车）</li>
+            <li><span class="n">├</span> <code>server/index.ts</code>：47 行，<code>inject = []</code>（刻意为空，避免注入缺失门），<code>apply()</code> 刻意 no-op</li>
+            <li><span class="n">└</span> 没有 <code>web/</code> 目录 ⇒ <code>/api/plugins/autowrite/*</code> 恒 404</li>
+          </ul>
+          <div class="p">为什么要留这个空壳：插件门 G1 会 <code>existsSync</code> 检查入口文件，缺了整插件被拒、<code>/api/health</code> 直接报 error。</div>
+        </div>
+        <div class="box">
+          <div class="h">出仓的实现 · <code>F:\new1.2-detached\ai-autowrite-module\</code> <span class="badge b-bad">仓外 107 文件</span></div>
+          <ul class="tree">
+            <li><span class="n">├</span> <code>discuss/</code>：三设计角色来回 → 定稿官收敛 → 写作官落笔 → 三道门（意图 / 校对 / 润色）→ 实体沉淀</li>
+            <li><span class="n">├</span> <code>pipeline/</code>：多智能体流水线（brief / cast / bible / plot / drift / pilot 六段可跑，production 当时未实现）</li>
+            <li><span class="n">├</span> <code>framework/memory/</code>：记忆水车（三斗 + 三层时间戳）</li>
+            <li><span class="n">├</span> <code>skills/</code>：8 个技能 + 1 个索引（剧情架构师 / 大纲 / 角色分析师 / 世界观 / 续写 / 对话润色 / 节奏医生 / 伏笔追踪 …）</li>
+            <li><span class="n">└</span> <code>web/</code>：40+ 前端文件（AI 写作台 / 流水线面板与图谱 / 记忆审计 / 技能库 / 红石开关 / AI 配置与本地模型）</li>
+          </ul>
+          <div class="p">另有 <code>MANIFEST.json</code>（逐文件路径 + 大小 + SHA256）、<code>PLUG-BACK.md</code>（装回步骤）、剥离前快照 zip。</div>
+        </div>
+        <div class="box">
+          <div class="h">⚠ 服务端还留着 11 条没人调的 AI 端点</div>
+          <div class="p"><code>/ai/scan</code>、<code>/ai/scan-timeline-stream</code>、<code>/ai/extract-events-stream</code>、<code>/ai/chat</code>、<code>/ai/check-outline</code>、<code>/ai/generate-plot</code>、<code>/ai/analyze-timeline</code>、<code>/ai/check-consistency</code>（死代码）、<code>/ai/skill-market</code>、<code>/ai/skill-library*</code>、<code>/ai/skill-targets*</code>。实现都在，缺的是调用它的前端。</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <h2>③ 手写模式里的 AI 到底能用到什么程度</h2>
+  <p class="muted">这是两组插件交叉的地方：手写台的面板全在，但它们要的「AI 能力」的提供方大多在 AI 写作那半。</p>
+  <table>
+    <thead><tr><th style="width:26%">能力 / 接口</th><th style="width:12%">现状</th><th>点下去会发生什么</th></tr></thead>
+    <tbody>
+      <tr class="grp"><td colspan="3">A · 真的能发出去（会真的请求大模型）</td></tr>
+      <tr><td><code>POST /ai/chat-stream</code></td><td><span class="st ok">可用</span></td><td>右栏「AI 对话」面板 + 拆书对话，流式返回。</td></tr>
+      <tr><td><code>POST /ai/generate-character</code></td><td><span class="st ok">可用</span></td><td>角色页的「AI 生成」。这是手写台<b>唯一会显式报错</b>的 AI 能力，其他都是静默。</td></tr>
+      <tr><td><code>POST /ai/analyze-style</code></td><td><span class="st ok">可用</span></td><td>文风顾问；失败时静默回落，不提示。</td></tr>
+
+      <tr class="grp"><td colspan="3">B · 想发但发不出去（能力键在手写台，提供方随 AI 写作出仓）</td></tr>
+      <tr><td><span class="k">ai.scan</span> 实体扫描</td><td><span class="st no">断链</span></td><td>后台自动实体扫描。<code>useAutoEntityDetection</code> 开头就 <code>if (!scan) return;</code> —— <b>整个扫描逻辑静默不执行</b>，不报错也没有 UI 提示。</td></tr>
+      <tr><td><span class="k">ai.quickPhrases</span> 快捷短语</td><td><span class="st no">降级</span></td><td>回落成本地启发式规则 <code>quickPhraseHeuristic.ts</code>，看起来还在工作，其实没有 AI。</td></tr>
+      <tr><td><span class="k">ai.timelineExtract</span> 时间线抽取</td><td><span class="st no">死按钮</span></td><td>按钮无条件渲染、可点，但能力读取失败后直接 <code>return</code>：点下去毫无反应（注释写的却是「入口隐藏」，与实现不符）。</td></tr>
+      <tr><td><span class="k">ai.outlineFill</span> 大纲补全</td><td><span class="st no">无消费点</span></td><td>能力键在，手写台没有任何地方调用它。</td></tr>
+      <tr><td><span class="k">ai.entityRefresh</span> 实体刷新</td><td><span class="st no">无提供方</span></td><td>同上。</td></tr>
+
+      <tr class="grp"><td colspan="3">C · 缺的是界面（服务端有端点，手写台没有入口）</td></tr>
+      <tr><td>技能库 / 技能市场 / 13 个工具</td><td><span class="st no">缺 UI</span></td><td>端点已实现（含 <code>/ai/skill-library*</code>），但手写台没有任何技能库 / 技能市场入口；worldbuilding 插件注册的势力顾问技能也因此失去触发路径（技能面板 UI 随 AI 写作台出仓）。</td></tr>
+      <tr><td>「AI 设置」栏目</td><td><span class="st no">空栏目</span></td><td>设置页留了 <code>category=ai</code> 这一栏，但全仓没有任何插件注册它 ⇒ 打开就是空的。</td></tr>
+      <tr><td>红石开关面板</td><td><span class="st no">出仓</span></td><td>手写台提示语指向这个面板，但面板本身在 AI 写作台里。</td></tr>
+
+      <tr class="grp"><td colspan="3">D · 一个已经死了的事件</td></tr>
+      <tr><td>顶栏「重写」</td><td><span class="st dead">死事件</span></td><td>已核实：<code>ProjectLayout</code> 只负责派发 <code>new CustomEvent('nm:rewrite')</code>，全仓<b>没有任何监听者</b>。它属于 AI 重写链路（同一批随 auto 工作台出仓），此因果为推断。</td></tr>
+    </tbody>
+  </table>
+
+  <h2>④ 所以现在的架构一句话总结</h2>
+  <div class="layer">
+    <div class="d" style="font-size:14.5px;color:#2a3348">
+      <b>宿主（Electron 壳 + Web 界面 + 插件内核 + 本地服务端 + 共享库）</b><br>
+      &nbsp;&nbsp;<span class="n">├</span> <b>手写模式插件组</b>：手写台（12 面板 + 章节左栏 + 编辑器）、拆书、世界观建造师、排印 —— <span class="badge b-ok">这批是完整的</span><br>
+      &nbsp;&nbsp;<span class="n">└</span> <b>自动模式插件组</b>：AI 写作台（1 个槽）、自动写作引擎（no-op 骨架）—— <span class="badge b-warn">实现 107 文件暂存仓外</span><br>
+      <br>
+      手写模式<b>自身能跑通</b>（写章节、管角色、管时间线、AI 对话都能用），但凡是「要点自动 / 要点红石」的功能都是断的，因为那半边的提供方被搬出了仓库。<br>
+      想恢复 AI 写作：把 <code>F:\new1.2-detached\ai-autowrite-module</code> 下的 <code>workbench</code> 与 <code>novel.autowrite</code> 拷回 <code>apps/plugins/auto/</code>，然后<b>重启 vite dev</b>（<code>import.meta.glob</code> 是构建期展开）<b>并重启服务端</b>（插件目录只在启动时扫一次），不需要 <code>pnpm install</code>。
+    </div>
+  </div>
+
+  <div class="foot">
+    证据来源：<code>apps/plugins/{manual,auto}/*/plugin.json</code>、<code>apps/plugins/manual/workbench/web/{index.tsx,panels.tsx}</code>、<code>apps/plugins/auto/workbench/web/index.tsx</code>、<code>apps/plugins/manual/worldbuilding/package.json</code>、<code>apps/server/src/modules/ai.ts</code>、<code>apps/web/src/components/shell/ProjectLayout.tsx</code>、<code>docs/handover/ai-writing-handover.md</code>、<code>F:\new1.2-detached\ai-autowrite-module\PLUG-BACK.md</code> 与 <code>MANIFEST.json</code>。<br>
+    本机 pwsh 沙箱不可用，本页未跑构建/测试；所有结论以文件原文为准，全部为人工逐段通读核验。
+  </div>
+</div>
+</body>
+</html>

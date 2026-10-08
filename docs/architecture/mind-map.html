@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NovelMuse · 现状架构思维图（Mind Map）</title>
+<style>
+  :root{
+    --bg:#0b0f18; --panel:#111726; --panel2:#151d2f; --line:#26314c; --line2:#1b2438;
+    --txt:#dfe6f5; --dim:#8b9ac0; --dim2:#63719a; --acc:#6b8cff;
+    --mono:ui-monospace,SFMono-Regular,Consolas,"Cascadia Mono",monospace;
+    --sans:system-ui,"Microsoft YaHei","Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:13px}
+  a{color:#8fa6ff;text-decoration:none;cursor:pointer}
+  a:hover{text-decoration:underline}
+  code,.mono,.ev{font-family:var(--mono);font-size:11.5px}
+  header{position:sticky;top:0;z-index:20;background:rgba(11,15,24,.94);border-bottom:1px solid var(--line);
+    backdrop-filter:blur(6px);padding:10px 18px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+  .brand{font-weight:700;font-size:15px;letter-spacing:.3px}
+  .brand span{color:var(--acc)}
+  nav.toc{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:12px;align-items:center}
+  nav.toc a{padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:#0e1424}
+  nav.toc a.here{border-color:var(--acc);color:#cfd9ff;background:#141d33}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;background:var(--panel);
+    border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:12px 16px 10px}
+  .toolbar input[type=search]{background:#0d1322;border:1px solid var(--line);color:var(--txt);
+    border-radius:7px;padding:6px 9px;font-size:12px;width:240px}
+  .toolbar button{background:#131b2e;border:1px solid var(--line);color:#cdd8f0;border-radius:7px;
+    padding:5px 9px;font-size:12px;cursor:pointer}
+  .toolbar button:hover{border-color:var(--acc)}
+  .toolbar button.on{border-color:var(--acc);background:#17203a;color:#dbe4ff}
+  .seg{display:flex;gap:6px;align-items:center}
+  .seg .lb{color:var(--dim2);font-size:12px}
+  .sp{flex:1}
+  .grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:12px;align-items:start;padding:0 16px}
+  @media (max-width:1080px){.grid{grid-template-columns:1fr}}
+  #stage{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;position:relative}
+  svg{display:block;width:100%;height:74vh;min-height:560px;cursor:grab;background:
+    radial-gradient(1200px 620px at 50% 0%,#131b2e 0%,#0d1220 60%,#0b0f18 100%)}
+  .node .box{fill:#151d2f;stroke:#2a3550;stroke-width:1.2}
+  .node.root .box{fill:#1b2440;stroke:#6b8cff;stroke-width:1.6}
+  .node.dim{opacity:.2}
+  .node.sel .box{stroke:#fff;stroke-width:2}
+  .node.path .box{stroke:#cfd9ff;stroke-width:1.8}
+  .node .tt{fill:#e6ecfb;font-size:12.5px;font-family:var(--sans);font-weight:600}
+  .node .tt.sm{font-size:11px;font-weight:500}
+  .node.root .tt{font-size:14px;font-weight:700;fill:#fff}
+  .node text{pointer-events:none}
+  .node .ex{fill:#8b9ac0;font-size:12px;font-family:var(--mono)}
+  .node .ex.open{fill:#39466b}
+  .link{fill:none;stroke-width:1.4;opacity:.72}
+  .badge{position:absolute;left:12px;bottom:12px;background:rgba(12,17,29,.9);border:1px solid var(--line);
+    border-radius:8px;padding:6px 10px;color:var(--dim);font-size:11.5px}
+  #detail{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;
+    position:sticky;top:60px;max-height:calc(100vh - 80px);overflow:auto}
+  #detail h4{margin:0 0 6px;font-size:13.5px}
+  #detail h4:not(:first-child){margin-top:14px;border-top:1px solid var(--line2);padding-top:10px}
+  #detail p{margin:6px 0;color:var(--dim);line-height:1.7}
+  #detail .row{margin:6px 0;color:var(--dim);line-height:1.7}
+  #detail .lbl{color:var(--dim2);margin-right:6px}
+  .pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:1px 7px;font-size:11px;color:#cdd8f0;margin:0 5px 0 0}
+  .bl{display:grid;grid-template-columns:12px 1fr;gap:6px 8px;align-items:center;margin:4px 0;color:var(--dim)}
+  .bl i{display:block;height:8px;border-radius:2px}
+  footer{padding:16px 18px 48px;border-top:1px solid var(--line);margin-top:18px}
+  footer h3{margin:0 0 8px;font-size:13.5px;color:#cfd9ff}
+  table{border-collapse:collapse;width:100%;font-size:12px}
+  th,td{border-bottom:1px solid var(--line2);padding:5px 8px;text-align:left;vertical-align:top}
+  th{color:#a9b7da;font-weight:600;background:#0f1524;position:sticky;top:0}
+  td.ev{font-family:var(--mono);font-size:11px;color:#9fb0d8;word-break:break-all}
+  tr.nr{cursor:pointer}
+  tr.nr:hover{background:#131b2e}
+  .hint{color:var(--dim);line-height:1.7;margin:10px 2px 0}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">NovelMuse · <span>现状架构思维图</span></div>
+  <nav class="toc">
+    <a href="architecture-map.html" title="架构全图（仓内现状）">架构全图</a>
+    <a href="project-graph.html" title="Nx 风格项目依赖图（含预设计面）">项目依赖图</a>
+    <a href="flow-current.html" title="泳道卡片版：冷启动 / AI 链路 / 能力共享 / 守卫 / 断链">泳道版流程图</a>
+    <a href="entry-to-end-flow.html" title="入口到结尾流程图（Nx 节点/边样式）">入口→结尾流程图</a>
+    <a href="architecture-plain.html" title="直白文字版说明">直白版</a>
+    <a class="here" href="mind-map.html">思维图（本页）</a>
+  </nav>
+</header>
+
+<div class="toolbar">
+  <input type="search" id="q" placeholder="搜索 节点 / 文件 / 行号…">
+  <span class="seg"><span class="lb">模式</span>
+    <button data-mode="all" class="on">全部</button>
+    <button data-mode="manual">手写台</button>
+    <button data-mode="auto">自动台</button>
+  </span>
+  <span class="seg"><span class="lb">展开</span>
+    <button data-lv="all">全部展开</button>
+    <button data-lv="2">收到二级</button>
+    <button data-lv="1">只看主干</button>
+  </span>
+  <span class="sp"></span>
+  <button data-z="in">＋</button>
+  <button data-z="out">－</button>
+  <button data-z="fit">适配</button>
+  <button data-z="reset">复位</button>
+</div>
+
+<div class="grid">
+  <div id="stage">
+    <svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="badge" id="badge">—</div>
+  </div>
+  <aside id="detail"></aside>
+</div>
+
+<p class="hint" style="padding:0 16px">
+  中心是根主题，两侧是主干。<b>点方块</b>＝收放它的子枝（+N 是藏起来的分支数）并选中它；<b>悬停</b>＝亮出「根 → 它」的路径；<b>双击</b>＝把视图对准它。所有依据都是 <code>文件:行号</code>，取自仓内源码（本环境无 shell，未跑构建）。
+</p>
+
+<footer>
+  <h3>全部节点索引（点一行 → 展开路径并跳到该节点）</h3>
+  <table id="nodes"></table>
+</footer>
+
+<script>
+(function(){
+'use strict';
+
+/* ── 数据：根 → 主干 → 条目 → 子条目 ──
+   节点字段：t 标题 / ev 依据（文件:行号）/ mode manual|auto|shared（缺省随父）/ note 备注 / c 子节点
+   主干额外：side 'r'|'l' 站位 · color 分支色 · open true 默认展开 */
+var TREE = {
+  t:'NovelMuse · 现状架构', ev:'本页依据来自仓内源码，逐项核对（本环境无 shell，未跑构建）',
+  note:'手写台与自动台是两个模块，只共享「共享库」和「AI 接口」两处公共面。',
+  c:[
+
+  /* ═══ 右 1：一次运行（入口 → 结尾）═══ */
+  { t:'一次运行：入口 → 结尾', side:'r', color:'#6b8cff', open:true,
+    ev:'apps/desktop/src/main.ts:12-13 → apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx:213',
+    note:'从双击图标到内容落库、界面回填的一条主线；这一支默认展开。', c:[
+
+    { t:'① 入口：双击图标 / 打开页面', ev:'apps/desktop/src/main.ts:12-13' },
+    { t:'② 壳进程启动（七步）', ev:'apps/desktop/src/main.ts:12-13', c:[
+      { t:'userData 与 paths', ev:'apps/desktop/src/paths.ts:8-11,652' },
+      { t:'单实例锁 + logging', ev:'apps/desktop/src/main.ts:12-13' },
+      { t:'首启播种 → userData', ev:'apps/desktop/package.json:49-51 · electron-builder.yml:64-68' },
+      { t:'spawn server 子进程', ev:'apps/desktop/src/server-process.ts:3,7-8,53', c:[
+        { t:'失败回退 tsx cli', ev:'apps/desktop/src/main.ts:313,324' } ] },
+      { t:'建窗（不 loadURL）', ev:'apps/desktop/src/window.ts:157,171' },
+      { t:'应用更新：替换 app-server / web-dist', ev:'apps/desktop/src/updater/index.ts:352,642,754' } ] },
+    { t:'③ 服务端：HOST_MODE 归一', ev:'apps/server/src/index.ts:26-31', c:[
+      { t:'缺省 all（开发态不挡）', ev:'apps/server/src/index.ts:26-31' } ] },
+    { t:'④ 插件扫描：modes ← 父目录名', ev:'apps/server/src/plugin/local-scanner.ts:148', c:[
+      { t:'manual / auto / shared 三个目录', ev:'apps/server/src/plugin/local-scanner.ts:148' },
+      { t:'内置插件 worldbuilding', ev:'apps/server/src/plugin/builtin.ts:19' } ] },
+    { t:'⑤ 宿主模式闸门', ev:'apps/server/src/plugin/host.ts:842-859', c:[
+      { t:'记 HOST_MODE_FILTERED 并跳过该插件', ev:'apps/server/src/plugin/host.ts:842-859' } ] },
+    { t:'⑥ 中间件 + 路由挂载', ev:'apps/server/src/plugin/host.ts:316-319', c:[
+      { t:'ensureConfigMiddleware 拦全站', ev:'apps/server/src/plugin/host.ts:316-319' },
+      { t:'26 个 AI 路由注册', ev:'apps/server/src/modules/ai.ts:771' },
+      { t:'/api/health 暴露插件状态', ev:'apps/server/src/plugin/host.ts:706' } ] },
+    { t:'⑦ 壳握手 → loadURL(origin)', ev:'apps/desktop/src/main.ts:446,271,354', c:[
+      { t:'stderr 端口握手 + 就绪探针', ev:'apps/desktop/src/main.ts:271,354' } ] },
+    { t:'⑧ Web 引导：mountAllWebPlugins', ev:'apps/web/src/main.tsx:41-99', c:[
+      { t:'glob 四目录 → pluginModeFromDir', ev:'apps/web/src/main.tsx:70-75,79-83' },
+      { t:'单入口失败隔离 blocked(id)', ev:'apps/web/src/main.tsx:44-47' } ] },
+    { t:'⑨ 扩展点落槽', ev:'apps/web/src/plugin/host.ts:34-36', c:[
+      { t:'withModes 盖章 11 处', ev:'apps/web/src/plugin/host.ts:34-36' },
+      { t:'能力（AI 接口）刻意不盖章', ev:'apps/web/src/plugin/registry.ts:389-391' } ] },
+    { t:'⑩ 手写台装进界面', ev:'apps/plugins/manual/workbench/web/index.tsx:52-54', c:[
+      { t:'12 个 projectPanel', ev:'apps/plugins/manual/workbench/web/index.tsx:52-54' },
+      { t:'chapters 面板（左侧停靠）', ev:'apps/plugins/manual/workbench/web/index.tsx:63-80' },
+      { t:'ai-chat 面板', ev:'apps/plugins/manual/workbench/web/index.tsx:88-96' } ] },
+    { t:'⑪ 写正文落库', ev:'apps/plugins/shared/data-core/src/data/databaseService.ts:35', c:[
+      { t:'saveChapter → PUT /api/chapters/:id', ev:'apps/plugins/shared/data-core/src/api/apiClient.ts:386 · apps/server/src/modules/chapters.ts:118' },
+      { t:'项目库 better-sqlite3 增量写', ev:'apps/server/src/services/base-service.ts:8' },
+      { t:'主库 sql.js 需手动 saveToDisk', ev:'apps/server/src/modules/ai.ts:1638-1640' },
+      { t:'localStorage 同步兜底', ev:'apps/plugins/shared/data-core/src/data/chapterLocalCache.ts:4-9' } ] },
+    { t:'⑫ AI 对话 → 回流结尾', ev:'apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx:213', c:[
+      { t:'fetch /ai/chat-stream', ev:'apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx:213,282,286' },
+      { t:'中间件链 → 分支判定', ev:'apps/server/src/modules/ai.ts:771,908-916' },
+      { t:'chat-agent → provider', ev:'apps/server/src/ai/agents/chat-agent.ts:828 · apps/server/src/ai/providers/provider-factory.ts:5,6,7' },
+      { t:'SSE 回填界面 + 落库', ev:'apps/plugins/manual/workbench/web/ai/sse.ts · apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx:230-247' },
+      { t:'回环：下次启动走更新', ev:'apps/desktop/src/updater/index.ts:642' } ] }
+  ]},
+
+  /* ═══ 右 2：桌面外壳 ═══ */
+  { t:'桌面外壳 Electron', side:'r', color:'#4fa8ff', c:[
+    { t:'main.ts 只做编排（七步）', ev:'apps/desktop/src/main.ts:12-13' },
+    { t:'window.ts 只建窗，不决定 origin', ev:'apps/desktop/src/window.ts:157,171' },
+    { t:'server-process.ts：spawn + 握手 + 启动预算', ev:'apps/desktop/src/server-process.ts:3,7-8,53' },
+    { t:'paths.ts：data 用 junction 接出来', ev:'apps/desktop/src/paths.ts:8-11' },
+    { t:'better-sqlite3 需 asar.unpacked', ev:'apps/desktop/src/paths.ts:652' },
+    { t:'updater：替换 + 备份 + 回滚', ev:'apps/desktop/src/updater/index.ts:352,642,754' } ]},
+
+  /* ═══ 右 3：服务端 ═══ */
+  { t:'服务端 @novel/server', side:'r', color:'#2dd4bf', c:[
+    { t:'HOST_MODE 归一（缺省 all）', ev:'apps/server/src/index.ts:26-31' },
+    { t:'本地插件扫描 → modes', ev:'apps/server/src/plugin/local-scanner.ts:148' },
+    { t:'宿主闸门：不匹配就跳过', ev:'apps/server/src/plugin/host.ts:842-859' },
+    { t:'ensureConfigMiddleware 拦全站', ev:'apps/server/src/plugin/host.ts:316-319' },
+    { t:'/api/health 插件状态表', ev:'apps/server/src/plugin/host.ts:706' },
+    { t:'chapters 路由族（PUT / DELETE / restore / reorder）', ev:'apps/server/src/modules/chapters.ts:118,142,164,186' },
+    { t:'ai.ts：26 个 AI 路由注册', ev:'apps/server/src/modules/ai.ts:771' },
+    { t:'双库：主库 sql.js + 项目库 better-sqlite3', ev:'apps/server/src/services/base-service.ts:8 · apps/server/src/modules/ai.ts:1638-1640' },
+    { t:'唯一「宿主 → 插件」硬依赖 worldbuilding', ev:'apps/server/package.json:19' },
+    { t:'Python 旁路 agents（/api/ai/gateway）', ev:'apps/agents/src/novelmuse_agents/main.py:3' } ]},
+
+  /* ═══ 右 4：共享库 ═══ */
+  { t:'共享库（唯一公共依赖）', side:'r', color:'#8f9fd0', c:[
+    { t:'data-core：stores（章节 / 角色 / 事件）', ev:'apps/plugins/shared/data-core/src/stores' },
+    { t:'data-core：apiClient（JWT 内存 + HttpOnly Cookie）', ev:'apps/plugins/shared/data-core/src/api/apiClient.ts:9,19-23,433-434' },
+    { t:'data-core：databaseService（表 → 路径、剥 null）', ev:'apps/plugins/shared/data-core/src/data/databaseService.ts:35,67,131,138' },
+    { t:'data-core：syncService（POST 新建 / PUT 已存在）', ev:'apps/plugins/shared/data-core/src/data/syncService.ts:89,97,109' },
+    { t:'data-core：chapterLocalCache 兜底', ev:'apps/plugins/shared/data-core/src/data/chapterLocalCache.ts:4-9,24' },
+    { t:'data-core：localUserData（正文 / 对话 / 大纲）', ev:'apps/plugins/shared/data-core/src/data/localUserData.ts:4,17,36,67' },
+    { t:'data-core：skills 消费 /api/ai/skills', ev:'apps/plugins/shared/data-core/src/skills/skillRegistry.ts:89' },
+    { t:'core：能力名常量 WEB_CAPABILITIES（5 个键）', ev:'packages/core/src/manifest.ts:87-93' },
+    { t:'core：模式判据 pluginAppliesToProjectMode', ev:'packages/core/src/mode.ts:67-74' },
+    { t:'ui-kit / ui-graph（在 apps/plugins/shared 下）', ev:'apps/plugins/shared/ui-kit · apps/plugins/shared/ui-graph' },
+    { t:'db / shared（在 packages 下）', ev:'packages/db · packages/shared' } ]},
+
+  /* ═══ 左 1：Web 内核 ═══ */
+  { t:'Web 内核 @novel/web', side:'l', color:'#7c8cff', c:[
+    { t:'mountAllWebPlugins', ev:'apps/web/src/main.tsx:41-99' },
+    { t:'静态条目 worldbuilding（modes manual）', ev:'apps/web/src/main.tsx:57' },
+    { t:'glob 四目录：manual / auto / shared / local', ev:'apps/web/src/main.tsx:70-75' },
+    { t:'pluginModeFromDir（local → shared）', ev:'apps/web/src/main.tsx:79-83' },
+    { t:'createWebPluginContext(id, modes)', ev:'apps/web/src/plugin/host.ts:38' },
+    { t:'注册表槽位（panels / commands / routes / settings…）', ev:'apps/web/src/plugin/registry.ts:29-57' },
+    { t:'能力通道（刻意不按模式隔离）', ev:'apps/web/src/plugin/registry.ts:311-322,389-391' },
+    { t:'面板默认开启集合（manual：chapters + ai-chat）', ev:'apps/web/src/stores/panelOpenStore.ts:234-237' } ]},
+
+  /* ═══ 左 2：手写台 ═══ */
+  { t:'手写台插件 novel.manual.workbench', side:'l', color:'#c084fc', mode:'manual', c:[
+    { t:'入口：12 个 projectPanel', ev:'apps/plugins/manual/workbench/web/index.tsx:52-54', mode:'manual' },
+    { t:'chapters 面板（左侧停靠）', ev:'apps/plugins/manual/workbench/web/index.tsx:63-80', mode:'manual' },
+    { t:'ai-chat 面板（从 auto 模块移交过来）', ev:'apps/plugins/manual/workbench/web/index.tsx:88-96', mode:'manual',
+      note:'此前 auto 与 manual 同 key 双注册，谁生效取决于 glob 挂载顺序；现在产品代码里只有 manual 一处注册。' },
+    { t:'editor：EditorPage / ChapterEditor', ev:'apps/plugins/manual/workbench/web/editor/EditorPage.tsx:29,129', mode:'manual' },
+    { t:'可用 AI 调用 5 条', ev:'apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx:213', mode:'manual', c:[
+      { t:'/ai/chat-stream（对话 / 拆书）', ev:'apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx:213', mode:'manual' },
+      { t:'/ai/generate-character（角色）', ev:'apps/plugins/manual/workbench/web/character/CharacterManager.tsx:302', mode:'manual' },
+      { t:'/ai/analyze-style（文风）', ev:'apps/plugins/shared/data-core/src/services/styleService.ts:156', mode:'manual' },
+      { t:'/ai/analyze-rhythm（节奏）', ev:'apps/plugins/shared/data-core/src/services/rhythmService.ts:109', mode:'manual' },
+      { t:'/ai/chat（改写）', ev:'apps/plugins/shared/data-core/src/services/styleService.ts:190', mode:'manual' } ] },
+    { t:'能力读侧 4 处（仓内 0 个提供方）', ev:'apps/plugins/manual/workbench/web/hooks/useAutoEntityDetection.ts:683', mode:'manual', c:[
+      { t:'ai.scan → 静默 return', ev:'apps/plugins/manual/workbench/web/hooks/useAutoEntityDetection.ts:683', mode:'manual' },
+      { t:'ai.scan（章节轮询）', ev:'apps/plugins/manual/workbench/web/hooks/useLatestChapterPolling.ts:35', mode:'manual' },
+      { t:'ai.timelineExtract → 点了没反应', ev:'apps/plugins/manual/workbench/web/timeline/TimelineView.tsx:157', mode:'manual' },
+      { t:'ai.quickPhrases → 回落本地启发式', ev:'apps/plugins/manual/workbench/web/editor/panels/QuickPhraseBubble.tsx:196', mode:'manual' } ] },
+    { t:'自带 sse.ts（与 auto 留档文件同源）', ev:'apps/plugins/manual/workbench/web/ai/sse.ts', mode:'manual' },
+    { t:'bookscan 插件（拆书能力并入对话面板）', ev:'apps/plugins/manual/bookscan/plugin.json', mode:'manual' },
+    { t:'无专属 AI provider（共用用户级供应商链）', ev:'docs/handover/ai-writing-handover.md', mode:'manual' } ]},
+
+  /* ═══ 左 3：自动台 ═══ */
+  { t:'自动台插件 novel.auto.workbench', side:'l', color:'#f0a020', mode:'auto', c:[
+    { t:'Web 面已出仓：入口只剩注释 / 最小 apply', ev:'apps/plugins/auto/workbench/web/index.tsx', mode:'auto' },
+    { t:'ai-chat 面板已删除（留档文件仍在）', ev:'apps/plugins/auto/workbench/web/ai/AiChatPanel.tsx', mode:'auto' },
+    { t:'sse.ts 仍被单测引用（故保留）', ev:'apps/plugins/auto/workbench/web/ai/__tests__/sse.test.ts:18', mode:'auto' },
+    { t:'autowrite 插件（骨架，批处理已物理删除）', ev:'apps/plugins/auto/autowrite/plugin.json', mode:'auto' },
+    { t:'manifest 仍声明 6 个注入点', ev:'apps/plugins/auto/workbench/plugin.json', mode:'auto' } ]},
+
+  /* ═══ 左 4：AI 接口 ═══ */
+  { t:'AI 接口（两边都能引用）', side:'l', color:'#4ade80', c:[
+    { t:'能力通道：一边注册、一边按名消费', ev:'apps/web/src/plugin/registry.ts:389-391', note:'缺席时静默降级，取代模块间静态 import。' },
+    { t:'5 个能力名（全仓 0 个提供方）', ev:'packages/core/src/manifest.ts:87-93' },
+    { t:'/ai/chat-stream：中间件链', ev:'apps/server/src/modules/ai.ts:771' },
+    { t:'工具 / Agent 分支：前端不传 ⇒ 恒普通对话', ev:'apps/server/src/modules/ai.ts:908-916 · apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx:218-227' },
+    { t:'provider：openai | ollama | custom', ev:'apps/server/src/ai/providers/provider-factory.ts:5,6,7' },
+    { t:'配置：user_settings + ensureConfigMiddleware', ev:'apps/server/src/ai/user-config-loader.ts:74' },
+    { t:'有消费者的端点 5 条', ev:'apps/server/src/modules/ai.ts:771,575,633,616,1099' },
+    { t:'共享库消费 1 条：/api/ai/skills', ev:'apps/plugins/shared/data-core/src/skills/skillRegistry.ts:89' },
+    { t:'孤儿 1 条：/ai/check-consistency', ev:'apps/plugins/manual/workbench/web/services/misc/consistencyService.ts:38' },
+    { t:'无消费者 12 条路径 / 19 个注册', ev:'apps/server/src/modules/ai.ts:364,389,480,710,1157,1239,1360,1491,1545,1906,1743,1763' },
+    { t:'Python 旁路 agents', ev:'apps/agents/src/novelmuse_agents/main.py:3' } ]},
+
+  /* ═══ 左 5：断链与缺口 ═══ */
+  { t:'断链与缺口（画得出、走不到）', side:'l', color:'#f0526d', c:[
+    { t:'ai.scan 无提供方（端点已实现）', ev:'apps/plugins/manual/workbench/web/hooks/useAutoEntityDetection.ts:683 · apps/server/src/modules/ai.ts:389' },
+    { t:'ai.timelineExtract 无提供方', ev:'apps/plugins/manual/workbench/web/timeline/TimelineView.tsx:157' },
+    { t:'ai.quickPhrases 无提供方', ev:'apps/plugins/manual/workbench/web/editor/panels/QuickPhraseBubble.tsx:196' },
+    { t:'顶栏重写是死事件（nm:rewrite 无监听者）', ev:'apps/web/src/components/shell/ProjectLayout.tsx:380,385' },
+    { t:'一致性检查孤儿（无面板）', ev:'apps/plugins/manual/workbench/web/services/misc/consistencyService.ts:38' },
+    { t:'AI 设置栏目空缺（无 category=ai 注册者）', ev:'docs/architecture/web-workbench-split-contract.md' },
+    { t:'预设计面：40+ Web 文件 / pipeline / memory（仓外）', ev:'docs/architecture/project-graph.html' } ]},
+
+  /* ═══ 左 6：隔离规则 ═══ */
+  { t:'隔离规则（谁被隔离、谁共享）', side:'l', color:'#a78bfa', c:[
+    { t:'UI 扩展点带 modes 过滤（11 处）', ev:'apps/web/src/plugin/host.ts:34-36' },
+    { t:'项目面板 / 路由 / 设置 / 命令 / 工具栏 / 选择菜单', ev:'apps/web/src/components/shell/ProjectLayout.tsx:217 · apps/web/src/App.tsx:198 · apps/web/src/components/settings/PluginSettingsSections.tsx:71 · apps/web/src/components/ui/CommandPalette.tsx:22' },
+    { t:'workbench 按模式键控', ev:'apps/web/src/plugin/registry.ts:262-277 · apps/web/src/components/shell/ProjectLayout.tsx:277-282' },
+    { t:'模块入口隔离：一个插件炸了只禁自己', ev:'apps/web/src/main.tsx:44-47' },
+    { t:'能力（AI 接口）刻意不按模式隔离', ev:'apps/web/src/plugin/registry.ts:389-391 · apps/web/src/plugin/host.ts:151-157' },
+    { t:'禁跨模块静态 import（门禁 M2A / A2M）', ev:'scripts/verify/verify-workbench-isolation.mjs' },
+    { t:'共享包是唯一公共依赖', ev:'apps/plugins/shared' } ]}
+  ]};
+
+var MODE = { manual:{n:'手写台',c:'#c084fc'}, auto:{n:'自动台',c:'#4fa8ff'}, shared:{n:'共享面',c:'#4ade80'} };
+var NODE_H = 34, ROOT_H = 40, GAP_Y = 13, COL_GAP = 46, ROOT_W = 236;
+var S = 'http://www.w3.org/2000/svg';
+
+var svg = document.getElementById('svg');
+var badge = document.getElementById('badge');
+var detail = document.getElementById('detail');
+
+function el(name, attrs, text){
+  var n = document.createElementNS(S, name);
+  if (attrs) for (var k in attrs) if (attrs[k] !== null && attrs[k] !== undefined) n.setAttribute(k, attrs[k]);
+  if (text !== undefined && text !== null) n.textContent = String(text);
+  return n;
+}
+function esc(s){
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/* ── 预处理：父子、模式、颜色、编号 ── */
+var all = [], branches = [], byIdAll = {}, seq = 0;
+(function prep(o, p, depth){
+  o._p = p; o._d = depth;
+  o.mode = o.mode || (p ? p.mode : 'shared');
+  o.note = o.note || '';
+  o._kids = o.c || []; delete o.c;
+  o._id = 'n' + (++seq);
+  if (depth === 0){ o._color = '#6b8cff'; o.side = 'r'; }
+  else if (depth === 1){ o._color = o.color || '#6b8cff'; o.side = o.side === 'l' ? 'l' : 'r'; branches.push(o); }
+  else { o._color = p._color; o.side = p.side; }
+  o.collapsed = depth >= 1 && !o.open && o._kids.length > 0;
+  all.push(o); byIdAll[o._id] = o;
+  o._kids.forEach(function(k){ prep(k, o, depth + 1); });
+})(TREE, null, 0);
+
+var visMode = 'all', query = '', sel = null;
+var vis = [], byId = {}, lastBox = null, tx = 0, ty = 0, sc = 1, hov = [];
+
+function modOk(o){ return visMode === 'all' || o.mode === visMode || o.mode === 'shared'; }
+function kidsOn(o){
+  var ks = o._kids.filter(modOk);
+  if (query) return ks;                       /* 搜索时强制全展开 */
+  return o.collapsed ? [] : ks;
+}
+function textW(s){
+  var w = 0;
+  for (var i = 0; i < s.length; i++) w += s.charCodeAt(i) > 0x2e80 ? 13 : 7.6;
+  return w;
+}
+function nodeW(o){ return Math.min(340, Math.max(74, Math.round(textW(o.t) + 30))); }
+
+/* ── 布局：两侧分列，纵向按叶子顺序排，父节点取子节点中点 ── */
+function layout(){
+  vis = []; byId = {}; sel = sel || null;
+  var q = query.toLowerCase(), hits = 0;
+
+  TREE._x = -ROOT_W / 2; TREE._y = -ROOT_H / 2; TREE._w = ROOT_W; TREE._h = ROOT_H;
+  TREE._hit = !q || (TREE.t + ' ' + TREE.ev).toLowerCase().indexOf(q) >= 0;
+  vis.push(TREE); byId[TREE._id] = TREE;
+
+  var maxW = { r:{}, l:{} }, maxD = { r:0, l:0 };
+  function collect(o, depth){
+    o._d2 = depth; o._w = nodeW(o); o._h = NODE_H;
+    var hay = (o.t + ' ' + o.ev + ' ' + o.note).toLowerCase();
+    o._hit = !q || hay.indexOf(q) >= 0;
+    if (q && o._hit) hits++;
+    var m = maxW[o.side];
+    m[depth] = Math.max(m[depth] || 0, o._w);
+    if (depth > maxD[o.side]) maxD[o.side] = depth;
+    o._ks = kidsOn(o).map(function(k){ return collect(k, depth + 1); });
+    vis.push(o); byId[o._id] = o;
+    return o;
+  }
+  branches.forEach(function(b){ if (modOk(b)) collect(b, 1); });
+  TREE._ks = branches.filter(modOk);          /* 根的子枝＝可见主干；nodeG/hover 要读它 */
+
+  var xs = { r:{}, l:{} }, d, acc;
+  acc = ROOT_W / 2;
+  for (d = 1; d <= maxD.r; d++){ acc += COL_GAP; xs.r[d] = acc; acc += (maxW.r[d] || 0); }
+  acc = ROOT_W / 2;
+  for (d = 1; d <= maxD.l; d++){ acc += COL_GAP; xs.l[d] = -acc - (maxW.l[d] || 0); acc += (maxW.l[d] || 0); }
+
+  var cur = { r:0, l:0 };
+  function place(o, depth){
+    o._x = (o.side === 'r' ? xs.r[depth] : xs.l[depth]);
+    if (!o._ks.length){ o._y = cur[o.side]; cur[o.side] += NODE_H + GAP_Y; return o._y; }
+    o._ks.forEach(function(k){ place(k, depth + 1); });
+    o._y = (o._ks[0]._y + o._ks[o._ks.length - 1]._y) / 2;
+    return o._y;
+  }
+  branches.forEach(function(b){ if (modOk(b)) place(b, 1); });
+
+  ['r', 'l'].forEach(function(side){
+    var lo = Infinity, hi = -Infinity;
+    vis.forEach(function(o){ if (o._d >= 1 && o.side === side){ lo = Math.min(lo, o._y); hi = Math.max(hi, o._y + NODE_H); } });
+    if (!isFinite(lo)) return;
+    var off = (lo + hi) / 2;
+    vis.forEach(function(o){ if (o._d >= 1 && o.side === side) o._y -= off; });
+  });
+
+  var bx = Infinity, bxx = -Infinity, by = Infinity, byy = -Infinity;
+  vis.forEach(function(o){
+    bx = Math.min(bx, o._x); bxx = Math.max(bxx, o._x + o._w);
+    by = Math.min(by, o._y); byy = Math.max(byy, o._y + o._h);
+  });
+  lastBox = { bx:bx, bxx:bxx, by:by, byy:byy, hits:hits };
+  return lastBox;
+}
+
+function link(p, c){
+  var py = p._y + p._h / 2, cy = c._y + c._h / 2, px, cx, s = c.side === 'r' ? 1 : -1;
+  if (s === 1){ px = p._x + p._w; cx = c._x; } else { px = p._x; cx = c._x + c._w; }
+  var k = Math.max(22, Math.abs(cx - px) * 0.42);
+  return 'M ' + px + ',' + py + ' C ' + (px + k * s) + ',' + py + ' ' + (cx - k * s) + ',' + cy + ' ' + cx + ',' + cy;
+}
+
+function nodeG(o){
+  var g = el('g', { 'class':'node' + (o._d === 0 ? ' root' : '') + (o._hit ? '' : ' dim') + (sel === o._id ? ' sel' : '') });
+  g.appendChild(el('rect', { x:o._x, y:o._y, width:o._w, height:o._h, rx:9, 'class':'box' }));
+  g.appendChild(el('rect', { x:o._x, y:o._y, width:4, height:o._h, rx:2, fill:o._color }));
+  g.appendChild(el('text', { x:o._x + 13, y:o._y + o._h / 2 + 4.6, 'class':'tt' + (textW(o.t) > o._w - 26 ? ' sm' : '') }, o.t));
+  if (o._kids.length){
+    var open = o._ks.length > 0;
+    var cnt = o._kids.filter(modOk).length;
+    g.appendChild(el('text', {
+      x: o.side === 'r' ? o._x + o._w + 11 : o._x - 11,
+      y: o._y + o._h / 2 + 4,
+      'class':'ex' + (open ? ' open' : ''),
+      'text-anchor': o.side === 'r' ? 'start' : 'end'
+    }, open ? '–' : '+' + cnt));
+  }
+  g.appendChild(el('title', null, o.t + (o._d ? '\n模式：' + MODE[o.mode].n : '')
+    + (o.ev ? '\n依据：' + o.ev : '') + (o.note ? '\n' + o.note : '')));
+  o._g = g;
+  g.addEventListener('click', function(ev){ if (ev.stopPropagation) ev.stopPropagation(); onClick(o); });
+  g.addEventListener('dblclick', function(ev){ if (ev.stopPropagation) ev.stopPropagation(); zoomTo(o); });
+  g.addEventListener('mouseenter', function(){ hover(o); });
+  g.addEventListener('mouseleave', unhover);
+  return g;
+}
+
+function unhover(){
+  hov.forEach(function(x){ if (x._g) x._g.classList.remove('path'); });
+  hov = [];
+}
+function hover(o){
+  unhover();
+  var p = o;
+  while (p){ if (p._g){ p._g.classList.add('path'); hov.push(p); } p = p._p; }
+  o._ks.forEach(function(k){ if (k._g){ k._g.classList.add('path'); hov.push(k); } });
+}
+
+function apply(){
+  var r = svg.querySelector('#root');
+  if (r) r.setAttribute('transform', 'translate(' + tx + ',' + ty + ') scale(' + sc + ')');
+}
+function sizeView(){
+  var vw = svg.clientWidth || 1200, vh = svg.clientHeight || 620;
+  svg.setAttribute('viewBox', '0 0 ' + vw + ' ' + vh);
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+}
+function draw(){
+  var box = layout();
+  svg.innerHTML = '';
+  var root = el('g', { id:'root' });
+  svg.appendChild(root);
+  var gL = el('g'), gN = el('g');
+  root.appendChild(gL); root.appendChild(gN);
+
+  vis.forEach(function(o){
+    if (o._d === 0) return;
+    if (!o._p || !byId[o._p._id]) return;
+    gL.appendChild(el('path', { d:link(o._p, o), 'class':'link', stroke:o._color }));
+  });
+  vis.forEach(function(o){ gN.appendChild(nodeG(o)); });
+
+  root.setAttribute('transform', 'translate(' + tx + ',' + ty + ') scale(' + sc + ')');
+  badge.textContent = '可见 ' + vis.length + ' / ' + all.length + ' 个节点 · ' + branches.filter(modOk).length + ' 条主干'
+    + (query ? ' · 命中 ' + box.hits + ' 个' : '')
+    + (visMode === 'all' ? '' : ' · 只看' + MODE[visMode].n);
+}
+
+function fit(){
+  if (!lastBox) return;
+  var vw = svg.clientWidth || 1200, vh = svg.clientHeight || 620, pad = 34;
+  var w = Math.max(1, lastBox.bxx - lastBox.bx), h = Math.max(1, lastBox.byy - lastBox.by);
+  sc = Math.min((vw - pad * 2) / w, (vh - pad * 2) / h);
+  if (!isFinite(sc) || sc <= 0) sc = 1;
+  sc = Math.max(0.12, Math.min(sc, 1.5));
+  tx = -lastBox.bx * sc + (vw - w * sc) / 2;
+  ty = -lastBox.by * sc + (vh - h * sc) / 2;
+  apply();
+}
+function home(){
+  var vw = svg.clientWidth || 1200, vh = svg.clientHeight || 620;
+  sc = 1; tx = vw / 2; ty = vh / 2;
+  apply();
+}
+function zoomTo(o){
+  var vw = svg.clientWidth || 1200, vh = svg.clientHeight || 620;
+  tx = vw / 2 - (o._x + o._w / 2) * sc;
+  ty = vh / 2 - (o._y + o._h / 2) * sc;
+  apply();
+}
+
+/* ── 选择 / 详情 ── */
+function onClick(o){
+  if (o._d >= 1 && o._kids.length) o.collapsed = !o.collapsed;
+  sel = o._id;
+  draw();
+  showDetail(o);
+}
+function reveal(o){
+  var p = o._p;
+  while (p){ p.collapsed = false; p = p._p; }
+  query = ''; document.getElementById('q').value = '';
+  sel = o._id;
+  table(); draw(); zoomTo(o); showDetail(o);
+}
+function bindGo(scope){
+  Array.prototype.forEach.call(scope.querySelectorAll('[data-go]'), function(a){
+    a.addEventListener('click', function(){
+      var o = byIdAll[a.getAttribute('data-go')];
+      if (o) reveal(o);
+    });
+  });
+}
+function showDetail(o){
+  var path = [], p = o._p;
+  while (p){ path.unshift(p); p = p._p; }
+  var h = ['<h4>' + esc(o.t) + '</h4>'];
+  h.push('<div class="row"><span class="pill" style="border-color:' + MODE[o.mode].c + '">' + MODE[o.mode].n + '</span>'
+    + (o._kids.length
+        ? '<span class="pill">' + o._kids.filter(modOk).length + ' 个子项' + (o.collapsed ? ' · 已收起' : '') + '</span>'
+        : '<span class="pill">叶子</span>') + '</div>');
+  if (path.length) h.push('<div class="row"><span class="lbl">路径</span>'
+    + path.map(function(x){ return '<a data-go="' + x._id + '">' + esc(x.t) + '</a>'; }).join(' › ') + '</div>');
+  if (o.ev) h.push('<div class="row"><span class="lbl">依据</span><span class="ev">' + esc(o.ev) + '</span></div>');
+  if (o.note) h.push('<div class="row">' + esc(o.note) + '</div>');
+  if (o._kids.length) h.push('<div class="row"><span class="lbl">子项</span>'
+    + o._kids.map(function(k){ return '<a data-go="' + k._id + '">' + esc(k.t) + '</a>'; }).join(' · ') + '</div>');
+  h.push('<div class="row" style="color:#63719a">再次点击方块可收放它的子枝。</div>');
+  detail.innerHTML = h.join('');
+  bindGo(detail);
+}
+function help(){
+  var h = ['<h4>思维图 · 怎么看</h4>',
+    '<p>中心是根主题，两侧是 <b>' + branches.length + '</b> 条主干。点方块收放子枝（<span class="ev">+N</span> 是收起的分支数）；点下面的主干名可直接跳过去。</p>',
+    '<p>悬停方块会亮出「根 → 它」的路径，看清它挂在哪条主线下；<b>双击</b>方块把视图对准它。</p>',
+    '<h4>主干一览（点即跳转）</h4>'];
+  branches.forEach(function(b){
+    var n = 0;
+    (function cnt(o){ n++; o._kids.forEach(cnt); })(b);
+    h.push('<div class="bl"><i style="background:' + b._color + '"></i><span><a data-go="' + b._id + '">'
+      + esc(b.t) + '</a> <span class="ev">' + n + ' 节点</span></span></div>');
+  });
+  h.push('<h4>模式图例</h4>');
+  Object.keys(MODE).forEach(function(k){
+    h.push('<div class="bl"><i style="background:' + MODE[k].c + '"></i><span>' + MODE[k].n + '</span></div>');
+  });
+  h.push('<p>「共享面」在两种模式下都显示；切到「手写台」或「自动台」只影响模块自己的节点。</p>');
+  detail.innerHTML = h.join('');
+  bindGo(detail);
+}
+
+/* ── 底部索引表 ── */
+function table(){
+  var t = document.getElementById('nodes');
+  var rows = ['<thead><tr><th style="width:58px">层级</th><th>节点</th><th style="width:120px">模式</th>'
+    + '<th>依据（文件:行号）</th></tr></thead><tbody>'];
+  all.forEach(function(o){
+    if (!modOk(o)) return;
+    rows.push('<tr class="nr" data-id="' + o._id + '">'
+      + '<td class="mono">L' + o._d + '</td>'
+      + '<td style="padding-left:' + (8 + o._d * 16) + 'px">' + esc(o.t) + '</td>'
+      + '<td><span class="pill" style="border-color:' + MODE[o.mode].c + '">' + MODE[o.mode].n + '</span></td>'
+      + '<td class="ev">' + esc(o.ev || '—') + '</td></tr>');
+  });
+  rows.push('</tbody>');
+  t.innerHTML = rows.join('');
+  Array.prototype.forEach.call(t.querySelectorAll('tr.nr'), function(tr){
+    tr.addEventListener('click', function(){
+      var o = byIdAll[tr.getAttribute('data-id')];
+      if (o) reveal(o);
+    });
+  });
+}
+
+/* ── 交互 ── */
+document.getElementById('q').addEventListener('input', function(ev){
+  query = String(ev.target.value || '').trim().toLowerCase();
+  draw(); fit();
+});
+Array.prototype.forEach.call(document.querySelectorAll('[data-mode]'), function(b){
+  b.addEventListener('click', function(){
+    visMode = b.getAttribute('data-mode');
+    Array.prototype.forEach.call(document.querySelectorAll('[data-mode]'), function(o){ o.classList.toggle('on', o === b); });
+    table(); draw(); fit();
+  });
+});
+Array.prototype.forEach.call(document.querySelectorAll('[data-lv]'), function(b){
+  b.addEventListener('click', function(){
+    var lv = b.getAttribute('data-lv');
+    all.forEach(function(o){
+      if (!o._kids.length) return;
+      o.collapsed = (lv === 'all') ? false : (o._d >= Number(lv));
+    });
+    query = ''; document.getElementById('q').value = '';
+    draw(); fit();
+  });
+});
+Array.prototype.forEach.call(document.querySelectorAll('[data-z]'), function(b){
+  b.addEventListener('click', function(){
+    var z = b.getAttribute('data-z');
+    if (z === 'fit') fit();
+    else if (z === 'reset') home();
+    else if (z === 'in'){ sc = Math.min(sc * 1.18, 4); apply(); }
+    else { sc = Math.max(sc / 1.18, 0.12); apply(); }
+  });
+});
+document.addEventListener('keydown', function(ev){
+  if (ev.target && /input|textarea/i.test(ev.target.tagName)) return;
+  var k = ev.key;
+  if (k === 'Escape'){ sel = null; draw(); help(); }
+  else if (k === 'f') fit();
+  else if (k === 'e') all.forEach(function(o){ if (o._kids.length) o.collapsed = false; }), draw(), fit();
+  else if (k === 'c') all.forEach(function(o){ if (o._kids.length) o.collapsed = o._d >= 2; }), draw(), fit();
+  else if (k === '1' || k === '2' || k === '3'){
+    var m = k === '1' ? 'all' : (k === '2' ? 'manual' : 'auto');
+    Array.prototype.forEach.call(document.querySelectorAll('[data-mode]'), function(o){
+      if (o.getAttribute('data-mode') === m) o.click();
+    });
+  }
+});
+svg.addEventListener('wheel', function(ev){
+  ev.preventDefault();
+  if (ev.ctrlKey){
+    var r = svg.getBoundingClientRect();
+    var mx = ev.clientX - r.left, my = ev.clientY - r.top;
+    var ns = Math.max(0.12, Math.min(4, sc * (ev.deltaY < 0 ? 1.12 : 1 / 1.12)));
+    tx = mx - (mx - tx) * (ns / sc);
+    ty = my - (my - ty) * (ns / sc);
+    sc = ns;
+  } else {
+    tx -= ev.deltaX;
+    ty -= ev.deltaY;
+  }
+  apply();
+}, { passive:false });
+window.addEventListener('resize', function(){ sizeView(); fit(); });
+
+/* ── 启动 ── */
+sizeView();
+table();
+draw();
+fit();
+help();
+})();
+</script>
+</body>
+</html>

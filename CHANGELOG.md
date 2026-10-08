@@ -283,6 +283,17 @@ reseeded=true`（buildId `3b4093c6…` → **`484046b7fdc335afe040d4af0f04676b`*
   接入点：`ProjectLayout`（从 URL bookId 恢复项目）、`BookshelfPage`、
   `ProjectIndexPage`、`AdminPage`、`PluginManagerSection`。
 
+### 文档（2026-10-07 架构可视化）
+
+- **新增 6 张架构可视化图**：`docs/architecture/` 下的 `architecture-map.html`、
+  `architecture-plain.html`、`entry-to-end-flow.html`、`flow-current.html`、
+  `mind-map.html`、`project-graph.html` —— 覆盖仓库总览、入口到端到端流程、
+  当前数据流与依赖关系。
+- **新增真实文件树**：`docs/architecture/file-tree.txt`（903 行，由实际仓库生成，
+  含各目录分区计数）。
+- 修正早期图稿把 `ui-kit` / `ui-graph` 误记为 `packages/*` 的包路径
+  （实际在 `apps/plugins/shared/*`）。
+
 ### 已知限制
 
 - 桌面端产物**未做代码签名**：首次运行会触发 Windows SmartScreen 提示，

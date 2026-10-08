@@ -1,0 +1,800 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NovelMuse · 入口到结尾流程图（Nx 节点/边样式）</title>
+<style>
+  :root{
+    --bg:#0b0f18; --panel:#111726; --panel2:#151d2f; --line:#26314c; --line2:#1b2438;
+    --txt:#dfe6f5; --dim:#8b9ac0; --dim2:#63719a; --acc:#6b8cff; --warn:#f0a020; --bad:#f0526d;
+    --ok:#4ade80; --mono:ui-monospace,SFMono-Regular,Consolas,"Cascadia Mono",monospace;
+    --sans:system-ui,"Microsoft YaHei","Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:13px}
+  a{color:#8fa6ff;text-decoration:none}
+  a:hover{text-decoration:underline}
+  code,.mono,.ev{font-family:var(--mono);font-size:11.5px}
+  code{background:#0e1424;border:1px solid var(--line2);border-radius:4px;padding:0 4px;color:#b9c7e8}
+  header{position:sticky;top:0;z-index:20;background:rgba(11,15,24,.94);border-bottom:1px solid var(--line);
+    backdrop-filter:blur(6px);padding:10px 18px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+  .brand{font-weight:700;font-size:15px;letter-spacing:.3px}
+  .brand span{color:var(--acc)}
+  nav.toc{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:12px;align-items:center}
+  nav.toc a{padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:#0e1424}
+  nav.toc a.here{border-color:var(--acc);color:#cfd9ff;background:#141d33}
+  .wrap{display:grid;grid-template-columns:296px 1fr;gap:0;align-items:start}
+  @media (max-width:1080px){.wrap{grid-template-columns:1fr}}
+  aside{border-right:1px solid var(--line);padding:14px 16px;position:sticky;top:52px;max-height:calc(100vh - 52px);overflow:auto}
+  aside h3{margin:14px 0 6px;font-size:12.5px;color:#cfd9ff;letter-spacing:.4px}
+  aside h3:first-child{margin-top:0}
+  aside p{margin:6px 0;color:var(--dim);line-height:1.65}
+  aside ul{margin:6px 0;padding-left:18px;color:var(--dim);line-height:1.7}
+  .lg{display:grid;grid-template-columns:14px 1fr;gap:6px 8px;align-items:center;margin:6px 0}
+  .lg i{display:block;height:3px;border-radius:2px}
+  .lg b{font-weight:600;color:#cdd8f0;font-size:12px}
+  .main{padding:12px 16px 40px;min-width:0}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;background:var(--panel);
+    border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+  .toolbar input[type=search]{background:#0d1322;border:1px solid var(--line);color:var(--txt);
+    border-radius:7px;padding:6px 9px;font-size:12px;width:210px}
+  .toolbar label{display:flex;gap:5px;align-items:center;color:var(--dim);font-size:12px;cursor:pointer}
+  .toolbar button{background:#131b2e;border:1px solid var(--line);color:#cdd8f0;border-radius:7px;
+    padding:5px 9px;font-size:12px;cursor:pointer}
+  .toolbar button:hover{border-color:var(--acc)}
+  .toolbar button.on{border-color:var(--acc);background:#17203a;color:#dbe4ff}
+  .sp{flex:1}
+  #stage{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;position:relative}
+  svg{display:block;width:100%;height:70vh;min-height:520px;background:
+    radial-gradient(1200px 600px at 30% 0%,#131b2e 0%,#0d1220 60%,#0b0f18 100%)}
+  .stageband{fill:#141c2d;opacity:.55}
+  .stagetxt{fill:#7f8fb8;font-size:11.5px;letter-spacing:.6px;font-family:var(--sans)}
+  .node{cursor:pointer}
+  .node rect{fill:#141c2e;stroke:#2a3550;stroke-width:1.2;rx:9}
+  .node .nl{fill:#e6ecfb;font-size:12.5px;font-weight:600;font-family:var(--sans)}
+  .node .ns{fill:#8b9ac0;font-size:10.5px;font-family:var(--mono)}
+  .node .bdg{fill:#0c111d;font-size:10.5px;font-weight:700;font-family:var(--mono)}
+  .node.dim{opacity:.16}
+  .node.sel rect{stroke:#fff;stroke-width:2}
+  .node.sel .nl{fill:#fff}
+  .node.hit rect{stroke:#cfd9ff;stroke-width:2}
+  .node text{pointer-events:none}
+  .edge{fill:none;stroke-width:1.5}
+  .edge.dim{opacity:.07}
+  .edge.hot{stroke-width:2.6;filter:drop-shadow(0 0 4px rgba(160,190,255,.55))}
+  .badge{position:absolute;left:12px;bottom:12px;background:rgba(12,17,29,.9);border:1px solid var(--line);
+    border-radius:8px;padding:6px 10px;color:var(--dim);font-size:11.5px}
+  footer{padding:16px 18px 48px;border-top:1px solid var(--line)}
+  footer h3{margin:0 0 8px;font-size:13.5px;color:#cfd9ff}
+  table{border-collapse:collapse;width:100%;font-size:12px}
+  th,td{border-bottom:1px solid var(--line2);padding:5px 8px;text-align:left;vertical-align:top}
+  th{color:#a9b7da;font-weight:600;background:#0f1524;position:sticky;top:0}
+  td.mono{white-space:nowrap;color:#b9c7e8}
+  tr.er.clk{cursor:pointer}
+  tr.er:hover{background:#131b2e}
+  tr.er.hot{background:#17203a}
+  .kdot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;vertical-align:1px}
+  #detail{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;display:none}
+  #detail h4{margin:0 0 6px;font-size:13.5px}
+  #detail .meta{color:var(--dim);line-height:1.7}
+  #detail .row{margin:5px 0}
+  #detail .lbl{color:var(--dim2);margin-right:6px}
+  .pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:1px 7px;font-size:11px;color:#cdd8f0;margin-right:5px}
+  .hot-nei{color:#dbe4ff}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">NovelMuse · <span>入口 → 结尾</span> 流程图</div>
+  <nav class="toc">
+    <a href="architecture-map.html" title="架构全图（仓内现状）">架构全图</a>
+    <a href="project-graph.html" title="Nx 风格项目依赖图（代码包/契约，含预设计面）">项目依赖图</a>
+    <a href="flow-current.html" title="泳道卡片版：冷启动 / AI 链路 / 能力共享 / 守卫 / 断链">泳道版流程图</a>
+    <a href="architecture-plain.html" title="直白文字版说明">直白版</a>
+    <a href="mind-map.html" title="思维图：中心根 + 两侧 10 条主干，逐层收放">思维图</a>
+    <a class="here" href="entry-to-end-flow.html">入口→结尾（本页）</a>
+  </nav>
+</header>
+
+<div class="wrap">
+  <aside id="side">
+    <h3>关于这张图</h3>
+    <p>同 <b>Nx Project Graph</b> 的渲染方式（节点方块 + 带类型的边 + 点选看详情），但语义换成<b>一条自上而下的执行流程</b>：从双击图标开始，到内容落库、界面回填结束。</p>
+    <p>纵向 12 行 = 12 个阶段；行内横向偏移 = 主干（中间）与旁支（两侧）。流程顺序看方块左上角的<b>步骤号</b>，与底部清单表一一对应。</p>
+
+    <h3>边（关系）图例</h3>
+    <div class="lg"><i style="background:#6b8cff"></i><b>启动 / 进程</b> <span class="ev">boot</span></div>
+    <div class="lg"><i style="background:#f0a020"></i><b>鉴权 / 门禁 / 校验</b> <span class="ev">gate</span></div>
+    <div class="lg"><i style="background:#2dd4bf"></i><b>调用 / 挂载</b> <span class="ev">call</span></div>
+    <div class="lg"><i style="background:#c084fc"></i><b>流 / 供应商往返</b> <span class="ev">stream</span></div>
+    <div class="lg"><i style="background:#4ade80"></i><b>落库 / 持久化</b> <span class="ev">data</span></div>
+    <div class="lg"><i style="background:#8f9fd0;height:2px;border-top:2px dashed #8f9fd0"></i><b>分支 / 旁路</b> <span class="ev">branch</span></div>
+    <div class="lg"><i style="background:#f0526d;height:2px;border-top:2px dashed #f0526d"></i><b>断链 / 死路</b> <span class="ev">dead</span></div>
+    <div class="lg"><i style="background:#7c8cff;height:2px;border-top:2px dashed #7c8cff"></i><b>回环 / 下次启动</b> <span class="ev">loop</span></div>
+
+    <h3>怎么读</h3>
+    <ul>
+      <li>鼠标移到<b>线</b>上看依据；点<b>方块</b>看角色、证据、备注。</li>
+      <li>勾掉某类边可只看一种关系；<b>只看主干</b> 会隐藏所有旁支与断链。</li>
+      <li>顶部模式按钮：<span class="ev">手写台</span> 只留手写侧与共享面；<span class="ev">自动台</span> 在本流程里只有共享/宿主面 —— 自动写作模块 Web 面已出仓，无独立链路可画。</li>
+      <li>快捷键：<span class="ev">f</span> 适配 · <span class="ev">m</span> 只看主干 · <span class="ev">1/2/3</span> 模式 · <span class="ev">Esc</span> 取消选择。</li>
+    </ul>
+
+    <h3>口径</h3>
+    <p>每条边与每个方块的依据都是 <code>文件:行号</code>，取自仓内现状（读源码核对，无 shell 无法跑构建）。断链（红虚线）不代表「线不存在」，而是<b>仓内没有另一端</b>：能力无提供方、路由无调用点、事件无监听者。</p>
+  </aside>
+
+  <div class="main">
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="搜索 方块 / 文件 / 行号…">
+      <span class="sp"></span>
+      <button data-mode="all" class="on">全部</button>
+      <button data-mode="manual">手写台</button>
+      <button data-mode="auto">自动台</button>
+      <label><input type="checkbox" id="mainonly"> 只看主干</label>
+      <span class="sp"></span>
+      <button data-z="in">＋</button>
+      <button data-z="out">－</button>
+      <button data-z="fit">适配</button>
+      <button data-z="reset">复位</button>
+    </div>
+    <div id="detail"></div>
+    <div id="stage">
+      <svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="badge" id="badge">—</div>
+    </div>
+    <p style="color:var(--dim);line-height:1.7;margin:10px 2px 0">
+      实线 = 真实存在的数据/控制流；虚线 = 分支（灰）· 断链（红）· 回环（蓝紫）。红虚线终点那些方块，就是「图上画得出来、程序里走不到」的部分。
+    </p>
+  </div>
+</div>
+
+<footer>
+  <h3>全量连线清单（步骤 N → 步骤 M，按流程顺序）</h3>
+  <table id="edges"></table>
+</footer>
+
+<script>
+(function(){
+  'use strict';
+
+  // ── 关系类型（颜色取自这里的十六进制，供 SVG 属性与 marker 使用，不用 var()）──
+  var KIND = {
+    boot:  {c:'#6b8cff', dash:'',    n:'启动 / 进程'},
+    gate:  {c:'#f0a020', dash:'',    n:'鉴权 / 门禁 / 校验'},
+    call:  {c:'#2dd4bf', dash:'',    n:'调用 / 挂载'},
+    stream:{c:'#c084fc', dash:'',    n:'流 / 供应商往返'},
+    data:  {c:'#4ade80', dash:'',    n:'落库 / 持久化'},
+    branch:{c:'#8f9fd0', dash:'4 4', n:'分支 / 旁路'},
+    dead:  {c:'#f0526d', dash:'5 5', n:'断链 / 死路'},
+    loop:  {c:'#7c8cff', dash:'2 5', n:'回环 / 下次启动'}
+  };
+
+  // ── 方块类型（描边色 + 中文名）──
+  var TYPE = {
+    entry:   {c:'#6b8cff', n:'入口'},
+    app:     {c:'#4fa8ff', n:'应用 / 壳'},
+    server:  {c:'#2dd4bf', n:'服务端'},
+    plugin:  {c:'#c084fc', n:'插件'},
+    lib:     {c:'#8f9fd0', n:'共享库'},
+    contract:{c:'#f0a020', n:'契约 / 能力'},
+    external:{c:'#4ade80', n:'外部服务'},
+    dead:    {c:'#f0526d', n:'断链 / 出仓'}
+  };
+
+  // ── 12 个阶段 ──
+  var STAGES = [
+    '① 入口：用户 → 壳进程',
+    '② 壳进程：拉起 server / 播种 / 更新',
+    '③ 服务端启动：模式归一 → 插件扫描',
+    '④ 服务端启动：模式闸门 → 中间件 → 路由',
+    '⑤ 壳握手 → Web 面引导',
+    '⑥ Web 面：挂载插件 → 扩展点落槽',
+    '⑦ 手写台装进界面',
+    '⑧ 动作 A：写正文（落库主线）',
+    '⑨ 动作 B：发起 AI 对话',
+    '⑩ 服务端 AI 链：门禁 → 分支',
+    '⑪ 智能体 → 供应商',
+    '⑫ 回流与落库 → 结尾'
+  ];
+
+  /* 方块：[id, 阶段, 横向(0=主干), 标题, 副标题, 类型, 模式, 依据, 备注, 旁支] */
+  var N = [
+    ['user', 0, 0, '用户入口', '双击图标 / 打开浏览器', 'entry', 'both',
+      'apps/desktop/src/main.ts:12-13',
+      '流程起点。壳进程按 ①userData ②单实例锁 ③paths ④logging ⑤首启播种 ⑥spawn+握手 ⑦建窗 loadURL 七步启动。', 0],
+    ['main', 0, -1, 'Electron 主进程', 'apps/desktop/src/main.ts', 'app', 'both',
+      'apps/desktop/src/main.ts:12-13,:271,:446',
+      '主进程只做编排：创建窗口与加载 origin 解耦（apps/desktop/src/window.ts:157 注释明说由调用方决定加载哪个 origin）。', 0],
+    ['win', 0, -2, '创建主窗口', 'BrowserWindow（不 loadURL）', 'app', 'both',
+      'apps/desktop/src/window.ts:157,171',
+      'D12.2 拆开的另一半：这里只建窗口，不决定页面来源。', 1],
+    ['spawn', 0, 1, 'spawn server 子进程', 'process.execPath + --import tsx', 'app', 'both',
+      'apps/desktop/src/server-process.ts:3,7-8,:501',
+      'D4.2 首选 import 方式；失败回退 tsx cli（main.ts:313 / :324）。', 0],
+    ['probe', 0, 2, 'stderr 端口握手', '+ /api/health 就绪探针', 'app', 'both',
+      'apps/desktop/src/main.ts:271,354 · server-process.ts:53',
+      'D5.1 握手 + D5.4 探针 + D5.3 总启动预算（:53）。就绪日志打印 plugins=N。', 0],
+    ['seed', 0, 3, '首启播种', 'app-server / web-dist → userData', 'app', 'both',
+      'apps/desktop/src/paths.ts:8-11,:652',
+      '关键一条 D7.3：<app-server>/data 做成指向 <userData>/data 的 junction，否则一次更新就把项目库换掉。', 1],
+    ['updater', 0, 4, '应用更新', '整体替换 app-runtime', 'app', 'both',
+      'apps/desktop/src/updater/index.ts:352,642,754',
+      '只替换 app-server / web-dist；替换前备份，失败回滚。结尾处回环到这条线。', 1],
+
+    ['hostmode', 1, 1, 'HOST_MODE 归一', 'all | manual | auto', 'server', 'both',
+      'apps/server/src/index.ts:26-31',
+      'normalizeHostMode(process.env.HOST_MODE)，缺省 all（开发态什么都不挡）。', 1],
+    ['scan', 1, 2, '插件扫描', 'modes ← 父目录名', 'server', 'both',
+      'apps/server/src/plugin/local-scanner.ts:148',
+      'manual/ · auto/ · shared/ 三个目录名直接变成插件模式；内置插件另走 builtin。', 0],
+    ['builtin', 1, 3, '内置插件注册', 'worldbuilding（动态 import）', 'plugin', 'manual',
+      'apps/server/src/plugin/builtin.ts:19,:55-65',
+      '全项目唯一「宿主 → 插件」硬依赖：apps/server/package.json:19 直接依赖 @novel-plugins/worldbuilding。', 1],
+
+    ['gate', 2, 1, '宿主模式闸门', 'HOST_MODE_FILTERED', 'server', 'both',
+      'apps/server/src/plugin/host.ts:842-859',
+      "hostMode !== 'all' 且插件 modes 既不含 shared 也不含 hostMode ⇒ 记 HOST_MODE_FILTERED 并跳过该插件。", 0],
+    ['mw', 2, 0, 'ensureConfigMiddleware', "guarded.use('*', …)", 'server', 'both',
+      'apps/server/src/plugin/host.ts:316-319',
+      'AI 供应商配置未就绪时，所有 /api 请求先被这一步拦下。', 0],
+    ['routes', 2, -1, '业务路由挂载', '/api/*（章节、AI、项目…）', 'server', 'both',
+      'apps/server/src/modules/*.ts',
+      'apps/server/src/modules/chapters.ts:118 PUT /api/chapters/:id；apps/server/src/modules/ai.ts:771 POST /ai/chat-stream 等 26 个 AI 路由注册。', 0],
+    ['health', 2, 4, '/api/health', 'plugins: […statuses]', 'server', 'both',
+      'apps/server/src/plugin/host.ts:706',
+      '壳进程的探针就是打这个端点拿插件状态表。', 1],
+
+    ['load', 3, -1, 'loadURL(origin)', '载入 Web SPA', 'app', 'both',
+      'apps/desktop/src/main.ts:446,:294',
+      'origin 来自端口握手；打包态由内嵌 server 提供静态资源。', 0],
+    ['webmain', 3, 0, 'mountAllWebPlugins', 'apps/web/src/main.tsx', 'app', 'both',
+      'apps/web/src/main.tsx:41-99',
+      '静态条目（:57 novel.worldbuilding modes [manual]）+ import.meta.glob 四个目录（:70-75）。', 0],
+    ['glob', 3, -2, 'glob 四目录 → 模式推导', 'pluginModeFromDir', 'app', 'both',
+      'apps/web/src/main.tsx:70-75,:79-83',
+      'manual / auto / shared / local 四个目录；local 归为 shared。', 0],
+    ['blocked', 3, 2, '单入口失败隔离', 'blocked(id) + console.error', 'app', 'both',
+      'apps/web/src/main.tsx:44-47,:95-97',
+      '每个插件入口单独 try/catch：一个插件炸掉只禁用自己，不影响其它插件与内核。', 1],
+    ['login', 3, -3, '登录态', 'JWT 内存 + HttpOnly Cookie', 'app', 'both',
+      'apps/plugins/shared/data-core/src/api/apiClient.ts:9,19-23',
+      'C4 起不再把 JWT 写 localStorage；所有 AI/业务请求过 requireAuth。', 1],
+
+    ['mount', 4, -1, 'createWebPluginContext(id, modes)', 'mountWebPlugin 逐入口挂载', 'app', 'both',
+      'apps/web/src/plugin/host.ts:38,:205-224',
+      '挂载时把插件模式带进上下文，供随后每个扩展点盖章。', 0],
+    ['slots', 4, 0, '扩展点落槽', 'projectPanels / builtinPanels / workbenches…', 'app', 'both',
+      'apps/web/src/plugin/host.ts:34-36（withModes 11 处）· apps/web/src/plugin/registry.ts',
+      'withModes 给 11 个 UI 扩展点盖章；能力（capability）刻意不盖章 —— 这是两边共享的接口面。', 0],
+
+    ['mwp', 5, 0, 'novel.manual.workbench', '手写台 Web 入口', 'plugin', 'manual',
+      'apps/plugins/manual/workbench/web/index.tsx:52-54',
+      '12 个 projectPanel + chapters 槽 + ai-chat 面板；AI 对话面板已从 auto 模块移交到这里。', 0],
+    ['p.chapters', 5, -1, 'chapters 面板', '章节列表 / 槽位 dock=left', 'plugin', 'manual',
+      'apps/plugins/manual/workbench/web/index.tsx:63-80',
+      '手写台默认打开的面板（panelOpenStore: manual 默认 [chapters, ai-chat]）。', 0],
+    ['p.aichat', 5, 1, 'ai-chat 面板', 'label「AI 对话」', 'plugin', 'manual',
+      'apps/plugins/manual/workbench/web/index.tsx:88-96',
+      'React.lazy 懒加载 + preload（:118-125）；auto 模块同名面板已删，仅剩留档文件。', 0],
+    ['editor', 5, -2, 'EditorPage / ChapterEditor', '正文编辑器', 'plugin', 'manual',
+      'apps/plugins/manual/workbench/web/editor/EditorPage.tsx:29,129',
+      '编辑正文 → 内存 Zustand store → 异步落库；两条路都要过这里。', 0],
+    ['stores', 5, -3, 'data-core 实体 store', 'Zustand（章节/角色/事件…）', 'lib', 'both',
+      'apps/plugins/shared/data-core/src/stores/*',
+      '两模块共用的最小面：共享库。它不是「互相引用」，而是同一条公共依赖。', 1],
+    ['cap', 5, 2, "getCapability('ai.*')", '5 个能力名的读侧', 'contract', 'both',
+      'apps/web/src/plugin/registry.ts:389-391 · packages/core/src/manifest.ts:87-93',
+      '能力 = 唯一「两边都能引用」的代码级通道：一边注册实现、另一边按名消费，缺席时静默降级。仓内 0 个提供方。', 0],
+
+    ['save', 6, -2, 'saveChapter()', '表 → API 路径映射', 'lib', 'both',
+      'apps/plugins/shared/data-core/src/data/databaseService.ts:35,67,131',
+      "'Chapters' → '/chapters'；null 字段要剥掉，否则 PUT 400（silent 模式静默失败）。", 0],
+    ['put', 6, -1, 'apiClient 发 PUT', 'base = VITE_API_BASE_URL || /api', 'lib', 'both',
+      'apps/plugins/shared/data-core/src/api/apiClient.ts:386,433-434',
+      '同步走 syncService（:89 POST 新建 / :97,:109 PUT 已存在，防竞态与项目串写）。', 0],
+    ['chaproute', 6, 0, 'PUT /api/chapters/:id', '服务端写入口', 'server', 'both',
+      'apps/server/src/modules/chapters.ts:118,142,186',
+      '同族端点：DELETE :142 软删除进回收站、:186 reorder。', 0],
+    ['cache', 6, -3, 'localStorage 正文兜底', '按 chapterId 同步缓存', 'lib', 'both',
+      'apps/plugins/shared/data-core/src/data/chapterLocalCache.ts:4-9,24',
+      'HMR / 刷新 / 关页时异步 PUT 可能没回来，所以额外同步缓存一份作兜底。', 1],
+
+    ['panel', 7, 0, 'AiChatPanel 本地 state', 'useState 存 messages', 'plugin', 'manual',
+      'apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx:177-205',
+      '消息不进共享 store（模块内组件态）⇒ 两边没有共享数据面；:135 卸载兜底 abort。', 0],
+    ['fetch', 7, -1, "fetch('/ai/chat-stream')", 'resolveApiUrl 拼 base', 'plugin', 'manual',
+      'apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx:213,:282,:286',
+      'handleSubmit 触发，handleStop 走 AbortController 中断。', 0],
+    ['body', 7, -2, '请求体', '{userMessage, phase, conversationHistory…}', 'plugin', 'manual',
+      'apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx:218-227',
+      '只有 userMessage / phase「小说对话」/ conversationHistory / 项目与章节名。不传 enableTools / enableAgent / skillId。', 0],
+    ['deadTools', 7, 1, '工具 / Agent 分支', '服务端有此分支，前端不触发', 'dead', 'manual',
+      'apps/server/src/modules/ai.ts:908-916 · apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx:218-227',
+      '分支条件读 enableTools/enableAgent，前端恒不传 ⇒ 永远走普通对话。', 1],
+    ['dScan', 7, 2, 'ai.scan 无提供方', '对应端点已实现', 'dead', 'manual',
+      'apps/plugins/manual/workbench/web/hooks/useAutoEntityDetection.ts:683',
+      '前端按能力取实现，取不到就静默 return；服务端 /ai/scan-timeline-stream:389 已就绪但没有注册者。', 1],
+    ['dTimeline', 7, 3, 'Timeline 抽取静默', '按钮照渲染，点了没反应', 'dead', 'manual',
+      'apps/plugins/manual/workbench/web/timeline/TimelineView.tsx:151,157,158,249-258',
+      'if (!extractCap) return —— 注释写「入口隐藏」，实际按钮无条件渲染。', 1],
+    ['dQuick', 7, 4, 'AI 快语兜底', '能力缺失回落启发式', 'dead', 'manual',
+      'apps/plugins/manual/workbench/web/editor/panels/QuickPhraseBubble.tsx:196-197 · apps/plugins/manual/workbench/web/editor/panels/quickPhraseHeuristic.ts:15',
+      'ai.quickPhrases 取不到时用本地启发式凑几句，用户看不出是降级。', 1],
+
+    ['cfg', 8, -2, '用户配置读取', '配置落在 user_settings', 'server', 'both',
+      'apps/server/src/ai/user-config-loader.ts:74',
+      'ensureConfigMiddleware 的落点：没有配置就直接 428，不会走到智能体。', 0],
+    ['mwai', 8, 0, 'AI 路由中间件链', 'requireAuth → 配置 → 限流 → zod', 'server', 'both',
+      'apps/server/src/modules/ai.ts:771,:777',
+      '日志里记录了 enableTools/enableAgent/skillId —— 正是前端不传的那三个字段。', 0],
+    ['branch', 8, 1, '分支判定', 'chat / tools / agent', 'server', 'both',
+      'apps/server/src/modules/ai.ts:908-916',
+      '三个分支都在，但只有 chat 会被走到。', 0],
+    ['pygw', 8, 3, 'Python agents 旁路', '/api/ai/gateway', 'external', 'both',
+      'apps/agents/src/novelmuse_agents/main.py:3',
+      'Python 侧为 TS 后端的 /ai/gateway 提供 HTTP；该端点在仓内无前端调用点。', 1],
+
+    ['agent', 9, 0, 'chat-agent', 'runChatAgentSimpleStream', 'server', 'both',
+      'apps/server/src/ai/agents/chat-agent.ts:828',
+      '首帧先声明由谁作答，再流式吐内容。', 0],
+    ['factory', 9, -1, 'provider-factory', '断路器 / 出站白名单 / 内置中转', 'server', 'both',
+      'apps/server/src/ai/providers/provider-factory.ts:5,6,7',
+      'CircuitBreaker(:5) + assertSafeOutboundUrl(:6) + getBuiltinRelay(:7)。', 0],
+    ['provider', 9, 1, '大模型供应商', 'openai | ollama | custom', 'external', 'both',
+      "apps/server/src/ai/providers/provider-factory.ts（AIProviderType）",
+      '三选一，可以走内置中转站（：7）。手写台没有专属 provider —— 全项目共用用户级这条链。', 0],
+
+    ['sse', 10, 0, 'SSE 帧解析', 'splitFrames / parseFrame / readSseStream', 'plugin', 'manual',
+      'apps/plugins/manual/workbench/web/ai/sse.ts',
+      '模块内自带一份（auto 侧留档文件仅供其单测引用）。', 0],
+    ['render', 10, -1, '文案提取 → 界面', 'body 的 message/error 优先', 'plugin', 'manual',
+      'apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx:230-247',
+      '流式回填到占位消息，最终 status: done。', 0],
+    ['db', 10, -2, '双库存储', '主库 sql.js + 项目库 better-sqlite3', 'lib', 'both',
+      'apps/server/src/services/base-service.ts:8 · apps/server/src/services/chapter-service.ts:41',
+      "scope='project' 走 getProjectDbSync(projectId) 增量写入；主库是内存库，改动要落盘。", 0],
+    ['disk', 10, -3, 'saveToDisk(true)', '主库强制持久化', 'lib', 'both',
+      'apps/server/src/modules/ai.ts:1638-1640 · apps/server/src/services/chapter-service.ts:41',
+      'sql.js 是内存数据库，不手动落盘重启即丢。', 0],
+    ['local', 10, -4, 'localStorage 面', '正文缓存 / AI 对话 / 大纲 / 统计', 'lib', 'both',
+      'apps/plugins/shared/data-core/src/data/localUserData.ts:4,17,36',
+      '清理按 localStorage 键前缀走，不引用 auto 的 store ⇒ auto 缺席时只清本地、不报错。', 1],
+
+    ['done', 11, 0, '结尾：内容落库 + 界面回填', '消息 status: done · 章节已写', 'lib', 'both',
+      'apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx:230-247 · apps/server/src/modules/chapters.ts:118 · apps/server/src/services/base-service.ts:8',
+      '一次操作的终点：界面拿到结果、数据进了项目库。', 0],
+    ['next', 11, 1, '下一次启动', '回环到「应用更新 / 播种」', 'app', 'both',
+      'apps/desktop/src/updater/index.ts:642,754',
+      '应用更新只替换 app-runtime 里的 app-server / web-dist，data 走 junction 保住。', 1],
+    ['dRoutes', 11, 2, '12 条路径 / 19 个注册', 'AI 路由已实现，前端无调用点', 'dead', 'both',
+      'apps/server/src/modules/ai.ts:364,389,480,710,1157,1239,1360,1491,1545,1906,1743,1763',
+      '服务端共 26 个 AI 路由注册：5 条有消费者、1 条孤儿、19 个（12 条路径）没有前端入口。', 1],
+    ['dConsist', 11, 3, '一致性检查孤儿', '调用点在，面板出仓', 'dead', 'manual',
+      'apps/plugins/manual/workbench/web/services/misc/consistencyService.ts:38 · apps/server/src/modules/ai.ts:551',
+      'consistencyService 会打 /ai/check-consistency，但仓内没有 ConsistencyPanel。', 1],
+    ['dRewrite', 11, -1, '顶栏重写是死事件', 'nm:rewrite 无监听者', 'dead', 'both',
+      'apps/web/src/components/shell/ProjectLayout.tsx:380,385',
+      '派发 new CustomEvent("nm:rewrite")，全仓 grep 只有派发点没有 addEventListener。', 1]
+  ];
+
+  /* 连线：[起点, 终点, 类型, 依据] */
+  var E = [
+    ['user','main','boot','apps/desktop/src/main.ts:12-13（七步启动）'],
+    ['main','win','boot','apps/desktop/src/window.ts:157（只建窗，不 loadURL）'],
+    ['main','spawn','boot','apps/desktop/src/main.ts:271'],
+    ['spawn','probe','boot','apps/desktop/src/server-process.ts:3,:53'],
+    ['probe','load','boot','apps/desktop/src/main.ts:446'],
+    ['seed','spawn','branch','apps/desktop/src/paths.ts:652（data junction 就位后 server 才起）'],
+    ['updater','seed','loop','apps/desktop/src/updater/index.ts:642,754'],
+    ['probe','health','boot','apps/desktop/src/main.ts:354（探针打 /api/health）'],
+
+    ['spawn','hostmode','boot','apps/desktop/src/main.ts:313（子进程内再读 HOST_MODE）'],
+    ['hostmode','scan','boot','apps/server/src/index.ts:26-31 → plugin/local-scanner.ts:148'],
+    ['scan','builtin','call','apps/server/src/plugin/builtin.ts:19'],
+
+    ['scan','gate','gate','apps/server/src/plugin/host.ts:842-859'],
+    ['gate','mw','call','apps/server/src/plugin/host.ts:316-319'],
+    ['mw','routes','call','apps/server/src/modules/*.ts'],
+
+    ['load','webmain','call','apps/desktop/src/main.ts:446 → apps/web/src/main.tsx:41-99'],
+    ['webmain','glob','boot','apps/web/src/main.tsx:70-75'],
+    ['webmain','blocked','branch','apps/web/src/main.tsx:44-47,:95-97'],
+    ['login','mwai','gate','apps/server/src/modules/ai.ts:771（requireAuth）'],
+    ['login','chaproute','gate','apps/server/src/modules/chapters.ts:118（requireAuth + 项目作用域）'],
+
+    ['glob','mount','call','apps/web/src/main.tsx:93（mountWebPlugin(id, load, modes)）'],
+    ['webmain','mount','call','apps/web/src/plugin/host.ts:205-224'],
+    ['mount','slots','call','apps/web/src/plugin/host.ts:34-36（withModes 11 处）'],
+    ['mount','cap','call','apps/web/src/plugin/registry.ts:389-391（唯一不盖章的扩展点）'],
+
+    ['slots','mwp','call','apps/plugins/manual/workbench/web/index.tsx:52-54'],
+    ['mwp','p.chapters','boot','apps/plugins/manual/workbench/web/index.tsx:63-80'],
+    ['mwp','p.aichat','boot','apps/plugins/manual/workbench/web/index.tsx:88-96'],
+    ['p.chapters','editor','call','apps/plugins/manual/workbench/web/editor/EditorPage.tsx:29'],
+    ['editor','stores','data','apps/plugins/shared/data-core/src/stores/*'],
+
+    ['editor','save','call','apps/plugins/manual/workbench/web/editor/EditorPage.tsx:129'],
+    ['save','put','call','apps/plugins/shared/data-core/src/data/databaseService.ts:35,67 ^ apiClient.ts:386'],
+    ['put','chaproute','call','apps/plugins/shared/data-core/src/api/apiClient.ts:433-434'],
+    ['save','cache','branch','apps/plugins/shared/data-core/src/data/chapterLocalCache.ts:4-9'],
+    ['chaproute','db','data','apps/server/src/modules/chapters.ts:118 → services/base-service.ts:8'],
+
+    ['p.aichat','panel','boot','apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx:177-205'],
+    ['panel','fetch','call','apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx:213'],
+    ['fetch','body','call','apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx:218-227'],
+    ['body','mwai','call','POST /api/ai/chat-stream → apps/server/src/modules/ai.ts:771'],
+    ['body','deadTools','dead','apps/server/src/modules/ai.ts:908-916（缺 enableTools/enableAgent）'],
+    ['cap','dScan','dead','apps/plugins/manual/workbench/web/hooks/useAutoEntityDetection.ts:683'],
+    ['cap','dTimeline','dead','apps/plugins/manual/workbench/web/timeline/TimelineView.tsx:157'],
+    ['cap','dQuick','dead','apps/plugins/manual/workbench/web/editor/panels/QuickPhraseBubble.tsx:196-197 → apps/plugins/manual/workbench/web/editor/panels/quickPhraseHeuristic.ts:15'],
+
+    ['mwai','cfg','gate','apps/server/src/ai/user-config-loader.ts:74'],
+    ['mwai','branch','call','apps/server/src/modules/ai.ts:908-916'],
+    ['mwai','pygw','branch','apps/agents/src/novelmuse_agents/main.py:3（/api/ai/gateway）'],
+
+    ['branch','agent','call','apps/server/src/ai/agents/chat-agent.ts:828'],
+    ['agent','factory','call','apps/server/src/ai/providers/provider-factory.ts:5,6,7'],
+    ['factory','provider','stream','apps/server/src/ai/providers/provider-factory.ts（三选一）'],
+    ['pygw','factory','branch','Python 旁路复用同一供应商链'],
+
+    ['provider','sse','stream','SSE 流回前端（apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx:213 的响应体）'],
+    ['sse','render','stream','apps/plugins/manual/workbench/web/ai/sse.ts'],
+    ['render','done','call','apps/plugins/manual/workbench/web/ai/AiChatPanel.tsx:230-247'],
+    ['db','disk','data','apps/server/src/modules/ai.ts:1638-1640 · apps/server/src/services/chapter-service.ts:41'],
+    ['render','local','branch','apps/plugins/shared/data-core/src/data/databaseService.ts:138（silent PUT 失败不弹提示）'],
+    ['disk','local','branch','apps/plugins/shared/data-core/src/data/localUserData.ts:4'],
+
+    ['done','next','loop','apps/desktop/src/updater/index.ts:642'],
+    ['slots','dRewrite','dead','apps/web/src/components/shell/ProjectLayout.tsx:385'],
+    ['dScan','dRoutes','dead','apps/server/src/modules/ai.ts:389（实现有、注册者无）'],
+    ['dRoutes','dConsist','dead','apps/plugins/manual/workbench/web/services/misc/consistencyService.ts:38']
+  ];
+
+  /* 步骤号：索引 + 1 即方块左上角的序号 */
+  var SEQ = ['user','main','win','spawn','probe','seed','updater',
+    'hostmode','scan','builtin',
+    'gate','mw','routes','health',
+    'load','webmain','glob','blocked','login',
+    'mount','slots',
+    'mwp','p.chapters','p.aichat','editor','stores','cap',
+    'save','put','chaproute','cache',
+    'panel','fetch','body','deadTools','dScan','dTimeline','dQuick',
+    'cfg','mwai','branch','pygw',
+    'agent','factory','provider',
+    'sse','render','db','disk','local',
+    'done','next','dRoutes','dConsist','dRewrite'];
+
+  // ── 几何 ──
+  var W = 196, H = 56, LANE = 226, STAGE_H = 128, GUTTER = 196, Y0 = 44;
+  var xOf = function(lane){ return GUTTER + (lane + 4) * LANE; };
+  var yOf = function(stage){ return Y0 + stage * STAGE_H; };
+
+  var byId = {};
+  N.forEach(function(t){
+    var o = { id:t[0], stage:t[1], lane:t[2], label:t[3], sub:t[4], type:t[5], modes:t[6],
+      ev:t[7], note:t[8], side:!!t[9] };
+    o.x = xOf(o.lane); o.y = yOf(o.stage); o.seq = SEQ.indexOf(o.id) + 1;
+    byId[o.id] = o;
+  });
+
+  var edges = E.map(function(t){
+    return { a:byId[t[0]], b:byId[t[1]], kind:t[2], ev:t[3] };
+  }).filter(function(e){ return e.a && e.b; });
+
+  // 数据自检：类型/关系键写错时回落到默认值，避免一处笔误让整页空白
+  N.forEach(function(n){
+    if (!TYPE[n.type]){ console.warn('[entry-to-end-flow] 未知方块类型', n.id, n.type); n.type = 'lib'; }
+  });
+  edges.forEach(function(e){
+    if (!KIND[e.kind]){ console.warn('[entry-to-end-flow] 未知关系类型', e.a.id, '→', e.b.id, e.kind); e.kind = 'call'; }
+  });
+
+  function pathOf(a, b){
+    // 同一阶段：左右侧出线的小 S 曲线
+    if (a.stage === b.stage){
+      var right = b.x >= a.x;
+      var ax = a.x + (right ? W : 0), bx = b.x + (right ? 0 : W);
+      var ay = a.y + H / 2, by = b.y + H / 2;
+      var k = right ? 28 : -28;
+      return 'M ' + ax + ',' + ay + ' C ' + (ax + k) + ',' + ay + ' ' + (bx - k) + ',' + by + ' ' + bx + ',' + by;
+    }
+    // 跨阶段：先下行、再横移、再下行（正交折线，长距离也干净）
+    var sx = a.x + W / 2, ex = b.x + W / 2, sy = a.y + H, ty = b.y;
+    var my = sy + Math.max(16, (ty - sy) * 0.45);
+    return 'M ' + sx + ',' + sy + ' L ' + sx + ',' + my + ' L ' + ex + ',' + my + ' L ' + ex + ',' + ty;
+  }
+
+  var S = 'http://www.w3.org/2000/svg';
+  var svg = document.getElementById('svg');
+  var badge = document.getElementById('badge');
+  var detail = document.getElementById('detail');
+  var root, gEdges, gNodes, gBands;
+
+  function el(name, attrs, text){
+    var n = document.createElementNS(S, name);
+    if (attrs) for (var k in attrs) if (attrs[k] !== null && attrs[k] !== undefined) n.setAttribute(k, attrs[k]);
+    if (text !== undefined && text !== null) n.textContent = String(text);
+    return n;
+  }
+
+  var showGhost = true; // 保留位（断链默认显示）
+  var visibleKinds = {};
+  Object.keys(KIND).forEach(function(k){ visibleKinds[k] = true; });
+  var mode = 'all', mainOnly = false, query = '', sel = null;
+  var sc = 1, tx = 0, ty = 0;
+
+  function visible(n){
+    if (mainOnly && n.side) return false;
+    if (mode === 'manual' && n.modes === 'auto') return false;
+    if (mode === 'auto' && n.modes === 'manual') return false;
+    if (query){
+      var hay = (n.label + ' ' + n.sub + ' ' + n.ev + ' ' + n.note + ' ' + n.id).toLowerCase();
+      if (hay.indexOf(query) < 0) return false;
+    }
+    return true;
+  }
+  function visibleEdge(e){ return visibleKinds[e.kind]; }
+
+  function build(){
+    svg.innerHTML = '';
+    root = el('g', { id:'root' });
+    svg.appendChild(root);
+    var defs = el('defs');
+    Object.keys(KIND).forEach(function(k){
+      var m = el('marker', { id:'arw-' + k, viewBox:'0 0 10 10', refX:'9', refY:'5',
+        markerWidth:'6', markerHeight:'6', orient:'auto-start-reverse' });
+      m.appendChild(el('path', { d:'M 0 0 L 10 5 L 0 10 z', fill:KIND[k].c }));
+      defs.appendChild(m);
+    });
+    root.appendChild(defs);
+
+    var maxX = 0, maxY = 0;
+    N.forEach(function(n){ maxX = Math.max(maxX, n.x + W); maxY = Math.max(maxY, n.y + H); });
+
+    gBands = el('g'); gEdges = el('g'); gNodes = el('g');
+    root.appendChild(gBands); root.appendChild(gEdges); root.appendChild(gNodes);
+
+    STAGES.forEach(function(txt, i){
+      var y = yOf(i) - 26;
+      gBands.appendChild(el('rect', { x:14, y:y - 14, width:(maxX - 14 + 26), height:100,
+        rx:10, 'class':'stageband' }));
+      gBands.appendChild(el('text', { x:28, y:y + 4, 'class':'stagetxt' }, txt));
+    });
+
+    edges.forEach(function(e){
+      var p = el('path', { d:pathOf(e.a, e.b), 'class':'edge',
+        stroke:KIND[e.kind].c, 'stroke-dasharray':KIND[e.kind].dash || null,
+        'marker-end':'url(#arw-' + e.kind + ')' });
+      p.appendChild(el('title', null, e.a.seq + ' ' + e.a.label + ' ——' + KIND[e.kind].n + '→ ' + e.b.seq + ' ' + e.b.label
+        + "\n依据：" + e.ev));
+      e.node = p;
+      gEdges.appendChild(p);
+    });
+
+    N.forEach(function(n){
+      var g = el('g', { 'class':'node', 'data-id':n.id });
+      var col = TYPE[n.type].c;
+      g.appendChild(el('rect', { x:n.x, y:n.y, width:W, height:H, rx:9, stroke:col }));
+      g.appendChild(el('rect', { x:n.x, y:n.y, width:4, height:H, fill:col, rx:2 }));
+      g.appendChild(el('text', { x:n.x + 12, y:n.y + 24, 'class':'nl' }, n.label));
+      g.appendChild(el('text', { x:n.x + 12, y:n.y + 42, 'class':'ns' }, n.sub));
+      g.appendChild(el('text', { x:n.x + W - 10, y:n.y + 15, 'class':'bdg', 'text-anchor':'end' }, '#' + n.seq));
+      g.appendChild(el('title', null, '#' + n.seq + ' ' + n.label + '（' + TYPE[n.type].n + '）\n' + n.sub + '\n' + n.ev));
+      n.g = g;
+      g.addEventListener('click', function(){ select(n.id); });
+      gNodes.appendChild(g);
+    });
+
+    sizeView();
+    apply();
+    render();
+  }
+
+  // 视口：viewBox = 当前可见像素区，内容坐标即像素，缩放/平移全部由 root 的 transform 承担
+  function sizeView(){
+    var vw = svg.clientWidth || 1200, vh = svg.clientHeight || 620;
+    svg.setAttribute('viewBox', '0 0 ' + vw + ' ' + vh);
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  }
+
+  function apply(){
+    if (root) root.setAttribute('transform', 'translate(' + tx + ',' + ty + ') scale(' + sc + ')');
+  }
+
+  function render(){
+    var shown = 0;
+    N.forEach(function(n){
+      var on = visible(n);
+      if (on) shown++;
+      if (on) n.g.removeAttribute('display'); else n.g.setAttribute('display', 'none');
+      n.g.setAttribute('class', 'node' + (on && sel === n.id ? ' sel' : ''));
+    });
+    edges.forEach(function(e){
+      var on = visibleEdge(e) && visible(e.a) && visible(e.b);
+      if (on) e.node.removeAttribute('display'); else e.node.setAttribute('display', 'none');
+    });
+    var kindsOn = Object.keys(KIND).filter(function(k){ return visibleKinds[k]; }).length;
+    badge.textContent = '显示 ' + shown + ' / ' + N.length + ' 个方块 · ' + kindsOn + ' / ' + Object.keys(KIND).length
+      + ' 类关系 · 可见连线 '
+      + edges.filter(function(e){ return visibleEdge(e) && visible(e.a) && visible(e.b); }).length + ' / ' + edges.length
+      + (mode === 'all' ? '' : ' · 模式：' + (mode === 'manual' ? '手写台' : '自动台'))
+      + (mainOnly ? ' · 只看主干' : '') + (query ? ' · 搜索“' + query + '”' : '');
+  }
+
+  // ── 选择 / 高亮 ──
+  function nei(id){
+    var s = {}, out = [], inn = [];
+    edges.forEach(function(e){
+      if (e.a.id === id){ out.push(e); s[e.b.id] = 1; }
+      if (e.b.id === id){ inn.push(e); s[e.a.id] = 1; }
+    });
+    return { set:s, out:out, inn:inn };
+  }
+
+  function select(id){
+    sel = id;
+    var n = byId[id];
+    var r = nei(id);
+    var h = ['<h4>#' + n.seq + ' ' + n.label + '</h4>'];
+    h.push('<div class="meta"><span class="pill" style="border-color:' + TYPE[n.type].c + '">' + TYPE[n.type].n + '</span>'
+      + '<span class="pill">阶段 ' + (n.stage + 1) + '：' + STAGES[n.stage].replace(/^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫]\s*/, '') + '</span>'
+      + (n.side ? '<span class="pill">旁支</span>' : '<span class="pill">主干</span>')
+      + '<span class="pill">' + (n.modes === 'both' ? '手写 + 自动共享' : (n.modes === 'manual' ? '手写台' : '自动台')) + '</span></div>');
+    h.push('<div class="row"><span class="lbl">副标题</span>' + esc(n.sub) + '</div>');
+    h.push('<div class="row"><span class="lbl">依据</span><span class="ev">' + esc(n.ev) + '</span></div>');
+    h.push('<div class="row" style="line-height:1.7">' + esc(n.note) + '</div>');
+    if (r.out.length){
+      h.push('<div class="row"><span class="lbl">下游</span>' + r.out.map(function(e){
+        return '<span class="pill hot-nei" data-go="' + e.b.id + '" style="cursor:pointer">#' + e.b.seq + ' ' + esc(e.b.label)
+          + ' <span class="ev" style="color:' + KIND[e.kind].c + '">' + KIND[e.kind].n + '</span></span>';
+      }).join('') + '</div>');
+    }
+    if (r.inn.length){
+      h.push('<div class="row"><span class="lbl">上游</span>' + r.inn.map(function(e){
+        return '<span class="pill hot-nei" data-go="' + e.a.id + '" style="cursor:pointer">#' + e.a.seq + ' ' + esc(e.a.label)
+          + ' <span class="ev" style="color:' + KIND[e.kind].c + '">' + KIND[e.kind].n + '</span></span>';
+      }).join('') + '</div>');
+    }
+    detail.innerHTML = h.join('');
+    detail.style.display = 'block';
+    Array.prototype.forEach.call(detail.querySelectorAll('[data-go]'), function(b){
+      b.addEventListener('click', function(){ select(b.getAttribute('data-go')); });
+    });
+    render();
+  }
+  function deselect(){ sel = null; detail.style.display = 'none'; render(); }
+
+  function esc(s){
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // ── 视口 ──
+  function fit(){
+    var xs = [], ys = [];
+    N.forEach(function(n){ if (visible(n)){ xs.push(n.x); xs.push(n.x + W); ys.push(n.y); ys.push(n.y + H); } });
+    if (!xs.length) return;
+    var bx = Math.min.apply(null, xs), bxx = Math.max.apply(null, xs);
+    var byy = Math.min.apply(null, ys), byyy = Math.max.apply(null, ys);
+    var vw = svg.clientWidth || 1200, vh = svg.clientHeight || 620;
+    var pad = 26;
+    sc = Math.min((vw - pad * 2) / (bxx - bx), (vh - pad * 2) / (byyy - byy));
+    if (!isFinite(sc) || sc <= 0) sc = 1;
+    sc = Math.max(0.18, Math.min(sc, 1.6));
+    tx = -bx * sc + (vw - (bxx - bx) * sc) / 2;
+    ty = -byy * sc + (vh - (byyy - byy) * sc) / 2;
+    apply();
+  }
+  // 回到「起点」视图：主干列居中、第 ① 阶段贴顶（从入口开始往下滚）
+  function home(){
+    var vw = svg.clientWidth || 1200;
+    sc = 1;
+    tx = Math.round((vw - W) / 2 - xOf(0));
+    ty = 26 - Y0;
+    apply();
+  }
+  function reset(){ home(); }
+
+  // ── 清单表 ──
+  function table(){
+    var t = document.getElementById('edges');
+    var hi = ['<thead><tr><th style="width:78px">步骤</th><th>起点</th><th style="width:132px">关系</th><th>终点</th>'
+      + '<th>依据（文件:行号 或 契约）</th></tr></thead><tbody>'];
+    edges.forEach(function(e){
+      hi.push('<tr class="er clk" data-i="' + edges.indexOf(e) + '">'
+        + '<td class="mono">#' + e.a.seq + ' → #' + e.b.seq + '</td>'
+        + '<td>#' + e.a.seq + ' ' + esc(e.a.label) + '</td>'
+        + '<td><span class="kdot" style="background:' + KIND[e.kind].c + '"></span>' + KIND[e.kind].n + '</td>'
+        + '<td>#' + e.b.seq + ' ' + esc(e.b.label) + '</td>'
+        + '<td class="ev">' + esc(e.ev) + '</td></tr>');
+    });
+    hi.push('</tbody>');
+    t.innerHTML = hi.join('');
+    Array.prototype.forEach.call(t.querySelectorAll('tr.er'), function(tr){
+      var e = edges[Number(tr.getAttribute('data-i'))];
+      tr.addEventListener('mouseenter', function(){
+        Array.prototype.forEach.call(t.querySelectorAll('tr.er.hot'), function(o){ o.classList.remove('hot'); });
+        tr.classList.add('hot');
+        e.node.classList.add('hot');
+        e.a.g.classList.add('hit'); e.b.g.classList.add('hit');
+      });
+      tr.addEventListener('mouseleave', function(){
+        tr.classList.remove('hot'); e.node.classList.remove('hot');
+        e.a.g.classList.remove('hit'); e.b.g.classList.remove('hit');
+      });
+      tr.addEventListener('click', function(){ select(e.a.id); });
+    });
+  }
+
+  // ── 交互 ──
+  document.getElementById('q').addEventListener('input', function(ev){
+    query = String(ev.target.value || '').trim().toLowerCase();
+    render();
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-mode]'), function(b){
+    b.addEventListener('click', function(){
+      mode = b.getAttribute('data-mode');
+      Array.prototype.forEach.call(document.querySelectorAll('[data-mode]'), function(o){ o.classList.toggle('on', o === b); });
+      render();
+    });
+  });
+  document.getElementById('mainonly').addEventListener('change', function(ev){
+    mainOnly = !!ev.target.checked; render();
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-z]'), function(b){
+    b.addEventListener('click', function(){
+      var z = b.getAttribute('data-z');
+      if (z === 'fit') fit();
+      else if (z === 'reset') reset();
+      else if (z === 'in'){ sc = Math.min(sc * 1.18, 4); apply(); }
+      else { sc = Math.max(sc / 1.18, 0.15); apply(); }
+    });
+  });
+  svg.addEventListener('wheel', function(ev){
+    ev.preventDefault();
+    if (ev.ctrlKey){
+      var r = svg.getBoundingClientRect();
+      var mx = ev.clientX - r.left, my = ev.clientY - r.top;
+      var ns = Math.max(0.15, Math.min(4, sc * (ev.deltaY < 0 ? 1.12 : 1 / 1.12)));
+      tx = mx - (mx - tx) * (ns / sc);
+      ty = my - (my - ty) * (ns / sc);
+      sc = ns;
+    } else {
+      tx -= ev.deltaX;
+      ty -= ev.deltaY;
+    }
+    apply();
+  }, { passive:false });
+  window.addEventListener('resize', function(){ sizeView(); apply(); });
+  document.addEventListener('keydown', function(ev){
+    if (ev.target && /input|textarea/i.test(ev.target.tagName)) return;
+    var k = ev.key;
+    if (k === 'Escape') deselect();
+    else if (k === 'f') fit();
+    else if (k === 'm'){ mainOnly = !mainOnly; document.getElementById('mainonly').checked = mainOnly; render(); }
+    else if (k === '1' || k === '2' || k === '3'){
+      var m = k === '1' ? 'all' : (k === '2' ? 'manual' : 'auto');
+      Array.prototype.forEach.call(document.querySelectorAll('[data-mode]'), function(o){
+        if (o.getAttribute('data-mode') === m){ o.click(); }
+      });
+    }
+  });
+  Array.prototype.forEach.call(Object.keys(KIND), function(k){
+    var l = document.createElement('label');
+    l.innerHTML = '<input type="checkbox" checked> <span class="kdot" style="background:' + KIND[k].c + '"></span>' + KIND[k].n;
+    l.querySelector('input').addEventListener('change', function(ev){
+      visibleKinds[k] = !!ev.target.checked; render();
+    });
+    document.querySelector('.toolbar').insertBefore(l, document.querySelector('.toolbar .sp'));
+  });
+
+  build();
+  table();
+  render();
+  home();
+})();
+</script>
+</body>
+</html>
