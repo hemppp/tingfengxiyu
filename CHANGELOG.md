@@ -274,6 +274,15 @@ reseeded=true`（buildId `3b4093c6…` → **`484046b7fdc335afe040d4af0f04676b`*
   `apps/plugins/manual/workbench/web/__tests__/`，import 改为 `'../panels'`，
   `node scripts/verify/verify-workbench-isolation.mjs` 现 **EXIT=0**。
 
+### 新增（2026-10-07 查询缓存）
+
+- **`useCachedQuery` 查询缓存**：新增 `@novel-plugins/data-core/hooks/useCachedQuery`
+  与集中式 `queryKeys`（`apps/web/src/services/api/queryKeys.ts`），对项目元信息 /
+  章节计数 / 管理员概览 / 插件清单等读多写少的查询做进程内缓存与失效；
+  `apps/web/src/hooks/useCachedQuery.ts` 为兼容再导出壳。
+  接入点：`ProjectLayout`（从 URL bookId 恢复项目）、`BookshelfPage`、
+  `ProjectIndexPage`、`AdminPage`、`PluginManagerSection`。
+
 ### 已知限制
 
 - 桌面端产物**未做代码签名**：首次运行会触发 Windows SmartScreen 提示，

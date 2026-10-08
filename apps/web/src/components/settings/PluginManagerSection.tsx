@@ -5,9 +5,11 @@
 // 动作：POST /api/admin/plugins/:id/enable | /disable | /promote | /re-quarantine
 // ============================================================
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Power, RefreshCw, AlertTriangle, Link2, ShieldCheck } from 'lucide-react';
 import { apiClient } from '@/services/api/apiClient';
+import { useCachedQuery } from '@/hooks/useCachedQuery';
+import { queryKeys } from '@/services/api/queryKeys';
 import { safeConfirm } from '@/utils/safeConfirm';
 
 interface GuardianInfo {
@@ -114,28 +116,28 @@ const GUARDIAN_ACTION: Record<GuardianInfo['state'], { label: string; endpoint: 
 };
 
 export function PluginManagerSection() {
-  const [data, setData] = useState<PluginListResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const resp = await apiClient.get<PluginListResponse>('/admin/plugins');
-      setData(resp);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '加载插件列表失败');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // ★ 插件列表改走缓存查询：从别的页面回到设置页不再闪「加载中...」，
+  //   先用上次的列表渲染，同时在后台校验。查询键见 queryKeys.adminPlugins。
+  const {
+    data: pluginData,
+    isLoading: loading,
+    isFetching,
+    error: loadError,
+    refresh: reload,
+  } = useCachedQuery<PluginListResponse>(
+    queryKeys.adminPlugins,
+    () => apiClient.get<PluginListResponse>('/admin/plugins'),
+  );
+  const data = pluginData ?? null;
 
+  const [error, setError] = useState('');
+  // 加载失败沿用原来的可见反馈（走同一个 error 提示条）
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (loadError) setError(loadError.message);
+  }, [loadError]);
 
   const toggle = async (p: PluginItem) => {
     if (p.enabled) {
@@ -153,7 +155,7 @@ export function PluginManagerSection() {
     try {
       await apiClient.post(`/admin/plugins/${encodeURIComponent(p.id)}/${p.enabled ? 'disable' : 'enable'}`);
       setNotice(`「${p.name}」已${p.enabled ? '禁用' : '启用'}`);
-      await load();
+      await reload();
     } catch (err) {
       const msg = err instanceof Error ? err.message : '操作失败';
       setNotice(`操作失败: ${msg}`);
@@ -172,7 +174,7 @@ export function PluginManagerSection() {
     try {
       await apiClient.post(`/admin/plugins/${encodeURIComponent(p.id)}/${action.endpoint}`);
       setNotice(`「${p.name}」${action.endpoint === 'promote' ? '已放行' : '已重置回隔离箱'}`);
-      await load();
+      await reload();
     } catch (err) {
       const msg = err instanceof Error ? err.message : '操作失败';
       setNotice(`操作失败: ${msg}`);
@@ -213,11 +215,13 @@ export function PluginManagerSection() {
           </span>
         )}
         <button
-          onClick={() => void load()}
+          onClick={() => void reload()}
           className="nm-btn-mist-soft px-2.5 py-1 rounded-md text-xs flex items-center gap-1"
           title="刷新"
         >
-          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+          {/* ★ 绑 isFetching 而不是 loading：命中缓存时 loading 恒为 false，
+              但它只表示「首屏无数据」，不表示「没在刷新」 */}
+          <RefreshCw size={12} className={isFetching ? 'animate-spin' : ''} />
           刷新
         </button>
       </div>

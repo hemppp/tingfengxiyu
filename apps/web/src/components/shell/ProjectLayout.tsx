@@ -62,6 +62,8 @@ import { useReferenceStore } from '@/stores/referenceStore';
 import { useAuthStore } from '@/stores/authStore';
 import { PATHS } from '@/routes/paths';
 import { apiClient } from '@/services/api/apiClient';
+import { useCachedQuery } from '@/hooks/useCachedQuery';
+import { queryKeys } from '@/services/api/queryKeys';
 import { useSyncService } from '@/services/data/syncService';
 import type { Project } from '@novel/shared';
 import { WorkbenchMissing } from '@/components/shell/WorkbenchMissing';
@@ -293,19 +295,24 @@ export function ProjectLayout() {
 
   // ★ 刷新恢复：URL 带有 :bookId 但 store 已重置（currentProject 为 null 或 id 不匹配）时，
   // 从后端拉取项目元数据写回 store。这样刷新 /project/:bookId/:chapterId 不会丢失书籍。
+  // ★ 走缓存查询：从别的书 / 别的页面切回来时，项目元数据**直接命中缓存**写回 store，
+  //   不再等一次网络往返 —— 这是「进项目要加载一下」串行链上的第一环。后台仍会校验。
+  var needsRestoreProject = Boolean(urlBookId) && (!project || project.id !== urlBookId);
+  var { data: restoredProject, error: restoreError } = useCachedQuery<Project>(
+    queryKeys.project(urlBookId || ''),
+    function() { return apiClient.get<Project>('/projects/' + urlBookId); },
+    { enabled: needsRestoreProject },
+  );
+
   useEffect(function() {
-    if (!urlBookId) return;
-    var current = useProjectStore.getState().currentProject;
-    if (current && current.id === urlBookId) return;
-    var cancelled = false;
-    apiClient.get<Project>('/projects/' + urlBookId).then(function(p) {
-      if (cancelled) return;
-      if (p) setProject(p);
-    }).catch(function(e) {
-      console.warn('[ProjectLayout] 从 URL bookId 恢复项目失败', e);
-    });
-    return function() { cancelled = true; };
-  }, [urlBookId, setProject]);
+    if (restoredProject) setProject(restoredProject);
+  }, [restoredProject, setProject]);
+
+  useEffect(function() {
+    if (restoreError) {
+      console.warn('[ProjectLayout] 从 URL bookId 恢复项目失败', restoreError);
+    }
+  }, [restoreError]);
 
   // ★ 优先用 URL 的 bookId 触发 syncService，避免 project 暂未恢复时 syncService 拿到 undefined
   //   取回 reload 下传给 AI 写作工作台：交付后实体已在服务端落库，

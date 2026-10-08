@@ -9,7 +9,7 @@
 // - 系统统计看板（用户数/项目数/章节数）
 // ============================================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Shield,
@@ -26,48 +26,57 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { adminApi, type AdminUser, type AdminStats } from '@/services/api/authApi';
+import { useCachedQuery } from '@/hooks/useCachedQuery';
+import { queryKeys } from '@/services/api/queryKeys';
 import { safeConfirm } from '@/utils/safeConfirm';
 
 export function AdminPage() {
   const navigate = useNavigate();
   const { user: currentUser } = useAuthStore();
 
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [stats, setStats] = useState<AdminStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  // ★ 用户列表 + 统计改走缓存查询：从别的页面回到后台不再闪 loading ——
+  //   先用上次的数据渲染，同时在后台校验。查询键见 queryKeys.adminOverview。
+  const {
+    data: overview,
+    isLoading: loading,
+    error: loadError,
+    refresh: refreshOverview,
+  } = useCachedQuery<{ users: AdminUser[]; stats: AdminStats }>(
+    queryKeys.adminOverview,
+    async () => {
+      const [usersData, statsData] = await Promise.all([
+        adminApi.listUsers(),
+        adminApi.getStats(),
+      ]);
+      return { users: usersData, stats: statsData };
+    },
+  );
+
+  // 按创建时间倒序（沿用原行为，排序放在渲染期做，不改缓存里服务端给的顺序）
+  const users = useMemo(
+    () => (overview?.users ?? []).slice().sort((a, b) => b.createdAt - a.createdAt),
+    [overview],
+  );
+  const stats = overview?.stats ?? null;
+
   const [error, setError] = useState('');
+
+  // 加载失败沿用原来的可见反馈（走同一个 error 提示条）
+  useEffect(() => {
+    if (loadError) setError(loadError.message);
+  }, [loadError]);
 
   // 重置密码的弹窗状态
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const [usersData, statsData] = await Promise.all([
-        adminApi.listUsers(),
-        adminApi.getStats(),
-      ]);
-      // 按创建时间倒序
-      setUsers(usersData.sort((a, b) => b.createdAt - a.createdAt));
-      setStats(statsData);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '加载失败');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     // 非管理员直接踢回首页
     if (currentUser && !currentUser.isAdmin) {
       navigate('/', { replace: true });
-      return;
     }
-    loadData();
-  }, [currentUser, navigate, loadData]);
+  }, [currentUser, navigate]);
 
   // ---- 重置密码 ----
   const handleResetPassword = async () => {
@@ -82,7 +91,7 @@ export function AdminPage() {
       await adminApi.resetUserPassword(resetTarget.id, newPassword);
       setResetTarget(null);
       setNewPassword('');
-      await loadData();
+      await refreshOverview();
     } catch (e) {
       setError(e instanceof Error ? e.message : '重置失败');
     } finally {
@@ -104,7 +113,7 @@ export function AdminPage() {
     setError('');
     try {
       await adminApi.deleteUser(user.id);
-      await loadData();
+      await refreshOverview();
     } catch (e) {
       setError(e instanceof Error ? e.message : '删除失败');
     } finally {
@@ -123,7 +132,7 @@ export function AdminPage() {
     setError('');
     try {
       await adminApi.setUserAdmin(user.id, !user.isAdmin);
-      await loadData();
+      await refreshOverview();
     } catch (e) {
       setError(e instanceof Error ? e.message : '设置失败');
     } finally {

@@ -12,6 +12,8 @@ import { nanoid } from 'nanoid';
 import { useChapterStore, useProjectStore } from '@/stores';
 import { saveChapter } from '@/services/data/databaseService';
 import { apiClient } from '@/services/api/apiClient';
+import { useCachedQuery } from '@/hooks/useCachedQuery';
+import { queryKeys } from '@/services/api/queryKeys';
 import { PATHS } from '@/routes/paths';
 import type { Project } from '@novel/shared';
 import { BookOpen, Library, Plus, Sparkles } from 'lucide-react';
@@ -31,16 +33,14 @@ export const ProjectIndexPage: React.FC = () => {
   // 2026-09-15 加：原先「无项目」分支只有一行提示，直接打开 /project 的人是走到死路。
   // 这里拉一份列表，给出「一步进书」的入口。
   const setProject = useProjectStore(s => s.setProject);
-  const [shelf, setShelf] = useState<Project[]>([]);
-  useEffect(() => {
-    if (currentProject) return; // 已有项目就不用拉列表
-    let alive = true;
-    void apiClient
-      .get<Project[]>('/projects')
-      .then((list) => { if (alive) setShelf(list ?? []); })
-      .catch(() => { /* 拉不到就只留「去书架」按钮，不打扰用户 */ });
-    return () => { alive = false; };
-  }, [currentProject?.id]);
+  // ★ 书架列表也走缓存查询：直接打开 /project 时空态能立刻列出书（命中缓存），
+  //   同时在后台校验。`enabled` 保证已有项目时完全不发请求（沿用原行为）。
+  const { data: shelfData } = useCachedQuery<Project[]>(
+    queryKeys.projects,
+    () => apiClient.get<Project[]>('/projects'),
+    { enabled: !currentProject },
+  );
+  const shelf = shelfData ?? [];
 
   /** 从空态一步进书：写 store + URL 带 bookId（与书架点书一致，刷新不会丢） */
   const openFromShelf = (b: Project) => {
