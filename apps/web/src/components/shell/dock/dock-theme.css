@@ -374,6 +374,209 @@
   min-height: 0;
   overflow: auto;
   border-top: 1px solid var(--vscode-panel-border);
+  /* ★ 展开区可含多个分区（插件注册的栏目 + 调用方内容）：横向并排，各自独立滚动。 */
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+}
+
+/* --- 底部面板分区（插件扩展点，见 components/shell/bottomSections.tsx） --- */
+.dock-bottom-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  flex: 0 0 auto;
+  border-right: 1px solid var(--vscode-panel-border);
+}
+
+/* 调用方内容（问题清单）占满剩余宽度 */
+.dock-bottom-section--main {
+  flex: 1 1 auto;
+  border-right: none;
+}
+
+.dock-bottom-section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 10px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--vscode-descriptionForeground);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.dock-bottom-section-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* --- 细条右侧的分区入口（由注册者自行渲染内容，这里只给壳与状态） --- */
+.dock-bottom-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.dock-bottom-entry:hover {
+  color: var(--vscode-editor-foreground);
+  background: var(--vscode-list-hoverBackground);
+}
+
+/* 面板已展开时入口保持「按下」观感，让用户知道这一栏就在下面 */
+.dock-bottom-entry[aria-expanded='true'] {
+  color: var(--vscode-editor-foreground);
+  border-color: var(--vscode-panel-border);
+  background: var(--vscode-list-hoverBackground);
+}
+
+.dock-bottom-entry-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dock-bottom-entry-count {
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 15px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+/* --- 分区内容通用壳（当前唯一使用者：快捷短语） --- */
+.dock-qp {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  min-width: 260px;
+}
+
+.dock-qp-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dock-qp-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  background: var(--vscode-button-secondaryBackground, transparent);
+  color: var(--vscode-button-secondaryForeground, inherit);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.dock-qp-action:hover:not(:disabled) {
+  background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
+}
+
+.dock-qp-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dock-qp-add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dock-qp-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 4px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  font-size: 11px;
+}
+
+.dock-qp-input:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.dock-qp-empty {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.dock-qp-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dock-qp-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 11px;
+  overflow: hidden;
+}
+
+.dock-qp-chip-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  max-width: 180px;
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  color: var(--vscode-editor-foreground);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.dock-qp-chip-text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dock-qp-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 22px;
+  border: none;
+  border-left: 1px solid var(--vscode-panel-border);
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+}
+
+.dock-qp-chip-remove:hover {
+  color: var(--vscode-editor-foreground);
+  background: var(--vscode-list-hoverBackground);
 }
 
 /* --- 状态栏：★ t1 已删除内核自带的第二根（截图只有 ProjectLayout 的通栏一根） --- */

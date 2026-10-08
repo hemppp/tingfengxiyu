@@ -2036,57 +2036,14 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   100% { transform: translate(0, 0) rotate(0deg); }
 }
 
-/* ════ 快捷短语触发气泡：双层复合漂移 + 水珠边缘蠕动 + 边缘光波 ════ */
-/* 漂移层 A（外层容器）：X 主导缓慢游移 */
-.nm-qp-blob-drift {
-  animation: nm-qp-drift-a 11.3s ease-in-out infinite;
-  will-change: transform;
-}
-/* 按钮层 B：Y 主导 + 轻旋（与 A 周期不同 → 复合轨迹不重复） */
-.nm-qp-blob-morph {
-  border: none;
-  animation:
-    nm-qp-drift-b 7.1s ease-in-out infinite,
-    nm-qp-blob-morph 5.7s ease-in-out infinite;
-  will-change: transform, border-radius;
-}
-/* 边缘水波：inset 光斑沿边缘晃动（水珠表面张力感） */
-.nm-qp-edge-wave {
-  animation:
-    nm-qp-drift-b 7.1s ease-in-out infinite,
-    nm-qp-blob-morph 5.7s ease-in-out infinite,
-    nm-qp-edge-wave 3.9s ease-in-out infinite;
-}
-@keyframes nm-qp-drift-a {
-  0%   { transform: translate(0, 0); }
-  23%  { transform: translate(7px, -5px); }
-  41%  { transform: translate(-6px, 4px); }
-  67%  { transform: translate(5px, 6px); }
-  82%  { transform: translate(-8px, -3px); }
-  100% { transform: translate(0, 0); }
-}
-@keyframes nm-qp-drift-b {
-  0%   { transform: translate(0, 0) rotate(0deg); }
-  31%  { transform: translate(-4px, 6px) rotate(-0.6deg); }
-  58%  { transform: translate(5px, -4px) rotate(0.5deg); }
-  86%  { transform: translate(-3px, -6px) rotate(0.3deg); }
-  100% { transform: translate(0, 0) rotate(0deg); }
-}
-/* 水珠轮廓蠕动：不规则 border-radius 持续变形（椭圆↔近圆之间呼吸） */
-@keyframes nm-qp-blob-morph {
-  0%, 100% { border-radius: 48% 52% 55% 45% / 52% 46% 54% 48%; }
-  33%      { border-radius: 56% 44% 47% 53% / 44% 56% 44% 56%; }
-  66%      { border-radius: 44% 56% 53% 47% / 56% 43% 57% 44%; }
-}
-/* 边缘光波：inset 高光绕边缘游走 */
-@keyframes nm-qp-edge-wave {
-  0%, 100% { box-shadow: inset 3px 3px 7px rgb(255 255 255 / 0.8), inset -4px -5px 9px hsl(var(--mountain-cyan) / 0.16), 0 6px 22px hsl(var(--ink) / 0.14); }
-  33%      { box-shadow: inset -4px 3px 8px rgb(255 255 255 / 0.7), inset 4px -4px 10px hsl(var(--mountain-cyan) / 0.22), 0 7px 24px hsl(var(--ink) / 0.16); }
-  66%      { box-shadow: inset 2px -4px 8px rgb(255 255 255 / 0.75), inset -3px 4px 9px hsl(var(--mountain-cyan) / 0.19), 0 5px 20px hsl(var(--ink) / 0.12); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .nm-qp-blob-drift, .nm-qp-blob-morph, .nm-qp-edge-wave { animation: none !important; }
-}
+/* ════ 快捷短语（QuickPhraseBubble）专属动画：已随 2026-10-08 的底部面板改造整体退役 ════
+ * 「快捷短语」不再是编辑器正文上方的 position:fixed 漂移水珠气泡，而是底部面板
+ * 底部面板里的一栏（QuickPhrasePanel，kernel 扩展点 registerBottomPanelSection）。
+ * 下列 nm-qp-blob-* / nm-qp-edge-wave 类与 nm-qp-* 关键帧仅服务于那枚水珠气泡，
+ * 已无任何引用，故连同 prefers-reduced-motion 兜底一并删除。
+ *
+ * 保留的 nm-qbubble* （AI 浮窗功能气泡栏，ui-kit/aiBars.tsx 使用）与本段无关。
+ * ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ============================================================
  * 全局底色（VS Code Dark Modern）

@@ -382,6 +382,48 @@ reseeded=true`（buildId `3b4093c6…` → **`484046b7fdc335afe040d4af0f04676b`*
   `verify-workbench-isolation.mjs --with-tests` exit 0（0 违规 / 0 缺失，
   断言 E 基线 245 ≥ 182）。
 
+### 变更（2026-10-08 快捷短语改挂底部面板）
+
+- **新增 kernel 扩展点 `registerBottomPanelSection`
+  （`apps/web/src/components/shell/bottomSections.tsx`）**：DockShell 的底部面板
+  原先只有一个内容源（`DockShellProps.bottomPanel.children` 的问题清单），
+  插件无法再加一栏。新注册表允许插件同时提供
+  **细条右侧入口**（`ThinEntry`，收 `{ open, onOpen }`，自行决定计数/图标）与
+  **展开区中的一栏**（`Component`，栏目标题由 DockShell 渲染）。
+  - 展开区改为 `display:flex` 横向并排：已注册分区按注册顺序在左、调用方内容
+    （问题清单）占满剩余宽度，各自独立滚动。
+  - 契约要求两个组件**同步可渲染**（禁用 `React.lazy`）：底部面板展开区
+    没有任何 Suspense 边界，懒加载挂起会一路上溯到路由级 fallback，
+    把整页换成「加载中...」大转圈（见「跳转加载转圈」那轮修复的实测结论）。
+  - 本注册表**不按模式隔离**（与 `projectPanels` / `builtinPanels` 不同），
+    是否注册由插件自身在 `apply()` 内决定，并用 `ctx.effect` 挂注销。
+- **「快捷短语」从漂移气泡改挂为底部面板的一栏**：
+  - 删除 `apps/plugins/manual/workbench/web/editor/panels/QuickPhraseBubble.tsx`
+    （467 行）。那枚气泡是 `position:fixed` 的**覆盖层**、不在文档流里：
+    正文滚到底会被它压住（520px 窄屏实测压住 39px），`EditorPage` 因此要挂一个
+    `useLayoutEffect` 反量滚动容器底边、动态改 `paddingBottom` 给它让位。
+    改为底部面板一栏后不再覆盖正文、不再需要预留量、不再有漂移动画抢注意力。
+  - 新增 `QuickPhrasePanel.tsx`，导出 `QuickPhraseThinEntry`（细条入口，带条数，
+    点击请求展开）与 `QuickPhraseSection`（展开区一栏）。数据推导
+    （项目短语 + 角色名/别名 + 地点 + 物品，按使用次数取前 12）保持不变。
+  - `apps/plugins/manual/workbench/web/index.tsx` 的 `apply()` 注册该分区
+    （key `quick-phrase`），用 `ctx.effect` 挂注销。
+  - 编辑器实例经 data-core 的 `useEditorStore` 取（底部面板与编辑器不在同一
+    React 子树里）。
+- **`EditorPage.tsx` 相应瘦身**：删除 `QuickPhraseBubble` / `QP_BUBBLE_CLEARANCE`
+  import、`qpReserve` state、整段预留量的 `useLayoutEffect`（含 `ResizeObserver`），
+  滚动容器的 `paddingBottom` 回到定值 `clamp(20px, 4vh, 32px)`。
+- **清理**：`globals.css` 里只服务那枚水珠气泡的 `.nm-qp-blob-drift` /
+  `.nm-qp-blob-morph` / `.nm-qp-edge-wave` 及 `nm-qp-*` 四个关键帧与
+  `prefers-reduced-motion` 兜底一并删除（保留无关的 `nm-qbubble*` ——
+  AI 浮窗功能气泡栏仍在用）。`dock-theme.css` 补齐 `.dock-bottom-entry-*` 与
+  `.dock-qp-*` 样式。
+- **验证**：web 段 `tsc --noEmit` exit 0；`pnpm --filter @novel/web build` ✓
+  （11.56 s）；`pnpm -r lint` 0 error；隔离门禁
+  `verify-workbench-isolation.mjs --with-tests` exit 0（0 违规 / 0 缺失，
+  断言 E 基线：type-check 0、test 0、**用例数 245** ≥ 182）；
+  `verify-plugin-mode-separation.mjs` 全过。
+
 ### 已知限制
 
 - 桌面端产物**未做代码签名**：首次运行会触发 Windows SmartScreen 提示，

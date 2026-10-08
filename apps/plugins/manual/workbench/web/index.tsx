@@ -26,9 +26,11 @@
 // ============================================================
 
 import React from 'react';
-import { BookOpen, MessageSquare } from 'lucide-react';
+import { BookOpen, MessageSquare, Sparkles } from 'lucide-react';
 import type { WebPluginContext } from '@novel/core/web';
 import { registerBuiltinPanelAsContext } from '@/plugin/host';
+import { registerBottomPanelSection } from '@/components/shell/bottomSections';
+import { QuickPhraseSection, QuickPhraseThinEntry } from './editor/panels/QuickPhrasePanel';
 import { BUILTIN_PANELS, preloadPanels } from './panels';
 
 // 章节面板内容：懒加载保持 chunk 分割
@@ -94,6 +96,22 @@ export function apply(ctx: WebPluginContext): void {
     modes: ['manual'],
     Component: AiChatPanel,
   });
+
+  // 4) 底部面板分区（kernel 扩展点 `registerBottomPanelSection`，见
+  //    `apps/web/src/components/shell/bottomSections.tsx`）：把「快捷短语」
+  //    从编辑器正文上方的 position:fixed 漂移气泡改挂到 DockShell 底部面板里
+  //    的一栏。扩展点本身**不按模式隔离**（是否注册由本模块自行决定），故不
+  //    走 ctx.* —— 直接调注册函数，并用 ctx.effect 挂注销，与其他注册一致。
+  ctx.effect(
+    registerBottomPanelSection({
+      key: 'quick-phrase',
+      label: '快捷短语',
+      icon: Sparkles,
+      ThinEntry: QuickPhraseThinEntry,
+      Component: QuickPhraseSection,
+    }),
+    'bottom-section:quick-phrase',
+  );
 }
 
 // ------------------------------------------------------------------

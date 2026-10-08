@@ -31,7 +31,7 @@ import {
 /**
  * 快捷语 — 按写作场景分类，点击填入输入框（不自动发送，允许用户再修改）。
  * 覆盖：场景描写 / 人物刻画 / 情节推进 / 文字打磨 四类高频写作需求。
- * 样式与编辑器 QuickPhraseBubble 胶囊风格保持一致：液态玻璃 + 分类色 + 弹性形变。
+ * 样式与编辑器 QuickPhrasePanel 胶囊风格保持一致：液态玻璃 + 分类色 + 弹性形变。
  */
 export type QuickPromptCategory = {
   category: string;
@@ -86,7 +86,7 @@ export const QUICK_PROMPTS: QuickPromptCategory[] = [
 
 /**
  * 快捷语栏 — 始终显示在输入框上方，可折叠。
- * 样式与编辑器 QuickPhraseBubble 胶囊风格保持一致：
+ * 样式与编辑器 QuickPhrasePanel 胶囊风格保持一致：
  *   - 液态玻璃背景（backdrop-filter blur + saturate）
  *   - 多层柔和投影（含 inset 顶部高光）
  *   - rounded-full 胶囊形态
@@ -159,7 +159,7 @@ export function QuickPromptsBar({ onPick, disabled, embedded, variant }: { onPic
     );
   }
 
-  // 胶囊 chip 样式（与 QuickPhraseBubble 一致）
+  // 胶囊 chip 样式（与 QuickPhrasePanel 一致）
   const chipStyle = (color: string): CSSProperties => ({
     background: 'rgb(var(--glass-tint) / 0.55)',
     backdropFilter: 'blur(20px) saturate(180%)',

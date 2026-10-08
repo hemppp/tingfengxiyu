@@ -73,6 +73,8 @@ import {
   type DockShellApi,
   type DockShellProps,
 } from './dock/types';
+// ★ 底部面板分区（插件扩展点）：细条右侧入口 + 展开区栏目，见 bottomSections.tsx
+import { useBottomPanelSections } from './bottomSections';
 
 // ---- 内部渲染器：中心区默认占用者（章节编辑器出口） ----------------------
 
@@ -291,6 +293,12 @@ export const DockShell = forwardRef<DockShellApi, DockShellProps>(function DockS
   const [activeKey, setActiveKey] = useState<string | null>(null);
   /** ★ t1：底部面板细条的展开态（Ctrl+J / 点击左端标题切换）。 */
   const [bottomOpen, setBottomOpen] = useState(false);
+  /**
+   * ★ 底部面板分区（插件注册的栏目）。
+   *   细条右侧渲染各分区的 `ThinEntry`（入口 / 计数），展开区先渲染各分区
+   *   的 `Component`（一栏），再渲染调用方给的 `bottomPanel.children`（问题清单）。
+   */
+  const bottomSections = useBottomPanelSections();
 
   // ★ t1：Ctrl+J 展开/收起底部面板。监听挂 window（与编辑器快捷键解耦），
   //   并 preventDefault 掉浏览器把 Ctrl+J 当「下载」的默认行为。
@@ -741,13 +749,41 @@ export const DockShell = forwardRef<DockShellApi, DockShellProps>(function DockS
             <span className="dock-bottom-title">底部面板</span>
           </button>
           <div className="dock-bottom-right">
+            {/* ★ 插件注册的细条入口（如「快捷短语」）：计数 / 图标由注册者决定，
+                点击即请求展开底部面板（收起仍走左端开关 / Ctrl+J）。 */}
+            {bottomSections.map((section) => (
+              <section.ThinEntry
+                key={section.key}
+                open={bottomOpen}
+                onOpen={() => setBottomOpen(true)}
+              />
+            ))}
             <span className="dock-bottom-issues" title="当前章节未解决批注（问题清单）条数">
               {bottomPanel?.issueCount ?? 0} 条问题
             </span>
             <kbd className="dock-bottom-kbd">Ctrl+J</kbd>
           </div>
         </div>
-        {bottomOpen ? <div className="dock-bottom-body">{bottomPanel?.children}</div> : null}
+        {bottomOpen ? (
+          <div className="dock-bottom-body">
+            {/* ★ 展开区多栏：先渲染插件注册的分区（各占一栏），再渲染调用方内容
+                （问题清单）。注册者的组件必须同步可渲染 —— 见 bottomSections.tsx 头注。 */}
+            {bottomSections.map((section) => (
+              <div className="dock-bottom-section" data-section-key={section.key} key={section.key}>
+                <div className="dock-bottom-section-title">
+                  {section.icon ? <section.icon size={12} aria-hidden="true" /> : null}
+                  <span>{section.label}</span>
+                </div>
+                <div className="dock-bottom-section-body">
+                  <section.Component />
+                </div>
+              </div>
+            ))}
+            <div className="dock-bottom-section dock-bottom-section--main">
+              {bottomPanel?.children}
+            </div>
+          </div>
+        ) : null}
       </section>
     </div>
   );
