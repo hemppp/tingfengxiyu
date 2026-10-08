@@ -131,6 +131,40 @@
 （本次删除的代码此前就已被 tree-shaking 排除在包外），仅 chunk 文件名哈希发生漂移；
 因此 `buildId` 会变化，桌面端下次启动会按 D7.5 自动重新播种。
 
+### 修复（2026-10-07 跳转加载 · 第二轮）
+
+2026-10-06 的「全修复」只覆盖了**路由级** chunk（`PRELOAD_ON_PATH` / `ALL_ROUTE_LOADERS`
+那 9 个页面 loader），漏掉了**进项目之后才出现的那批 chunk** —— 它们全是模块内部的
+相对路径懒加载，kernel 连说明符都看不到。本轮补上这三处：
+
+- **面板级预取（新增模块 `preload()` 扩展）**：`manual/workbench/web/index.tsx` 与
+  `auto/workbench/web/index.tsx` 各导出一个 `preload()`，把章节左栏 + 12 个手写台停靠面板 +
+  AI 对话面板的 `import()` 一次性发出。kernel 新增 `loadModulePreload(dir)`
+  （`apps/web/src/plugin/moduleEntries.ts`），仍走既有的 `import.meta.glob` 模块入口解析，
+  **没有新增任何指向插件内部的静态 import**（D35 / K2M 边保持不变）；模块缺席或未导出
+  `preload` ⇒ loader 为 null ⇒ 自动跳过。
+  预取列表与实际加载项**同源**：`panels.tsx` 的 12 个 `React.lazy` 统一经新的
+  `lazyPanel()` 包装，谁被懒加载谁就自动进预取列表，不会两处各写一遍而漂移。
+  触发点挂在 `PRELOAD_ON_PATH` 的 `/bookshelf` 与 `/project` 两段（进入工作台的入口）。
+- **全站预热从「串行空闲队列」改为「一次并行发出」**（`apps/web/src/App.tsx`）：
+  原实现一个 loader 一个空闲时间片（每次最多等 2.5 s 空闲），队列尾部的 loader
+  要十几秒后才轮到 —— 那段时间跳转照样出「加载中」，等于没预热。现在在首屏稳定后的
+  同一个 `requestIdleCallback` 里把全部 `import()` 一起发出，由浏览器自己复用连接排优先级；
+  空闲回调保证不抢首屏，模块表缓存保证重复预热是廉价 no-op。
+- **入场淡入不再从全透明起步**（`apps/web/src/routes/PageFade.tsx`）：
+  `opacity: 0 → 1` 跑 280 ms 等于每次跨段跳转整页闪一下（深色界面上会透出
+  `color-scheme: light` 的白底）。改为 `opacity: 0.4 → 1`、160 ms、位移 8px → 4px：
+  保留过渡感，但任何一帧都不会出现空白页。
+
+**未预热（有意保留懒加载）**：`ui-graph` 的 `Graph3D` 及其 `vendor-three`（562 KB）——
+只在打开关系图时按需拉取，进项目就预下这半兆不划算。若实际使用中关系图打开偏慢，
+把 `GraphShell.tsx:25` 那条 lazy 也纳入 `manual` 的 `preload()` 即可。
+
+验证：`pnpm -r type-check`（14 workspace）✓、`pnpm --filter @novel/web build` ✓、
+`pnpm verify:all` ✓。产物静态核验：kernel 入口已含 `typeof n.preload=="function"&&await n.preload()`
+调用点，两个模块入口 chunk 的导出表里各有 `preload`，面板 chunk 均由模块入口 chunk 引用。
+**未做浏览器级耗时实测**（`e2e:ui` / `e2e:modes` 需要 CDP 浏览器 + dev 服务，本轮未起）。
+
 ### 修复（2026-10-07 活动栏按钮 = 面板开关）
 
 用户口径：最左侧活动栏里已有的「章节」「AI 对话」图标按钮，**点一下要能把对应面板收起来**。

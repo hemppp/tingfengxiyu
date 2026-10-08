@@ -97,6 +97,28 @@ export function hasModule(dir: ModuleDir): boolean {
  * 取模块公开导出的某个组件，包成 React.lazy 可用的 loader。
  * 模块缺席 / 导出不存在 ⇒ 返回 null（调用方据此**不渲染**，不得伪造兜底实现）。
  */
+/**
+ * 解析某模块入口的**面板级预取**函数（模块公开导出 `preload`）。
+ *
+ * ★ 2026-10-07「跳转画面会加载一下」修复：
+ *   路由级 chunk 由 kernel 的 `ALL_ROUTE_LOADERS` / `PRELOAD_ON_PATH` 兜住了，但
+ *   **进项目之后才出现的那批 chunk 全在模块内部** —— 12 个手写台停靠面板、章节左栏、
+ *   AI 对话面板，kernel 看不到它们的 import 说明符，也就无从预热。表现就是
+ *   「进项目先出一排『加载中…』，点开面板再出一次」。
+ *   解法是把预取的**内容**留在模块里：模块入口导出一个 `preload()`，kernel 只在
+ *   空闲时间片里调用它。kernel 依旧不触碰插件内部实现（D35 / K2M 边保持不变），
+ *   模块缺席或未导出 `preload` ⇒ 返回 null（调用方静默跳过，不伪造兜底）。
+ */
+export function loadModulePreload(dir: ModuleDir): (() => Promise<unknown>) | null {
+  const load = getModuleEntryLoader(dir);
+  if (!load) return null;
+  return async () => {
+    const mod = (await load()) as { preload?: () => unknown };
+    if (typeof mod.preload !== 'function') return;
+    await mod.preload();
+  };
+}
+
 export function loadModuleComponent<T>(
   dir: ModuleDir,
   exportName: string,
