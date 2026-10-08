@@ -1133,7 +1133,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   background: transparent;
 }
 
-/* ════ 编辑器正文排版（全局常驻：普通视图与沉浸式写作共享同一套样式） ════ */
+/* ════ 编辑器正文排版（全局常驻，所有视图共享同一套样式） ════ */
 .ProseMirror {
   font-family: 'Noto Serif SC', serif !important;
   font-size: clamp(15px, 1.6vw, 17px) !important;

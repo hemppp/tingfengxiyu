@@ -362,6 +362,26 @@ reseeded=true`（buildId `3b4093c6…` → **`484046b7fdc335afe040d4af0f04676b`*
     （2 个项目）正常列出 ⇒ 迁移路径可用。
   - 体积变化：zip 由 199.7 MB 增至 217.3 MB（+17.6 MB，即预置运行时的压缩增量）。
 
+### 变更（2026-10-08 移除沉浸式写作模式）
+
+- **移除编辑器右上角的「沉浸式写作」全屏专注模式**（`WriterMode`）：
+  - 删除 `apps/plugins/manual/workbench/web/editor/WriterMode.tsx`（112 行）。
+  - `EditorPage.tsx` 去掉该模式的入口按钮、`writerMode` 状态、
+    `if (writerMode && editor)` 的整页替换分支，以及随之无用的
+    `Pen` / `WriterMode` 两处 import。
+  - `useEditorInstance.ts` 的编辑器根类名由 `'ProseMirror WriterMode'`
+    收敛为 `'ProseMirror'` —— 该类名是历史残留，全仓 CSS 从无
+    `.WriterMode` 选择器（正文排版规则一直挂在 `.ProseMirror` 上，
+    移除后样式不变）。
+  - 保留：`README.md`「沉浸式编辑器」特性（Typora 风格 Markdown 体验与
+    实时字数仍在）、落地页文案与 `globals.css` 的正文排版规则。
+- 验证：web 段 `tsc --noEmit` exit 0；模块内部
+  `tsc -p apps/plugins/manual/workbench/tsconfig.typecheck.json` exit 0；
+  `pnpm --filter @novel/web build` ✓（12.01 s，产物中已无 WriterMode chunk）；
+  web vitest **245 例 / 21 文件全过**；隔离门禁
+  `verify-workbench-isolation.mjs --with-tests` exit 0（0 违规 / 0 缺失，
+  断言 E 基线 245 ≥ 182）。
+
 ### 已知限制
 
 - 桌面端产物**未做代码签名**：首次运行会触发 Windows SmartScreen 提示，

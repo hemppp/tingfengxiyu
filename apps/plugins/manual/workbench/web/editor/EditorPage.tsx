@@ -7,8 +7,6 @@ import { PATHS } from '@/routes/paths';
 import { gsap, useGSAP } from '@novel-plugins/ui-kit/gsap';
 import { pickFallbackChapterId } from '../utils/chapter';
 import { SelectionMenu } from './SelectionMenu';
-import { Pen } from 'lucide-react';
-import { WriterMode } from './WriterMode';
 import { ForeshadowWarning } from '../foreshadow/ForeshadowWarning';
 import { StyleAdvisor } from './panels/StyleAdvisor';
 import { styleService } from '@novel-plugins/data-core/editor/styleService';
@@ -50,7 +48,6 @@ const SUBTITLE_STYLE: React.CSSProperties = {
 /** 元信息行的一段；四段全部来自真实数据，缺失时整段不进入数组（不渲染空占位/null） */
 
 export function EditorPage() {
-  const [writerMode, setWriterMode] = useState(false);
   const [styleProfile, setStyleProfile] = useState<StyleProfile | null>(null);
   const [findVisible, setFindVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -232,7 +229,7 @@ export function EditorPage() {
   //
   //   ★ 为什么"量"而不是写死常量：预留量 = 滚动容器底边 → 气泡顶边 的距离。
   //     气泡顶边固定在视口底上方 QP_BUBBLE_CLEARANCE，但滚动容器底边到视口底的距离
-  //     随布局变（侧栏折叠 / 沉浸模式 / 状态栏），写死一个数在别的布局下必然对不齐。
+  //     随布局变（侧栏折叠 / 状态栏），写死一个数在别的布局下必然对不齐。
   useLayoutEffect(() => {
     const host = scrollHostRef.current;
     if (!host) return;
@@ -497,15 +494,6 @@ export function EditorPage() {
     [currentChapter, liveWordCount, characters],
   );
 
-  if (writerMode && editor) {
-    return (
-      <WriterMode
-        editor={editor}
-        onExit={() => setWriterMode(false)}
-      />
-    );
-  }
-
   if (!currentChapter) {
     return (
       <div className="h-full flex flex-col bg-transparent font-[Inter,sans-serif]">
@@ -556,18 +544,6 @@ export function EditorPage() {
 
   return (
     <div ref={containerRef} className="h-full flex flex-col bg-transparent font-[Inter,sans-serif]">
-      {/* 沉浸式写作按钮 - 浮于右上角（已移除字数/章节统计 bar） */}
-      <button
-        onClick={() => setWriterMode(true)}
-        className="absolute right-4 sm:right-6 top-3 z-20 flex items-center justify-center gap-1.5 min-w-6 min-h-6 px-2.5 py-1 text-[12px] rounded-xl transition-all duration-200 hover:bg-[hsl(var(--mist-pale))]"
-        style={{ color: 'hsl(var(--ink-light))' }}
-        title="沉浸式写作"
-        aria-label="沉浸式写作"
-      >
-        <Pen size={12} aria-hidden="true" />
-        <span className="hidden sm:inline">沉浸式写作</span>
-      </button>
-
       {/* 编辑器面板栏（scope: 'editor' 的插件面板开关；无面板时不渲染） */}
       <EditorPanelRail />
 

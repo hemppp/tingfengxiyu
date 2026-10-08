@@ -550,7 +550,7 @@ export function useIndependentEditor(initialContent?: string) {
     content: initialContent || '',
     editorProps: {
       attributes: {
-        class: 'ProseMirror WriterMode',
+        class: 'ProseMirror',
       },
     },
   });
