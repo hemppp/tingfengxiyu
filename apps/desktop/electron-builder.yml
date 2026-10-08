@@ -15,7 +15,7 @@
 #     ⇒ 只改本文件 = 没改；只改 package.json = 两份配置漂移。日志里应出现
 #       `loaded configuration { file: 'package.json ("build" field)' }` 作为实证。
 #
-# 目标平台：仅 Windows x64（D1）。分发形态：NSIS 安装版 + 单文件便携 exe + 标准便携版 zip。
+# 目标平台：仅 Windows x64（D1）。分发形态：NSIS 安装版 + 标准便携版 zip（D4.6：单文件便携 exe 已移除）。
 #   便携版 zip 不由 electron-builder 的 `zip` target 产出（它是**平铺**的，
 #   6273 个文件直接铺在压缩包根，用户解压会炸开目录）；改由
 #   scripts/package-portable-zip.mjs 加壳（顶层 NovelMuse/ + 使用说明.txt）后压缩。
@@ -76,9 +76,6 @@ win:
     - target: nsis
       arch:
         - x64
-    - target: portable
-      arch:
-        - x64
   icon: build-resources/icon.ico
   artifactName: NovelMuse-${version}-${arch}.${ext}
 
@@ -95,6 +92,13 @@ nsis:
 # D4.4（2026-10-06）：便携版改为标准绿色 zip（解压即用），由
 #   scripts/package-portable-zip.mjs 加壳后压缩，`pnpm dist:zip` 一步到位。
 #
+# D4.6（2026-10-06，同日修订，**取代 D4.5**）：移除单文件便携 exe，便携版只保留 zip。
+#   用户决策：exe 形态在低完整性/沙箱环境与首启解压反馈上都不可靠（见 D4.5-1 的两个假象），
+#   且与 zip 形态功能重复；`release/desktop/NovelMuse-Portable-<version>-x64.exe` 已删除。
+#   ⇒ `win.target` 只剩 `nsis`；`portable` 段与 `dist:portable` 脚本一并移除。
+#   注意：便携版 zip 仍叫 `NovelMuse-Portable-<version>-x64.zip`，与已删除的 exe 同名不同扩展名，
+#   不要因为文件名带 Portable 就以为是 exe 目标产出的。
+# ---- 以下为 D4.5 的历史记录（已废弃，勿据此恢复）------------------------------
 # D4.5（2026-10-06，同日修订）：在 zip 之外**并行提供**单文件便携 exe。
 #   用户实测反馈：zip 需先解压再进目录双击，不如「一个 exe 双击即用」直接；
 #   且 0.2.0 已裁掉 web-only 依赖（240.8 MB → 68.2 MB 负载），
@@ -102,7 +106,4 @@ nsis:
 #   ⇒ 恢复 `portable` target，`win.target` 同时产出 nsis + portable。
 #   注意：portable 必须配 `splashImage`，否则 portable.nsi:11-13 走 SetSilent silent，
 #   用户会看到「双击后长时间无任何反应」。`unpackDirName` 让解压目录带产品名。
-portable:
-  artifactName: NovelMuse-Portable-${version}-${arch}.${ext}
-  splashImage: build-resources/splash.bmp
-  unpackDirName: NovelMuse
+# (D4.5 已由 D4.6 废止，故此处不再保留 `portable:` 配置段。)

@@ -4,9 +4,10 @@
 //
 // 冻结内容：
 //   D7.1  userData 布局（11 个 updater 需要的字段 + 本 shell 的派生字段）
-//   D7.2  首次启动播种（version.json 不存在时）
+//   D7.2  首次启动播种（version.json 不存在，或安装包比运行时更新，或载荷指纹变化时）
 //   D7.3  <userData>/app-runtime/app-server/data → <userData>/data   ★关键
 //   D7.4  <userData>/plugins/node_modules → app-runtime/app-server/node_modules
+//   D7.5  重新播种（版本/指纹变更）：只对**链接**摘链接、绝不跟随 ⇒ 数据安全
 //   D8.2  app-server/node_modules/better-sqlite3 → asar.unpacked 副本
 //   F20   junction 的 lstat().isDirectory() === false ⇒ 存在性判断必须用
 //         fs.statSync / fs.existsSync
@@ -22,12 +23,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { Logger, UserDataLayout, VersionJson } from './types.js';
+import { isNewer } from './updater/semver.js';
+import type { BuildStamp, Logger, UserDataLayout, VersionJson } from './types.js';
 
 /** 需要投递到 userData 的资源子目录名（D16 extraResources 的 `to` 名）。 */
 const RES_APP_SERVER = 'app-server';
 const RES_WEB_DIST = 'web-dist';
 const RES_SEED_PLUGINS = 'seed-plugins';
+
+/** D7.5：载荷指纹文件名（由 `scripts/build-server-payload.mjs` 写入 app-server 根）。 */
+const BUILD_STAMP_NAME = 'build-stamp.json';
+
+/** D7.5：重新播种时判定「载荷已变」的原因标签（用于日志）。 */
+type ReseedReason = 'missing' | 'shell-newer' | 'payload-changed';
 
 /** D7.2 步骤 3：播种的三个插件模式目录（`local` 单独创建，不播种）。 */
 const SEEDED_PLUGIN_MODES = ['auto', 'manual', 'shared'] as const;
@@ -301,10 +309,15 @@ export function readVersionJson(layout: UserDataLayout): VersionJson | null {
     const raw = fs.readFileSync(layout.versionJsonPath, 'utf8');
     const parsed = JSON.parse(raw) as Partial<VersionJson>;
     if (typeof parsed.appVersion === 'string') {
-      return {
+      const result: VersionJson = {
         appVersion: parsed.appVersion,
         updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : '',
       };
+      // D7.5：旧版本写的 version.json 没有 buildId ⇒ 视为 undefined（不伪造）。
+      if (typeof parsed.buildId === 'string' && parsed.buildId.length > 0) {
+        result.buildId = parsed.buildId;
+      }
+      return result;
     }
     return null;
   } catch {
@@ -312,12 +325,47 @@ export function readVersionJson(layout: UserDataLayout): VersionJson | null {
   }
 }
 
-/** 写 `version.json`（D7.2 步骤 6）。 */
-function writeVersionJson(layout: UserDataLayout, appVersion: string): void {
+/**
+ * D7.5：读**打包资源**里的载荷指纹（`<resourcesRoot>/app-server/build-stamp.json`）。
+ *
+ * 缺失或损坏返回 null（旧安装包 / 载荷生成器未产出）—— 此时退化为纯版本号比较。
+ */
+export function readBuildStamp(resourcesRoot: string): BuildStamp | null {
+  try {
+    const raw = fs.readFileSync(
+      path.join(resourcesRoot, RES_APP_SERVER, BUILD_STAMP_NAME),
+      'utf8',
+    );
+    const parsed = JSON.parse(raw) as Partial<BuildStamp>;
+    if (typeof parsed.buildId === 'string' && parsed.buildId.length > 0) {
+      const stamp: BuildStamp = {
+        version: typeof parsed.version === 'string' ? parsed.version : '',
+        buildId: parsed.buildId,
+      };
+      if (typeof parsed.algorithm === 'string') {
+        stamp.algorithm = parsed.algorithm;
+      }
+      return stamp;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** 写 `version.json`（D7.2 步骤 6；D7.5 追加 `buildId`）。 */
+function writeVersionJson(
+  layout: UserDataLayout,
+  appVersion: string,
+  buildId: string | undefined,
+): void {
   const payload: VersionJson = {
     appVersion,
     updatedAt: new Date().toISOString(),
   };
+  if (typeof buildId === 'string' && buildId.length > 0) {
+    payload.buildId = buildId;
+  }
   fs.writeFileSync(layout.versionJsonPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
 }
 
@@ -327,11 +375,13 @@ function writeVersionJson(layout: UserDataLayout, appVersion: string): void {
  * **仅打包态调用**：开发态直接跑仓库源码（D12.5），不使用 app-runtime。
  *
  * @param resourcesRoot 打包态的 `process.resourcesPath`
+ * @param buildId D7.5 载荷指纹（`resources/app-server/build-stamp.json`）；缺失传 undefined
  */
 function seedFromResources(
   layout: UserDataLayout,
   resourcesRoot: string,
   appVersion: string,
+  buildId: string | undefined,
   log: Logger,
 ): void {
   const srcAppServer = path.join(resourcesRoot, RES_APP_SERVER);
@@ -389,8 +439,173 @@ function seedFromResources(
   // 步骤 5 的 junction 由 ensureRuntimeJunctions() 在播种后调用。
 
   // 步骤 6：version.json
-  writeVersionJson(layout, appVersion);
-  log('info', `首启播种完成，已写 ${layout.versionJsonPath}（appVersion=${appVersion}）`);
+  writeVersionJson(layout, appVersion, buildId);
+  log(
+    'info',
+    `首启播种完成，已写 ${layout.versionJsonPath}` +
+      `（appVersion=${appVersion}，buildId=${buildId ?? '（未提供）'}）`,
+  );
+}
+
+// ------------------------------------------------------------
+// D7.5 重新播种（版本或载荷指纹变更时）
+// ------------------------------------------------------------
+
+/**
+ * 删除一个目录树，但**对任何链接只摘链接、绝不跟随**（D7.5 数据安全核心）。
+ *
+ * 为什么不能直接用 `fs.rmSync(dir, { recursive: true })`：
+ * `app-runtime/app-server/data` 是指向 `<userData>/data` 的 **junction**，
+ * Node 的递归删除会**穿过 reparse point** 删掉目标里的真实数据 ——
+ * 也就是用户全部书稿（ADR D7.3 红线）。
+ *
+ * 本函数逐条目处理：链接 ⇒ `removeLink()`（unlink 语义，只摘链接本身）；
+ * 真实目录 ⇒ 递归；真实文件 ⇒ unlink。
+ */
+function removeTreeSkippingLinks(target: string, log: Logger): void {
+  // 目标自身就是链接 ⇒ 只摘链接。**绝不能 readdir**（那会列到目标的真实内容）。
+  if (isLink(target)) {
+    log('info', `D7.5：摘除链接（不跟随）：${target}`);
+    removeLink(target);
+    return;
+  }
+  if (!pathExists(target)) {
+    return;
+  }
+
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(target, { withFileTypes: true });
+  } catch (error) {
+    log('warn', `D7.5：读取目录失败，跳过：${target} —— ${String(error)}`);
+    return;
+  }
+
+  for (const entry of entries) {
+    const child = path.join(target, entry.name);
+    if (isLink(child)) {
+      log('info', `D7.5：摘除链接（不跟随）：${child}`);
+      removeLink(child);
+      continue;
+    }
+    if (entry.isDirectory()) {
+      removeTreeSkippingLinks(child, log);
+      continue;
+    }
+    try {
+      fs.unlinkSync(child);
+    } catch (error) {
+      log('warn', `D7.5：删除文件失败：${child} —— ${String(error)}`);
+    }
+  }
+
+  try {
+    fs.rmdirSync(target);
+  } catch (error) {
+    log('warn', `D7.5：删除目录失败：${target} —— ${String(error)}`);
+  }
+}
+
+/**
+ * D7.5 前置安全检查：确认 `app-runtime/app-server/data` 位置上没有**真实数据**。
+ *
+ * 正常状态它是指向 `<userData>/data` 的 junction（或不存在）。若它是**真实非空目录**，
+ * 说明 D7.3 junction 从未建立成功、项目库就落在这个会被替换的目录里 ——
+ * 此时删除即毁书稿 ⇒ 拒绝重新播种（宁可让用户继续看旧界面）。
+ */
+function isSafeToClearRuntime(layout: UserDataLayout, log: Logger): boolean {
+  const dataPath = layout.appServerDataLink;
+  if (!pathExists(dataPath)) {
+    return true; // 该条目不存在 ⇒ 无数据风险
+  }
+  if (isLink(dataPath)) {
+    return true; // 链接 ⇒ removeTreeSkippingLinks 只摘链接，绝不跟随
+  }
+  if (isEmptyDir(dataPath)) {
+    return true; // 真实空目录 ⇒ 无数据
+  }
+  log(
+    'error',
+    `D7.5 安全检查未通过：${dataPath} 是真实非空目录（D7.3 junction 未建立的历史遗留）。` +
+      `它可能就是当前项目库所在 ⇒ 拒绝重新播种以免销毁书稿。` +
+      `请先备份，把该目录内容合并到 ${layout.dataDir} 后删掉它（或删掉整个 app-runtime，` +
+      `注意：删 app-runtime 前必须先摘掉该目录，否则会连带删掉书稿），再重启应用。`,
+  );
+  return false;
+}
+
+/**
+ * D7.5：清空旧的运行时副本，为重新播种让路。
+ *
+ * **为什么必须清**：`copyDirNoClobber` 对已存在的文件一律跳过（D7.2 刻意如此，
+ * 以免覆盖用户改动）⇒ 不清空的话「重新播种」一个文件都复制不进来，用户会继续
+ * 看到旧前端。这正是本仓库实际踩过的坑。
+ *
+ * 清理范围（全部经 `removeTreeSkippingLinks`，链接只摘不跟随）：
+ *   - `<userData>/plugins/node_modules`（先摘，避免 app-server 被删后悬空）
+ *   - `<userData>/app-runtime/app-server`（★ 内含 data junction，只摘链接）
+ *   - `<userData>/app-runtime/web-dist`
+ *   - `<userData>/plugins/{auto,manual,shared}`（刷新插件代码；`local/` 保留不碰）
+ *
+ * @returns 是否已清空（false ⇒ 安全检查未通过，调用方必须放弃重新播种）
+ */
+function clearRuntimeForReseed(layout: UserDataLayout, log: Logger): boolean {
+  if (!isSafeToClearRuntime(layout, log)) {
+    return false;
+  }
+
+  removeTreeSkippingLinks(layout.pluginsNodeModulesLink, log);
+  removeTreeSkippingLinks(layout.appServerDir, log);
+  removeTreeSkippingLinks(layout.webDistDir, log);
+  for (const mode of SEEDED_PLUGIN_MODES) {
+    removeTreeSkippingLinks(path.join(layout.pluginsRoot, mode), log);
+  }
+  // ensureBaseDirs 建的普通目录可能被一并清掉，补回来（播种会再写它们的内容）。
+  fs.mkdirSync(layout.appRuntimeDir, { recursive: true });
+
+  // ★ 数据安全后置自证：data 目录必须还在。
+  if (!pathExists(layout.dataDir)) {
+    log(
+      'error',
+      `D7.5 异常：清理运行时后 ${layout.dataDir} 不存在。` +
+        `这不应发生（data 是 junction 的目标，绝不在清理范围内）—— 请立即检查磁盘与备份。`,
+    );
+    return false;
+  }
+  log('info', `D7.5：运行时副本已清空，准备重新播种（${layout.dataDir} 完好）`);
+  return true;
+}
+
+/**
+ * D7.5：判定是否需要（重新）播种。
+ *
+ * 三条触发条件（互斥，按优先级）：
+ *   1. `missing` —— version.json 不存在（D7.2 原有条件）；
+ *   2. `shell-newer` —— 安装包版本**严格高于**运行时记录的版本（换了版本安装）；
+ *   3. `payload-changed` —— 版本号相同但载荷指纹变了（同版本号重新打包）。
+ *
+ * **条件 3 只在版本号相同时生效**，这是为了让应用内更新器装好的运行时不被误判为陈旧：
+ * 更新器写入的 `appVersion` 可能高于外壳版本，此时绝不能「重新播种」回退到安装包里的旧载荷。
+ */
+function shouldReseed(
+  existing: VersionJson | null,
+  stamp: BuildStamp | null,
+  appVersion: string,
+): ReseedReason | null {
+  if (existing === null) {
+    return 'missing';
+  }
+  if (isNewer(appVersion, existing.appVersion)) {
+    return 'shell-newer';
+  }
+  if (
+    stamp !== null &&
+    existing.appVersion === appVersion &&
+    existing.buildId !== stamp.buildId
+  ) {
+    return 'payload-changed';
+  }
+  return null;
 }
 
 // ------------------------------------------------------------
@@ -525,6 +740,8 @@ export interface EnsureLayoutResult {
   layout: UserDataLayout;
   /** 本次是否执行了首启播种（D7.2） */
   seeded: boolean;
+  /** 本次是「已有运行时被版本/指纹判定为陈旧后重新播种」（D7.5） */
+  reseeded: boolean;
   /** 打包态是否检测到 app-server 负载 */
   appServerPresent: boolean;
   junctions: JunctionReport;
@@ -551,20 +768,39 @@ export function ensureLayout(
   log('info', `userData 布局已就绪：${layout.userData}`);
 
   let seeded = false;
+  let reseeded = false;
   if (isPackaged) {
     if (resourcesRoot === null) {
       throw new Error('打包态必须提供 resourcesRoot（process.resourcesPath）');
     }
-    // D7.2 触发条件：version.json 不存在
+    // D7.2 / D7.5 触发条件：version.json 缺失、安装包版本更高、或同版本号载荷指纹变了。
     const existing = readVersionJson(layout);
-    if (existing === null) {
-      log('info', '未检测到 version.json ⇒ 执行首启播种（D7.2）');
-      seedFromResources(layout, resourcesRoot, appVersion, log);
-      seeded = true;
+    const stamp = readBuildStamp(resourcesRoot);
+    const reason = shouldReseed(existing, stamp, appVersion);
+    if (reason !== null) {
+      log(
+        'info',
+        `播种检查：需要播种（reason=${reason}，` +
+          `运行时 appVersion=${existing?.appVersion ?? '（无）'}/buildId=${existing?.buildId ?? '（无）'}，` +
+          `安装包 appVersion=${appVersion}/buildId=${stamp?.buildId ?? '（无指纹）'}）`,
+      );
+      // 必须先清空旧运行时：copyDirNoClobber 会跳过已存在文件 ⇒ 不清就复制不进去。
+      if (clearRuntimeForReseed(layout, log)) {
+        seedFromResources(layout, resourcesRoot, appVersion, stamp?.buildId, log);
+        seeded = true;
+        reseeded = reason !== 'missing';
+      } else {
+        log(
+          'error',
+          '重新播种被安全检查阻止 ⇒ 本次继续使用现有运行时（界面可能不是最新）。',
+        );
+      }
     } else {
       log(
         'info',
-        `已存在 version.json（appVersion=${existing.appVersion}，updatedAt=${existing.updatedAt}）⇒ 跳过播种`,
+        `已存在 version.json（appVersion=${existing?.appVersion ?? '（无）'}，` +
+          `buildId=${existing?.buildId ?? '（无）'}，updatedAt=${existing?.updatedAt ?? '（无）'}）` +
+          `且与安装包一致 ⇒ 跳过播种`,
       );
     }
   } else {
@@ -586,6 +822,7 @@ export function ensureLayout(
   return {
     layout,
     seeded,
+    reseeded,
     appServerPresent: pathExists(layout.appServerDir),
     junctions,
   };

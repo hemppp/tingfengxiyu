@@ -145,7 +145,7 @@ export interface BuildServerEnvOptions {
  *   NODE_ENV='production'、PORT='0'、HOST='127.0.0.1'、
  *   WEB_DIST_PATH=<userData>/app-runtime/web-dist、
  *   DB_PATH=<userData>/data/novelmuse.db、
- *   PLUGINS_ROOT=<userData>/plugins、
+ *   PLUGINS_ROOT=<userData>/plugins、ALLOW_REGISTRATION='true'、
  *   JWT_SECRET=<持久化密钥>、DISABLE_PROXY_DETECT='1'、
  *   HOST_MODE='all'、ELECTRON_RUN_AS_NODE='1'
  *
@@ -156,6 +156,8 @@ export interface BuildServerEnvOptions {
  *   undefined，不注册静态回退）；JWT_SECRET **不注入**（dev 下 `jwt.ts`
  *   走文件回退 `<repo>/data/.jwt-secret`）。
  *   `ELECTRON_RUN_AS_NODE` 与打包态相同（`'1'`）。
+ *   开发态的 `ALLOW_REGISTRATION` **不处置**（既不注入也不剔除）⇒ 沿用宿主环境；
+ *   未设置时 `NODE_ENV='development'` 已使注册默认开放。
  *
  * @param repoRoot 开发态仓库根（由 `paths.ts` 的 `findRepoRoot()` 得到）；
  *   打包态传 null。
@@ -204,6 +206,10 @@ export function buildServerEnv(
     env.WEB_DIST_PATH = layout.webDistDir;
     env.DB_PATH = layout.dbPath;
     env.PLUGINS_ROOT = layout.pluginsRoot;
+    // 打包态的 NODE_ENV 恒为 'production'，而 apps/server/src/modules/auth.ts:29-32
+    // 在 ALLOW_REGISTRATION 未定义时按 `NODE_ENV !== 'production'` 判定 ⇒ 打包态
+    // 注册默认关闭。这里显式打开，让桌面版与网页版行为一致（注册页在导航上无条件可见）。
+    env.ALLOW_REGISTRATION = 'true';
 
     const { secret, generated } = loadOrCreateJwtSecret(layout.jwtSecretPath, log);
     env.JWT_SECRET = secret;

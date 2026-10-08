@@ -156,10 +156,32 @@ export interface UserDataLayout {
   initialAdminPasswordPath: string;
 }
 
-/** `version.json` 的形状（ADR D7.1 逐字）。 */
+/** `version.json` 的形状（ADR D7.1 逐字；D7.5 追加 `buildId`）。 */
 export interface VersionJson {
   appVersion: string;
   updatedAt: string;
+  /**
+   * D7.5：当前生效运行时的**载荷指纹**（`resources/app-server/build-stamp.json`
+   * 的 `buildId`）。用于识别「版本号没变但重新打包了」的情况 —— 此时
+   * `appVersion` 相同，只有指纹能判出载荷已更新。
+   *
+   * 可选：旧版本（D7.5 之前）写的 version.json 没有该字段，读取时为 undefined。
+   */
+  buildId?: string;
+}
+
+/**
+ * D7.5：打包期写入 `resources/app-server/build-stamp.json` 的载荷指纹。
+ *
+ * 由 `apps/desktop/scripts/build-server-payload.mjs` 生成，随安装包与更新包一起分发。
+ */
+export interface BuildStamp {
+  /** 打包时 `apps/desktop/package.json` 的 version。 */
+  version: string;
+  /** `sha256(app-server + seed-plugins + web-dist 的「相对路径|字节数」清单)` 前 32 位十六进制。 */
+  buildId: string;
+  /** 指纹口径说明（便于人工复核）。 */
+  algorithm?: string;
 }
 
 // ------------------------------------------------------------

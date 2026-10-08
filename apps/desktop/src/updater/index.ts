@@ -317,6 +317,34 @@ async function hasEntry(dir: string, name: string): Promise<boolean> {
 }
 
 /**
+ * D7.5：读更新包里的载荷指纹（`<appServerRoot>/build-stamp.json`）。
+ *
+ * 缺失或损坏返回 null ⇒ 调用方不写 `buildId`（维持 D14.4 的两字段结构）。
+ * 名称与 `paths.ts` 的 `BUILD_STAMP_NAME` 逐字一致；本文件按冻结边界不 import paths.ts。
+ */
+async function readBuildStampId(
+  appServerRoot: string,
+  log: (level: UpdaterLogLevel, message: string) => void,
+): Promise<string | null> {
+  const stampPath = path.join(appServerRoot, 'build-stamp.json');
+  try {
+    const raw = await fsp.readFile(stampPath, 'utf8');
+    const parsed = JSON.parse(raw) as { buildId?: unknown };
+    if (typeof parsed.buildId === 'string' && parsed.buildId.length > 0) {
+      return parsed.buildId;
+    }
+    log('warn', `更新包的 build-stamp.json 缺少 buildId ⇒ 本次不写：${stampPath}`);
+    return null;
+  } catch (err) {
+    log(
+      'warn',
+      `未找到更新包载荷指纹（${stampPath}）⇒ version.json 不写 buildId：${errText(err)}`,
+    );
+    return null;
+  }
+}
+
+/**
  * 定位解压产物里的 server 负载根与前端产物根。
  *
  * 容忍两种打包形态：
@@ -677,11 +705,17 @@ export function createUpdater(ctx: UpdaterContext): Updater {
         log('warn', `D7.4 junction 未就位：${pluginsNodeModulesLink}（插件依赖可能被隔离，下次启动会重试）`);
       }
 
-      // ---- 步骤 8：写 version.json（D14.4 冻结结构）----
-      const versionPayload = {
+      // ---- 步骤 8：写 version.json（D14.4 冻结结构 + D7.5 buildId）----
+      // D7.5：把更新包携带的载荷指纹一并记下。否则下次启动时闸门会看到
+      // 「同版本号但 buildId 不同」而重新播种，把刚装好的运行时覆盖回安装包里的旧载荷。
+      const stampBuildId = await readBuildStampId(roots.appServerRoot, log);
+      const versionPayload: { appVersion: string; updatedAt: string; buildId?: string } = {
         appVersion: targetVersion,
         updatedAt: new Date().toISOString(),
       };
+      if (stampBuildId !== null) {
+        versionPayload.buildId = stampBuildId;
+      }
       try {
         await fsp.mkdir(path.dirname(layout.versionJsonPath), { recursive: true });
         const tmp = `${layout.versionJsonPath}.tmp`;

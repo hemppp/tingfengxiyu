@@ -8,6 +8,7 @@
  * 产出（确定性、幂等）：
  *     apps/desktop/payload/app-server/             → extraResources → resources/app-server/
  *     apps/desktop/payload/seed-plugins/{auto,manual,shared}/  → extraResources → resources/seed-plugins/
+ *     apps/desktop/payload/app-server/build-stamp.json         → 载荷指纹（ADR D7.5）
  *
  * 负载内容（D4.2 冻结清单，2026-10-06 方案 A 修订后）：
  *   app-server/apps/server/src/**                  server 全部 TS 源码
@@ -30,6 +31,7 @@
  *     见 D8.2；此处只保留其在 package.json 里的声明，不投递可能 ABI 错误的副本）
  */
 
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -444,6 +446,57 @@ function main() {
   log(`第三方闭包投递包数: ${copied.length}（顶层目录 ${pkgCount} + scoped 展开 ${scoped}）`);
   log(`app-server 体积: ${total.bytes} B / ${total.files} 文件`);
   log(`seed-plugins 体积: ${seedStat.bytes} B / ${seedStat.files} 文件`);
+
+  // ---- 9) 载荷指纹 build-stamp.json（ADR D7.5）---------------------
+  // 为什么需要：`version.json` 只记 `appVersion`，而主进程的播种闸门原来只判
+  // 「version.json 在不在」。于是「版本号没变但重新打包」时闸门直接跳过播种，
+  // 用户继续看到 app-runtime 里那份旧前端（本仓库实际踩过的坑）。
+  //
+  // 指纹口径：被播种的三处内容（app-server / seed-plugins / web-dist）的
+  // 「相对路径 + 字节数」清单，排序后取 sha256。**不含时间戳**，故同一份源码
+  // 重复构建得到同一指纹（保持本脚本「确定性、幂等」的既有承诺）；内容一变指纹就变。
+  const WEB_DIST = path.join(REPO, 'apps', 'web', 'dist');
+  const fingerprint = [];
+  const collectForFingerprint = (root, label) => {
+    if (!exists(root)) {
+      log(`指纹：缺少 ${label}（${path.relative(REPO, root)}）⇒ 不计入`);
+      return;
+    }
+    const walk = (d) => {
+      const entries = fs
+        .readdirSync(d, { withFileTypes: true })
+        .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+      for (const e of entries) {
+        const fp = path.join(d, e.name);
+        if (e.isDirectory()) walk(fp);
+        else if (e.isFile()) {
+          const rel = path.relative(root, fp).split(path.sep).join('/');
+          fingerprint.push(`${label}/${rel}|${fs.statSync(fp).size}`);
+        }
+      }
+    };
+    walk(root);
+  };
+  collectForFingerprint(APP_SERVER, 'app-server');
+  collectForFingerprint(SEED, 'seed-plugins');
+  collectForFingerprint(WEB_DIST, 'web-dist');
+  fingerprint.sort();
+
+  const appVersion = JSON.parse(
+    fs.readFileSync(path.join(DESKTOP, 'package.json'), 'utf8'),
+  ).version;
+  const stamp = {
+    version: appVersion,
+    buildId: createHash('sha256').update(fingerprint.join('\n')).digest('hex').slice(0, 32),
+    algorithm: 'sha256(sorted "<label>/<relpath>|<bytes>" of app-server + seed-plugins + web-dist)',
+  };
+  fs.writeFileSync(
+    path.join(APP_SERVER, 'build-stamp.json'),
+    `${JSON.stringify(stamp, null, 2)}\n`,
+    'utf8',
+  );
+  log(`载荷指纹: version=${stamp.version} buildId=${stamp.buildId}（${fingerprint.length} 条）`);
+
   log('OK');
 }
 

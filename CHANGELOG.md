@@ -12,12 +12,12 @@
 ### 新增
 
 - **桌面端（Electron）**：主进程 + 内嵌 server 子进程，内置 server 负载与
-  seed 插件；交付 Windows x64 的**三种形态**：NSIS 安装版、
-  **单文件便携 exe**（`NovelMuse-Portable-0.2.0-x64.exe`，双击即用，
-  首启自解压并显示启动图）与**标准绿色 zip**
-  （`NovelMuse-Portable-0.2.0-x64.zip`，解压后进顶层 `NovelMuse/`
-  双击 `NovelMuse.exe`）。
+  seed 插件；交付 Windows x64 的**两种形态**：NSIS 安装版与
+  **标准绿色 zip**（`NovelMuse-Portable-0.2.0-x64.zip`，解压后进顶层
+  `NovelMuse/` 双击 `NovelMuse.exe`）。
   首启自动播种数据目录，退出走优雅关闭通道。
+  > 单文件便携 exe（`NovelMuse-Portable-0.2.0-x64.exe`）曾作为第三种形态提供，
+  > 已于 **2026-10-06 移除**（见下方「变更」与 ADR D4.6）。
 - **停靠式工作台（Dock）**：以 `dockview` 重建项目页布局 —— 活动栏、
   左/中/右三栏与底部细条，面板可拖拽停靠；新增 **文档标签**（DocTabs）
   接管中心区组头，可打开 / 关闭「章节正文 / 人物设定 / 大纲」等标签。
@@ -49,10 +49,57 @@
   **68.2 MB / 5911 文件**（剔除 web-only 依赖与第三方包内 `.map`/`.d.ts`/文档），
   单文件 exe 首启自解压由约 **4.5 分钟**降到约 **1–2 分钟**；绿色 zip 约 **190 MB**，
   解压约 **5 秒**，双击即起窗。
-- **便携形态二选一**：既提供单文件自解压 exe（双击即用），也提供标准绿色 zip
-  （内含顶层 `NovelMuse/` 目录；electron-builder 原生 `zip` target 会把 6273 个文件
-  平铺在压缩包根，故 zip 由 `scripts/package-portable-zip.mjs` 加壳后压缩）。
-  两种形态数据落点相同：`%APPDATA%\NovelMuse`，升级覆盖文件夹即可保留书稿。
+- **便携版首启无反馈（已废）**：曾为单文件便携 exe 补 `portable.splashImage`
+  以消除「双击后数分钟无窗口」。该 exe 形态已整体移除，此修复连同
+  `portable` target 一并作废（ADR D4.6）。
+
+### 变更（2026-10-06 同日修订）
+
+- **移除单文件便携 exe**：便携版**只保留 zip 一种形态**。`win.target` 回退为
+  只有 `nsis`；`portable` 配置段与 `dist:portable` 脚本一并删除；
+  `release/desktop/NovelMuse-Portable-0.2.0-x64.exe`（122219604 B）已从产物目录删除。
+  理由：与绿色 zip 功能完全重叠，且它是 NSIS 自解压 stub —— 首启实测 64–102 s，
+  并独占 D4.5-1 记录的两个假象（`Error writing temporary file`、无窗口静默 exit 0）；
+  zip 解压约 5 s 且解压后就是普通 exe，没有 stub 这一层。
+  **文件名不变**：便携版 zip 仍叫 `NovelMuse-Portable-<version>-x64.zip`
+  （「Portable」指便携形态，不是 portable target）。
+- **修掉「封装版界面与网页版不一致」的成因**：桌面端的前端与后端**不是**从安装目录
+  直接运行，而是**首启播种一次**到 `%APPDATA%\NovelMuse\app-runtime\{web-dist,app-server}`，
+  之后再装新版安装包 / 换新版便携 zip **都不会刷新它**（播种闸门只看
+  <code>app-runtime\version.json</code> 是否存在，从不比较版本号，见
+  <code>docs/architecture/desktop-packaging-adr.md</code> D7.2）。本次已清除本地
+  冻结的旧运行时（含先摘除 `app-server\data` 与 `app-server\node_modules\better-sqlite3`
+  两个 junction，避免递归删除穿透链接删掉书稿库），下次启动会按新包重新播种。
+  **注意：代码层面的「版本变了就重新播种」尚未实现**，是残留缺陷。
+  （该残留缺陷已于下方「修复（同日修订 2）」中实现，见 ADR D7.5。）
+
+### 修复（2026-10-06 同日修订 2）
+
+- **播种闸门现在会识别「同版本号重新打包」（ADR D7.5）**：以往闸门只判
+  `app-runtime/version.json` 是否存在，于是**在同一个版本号（如 0.2.0）下重新打包**后，
+  用户装上新包仍看到旧界面/旧后端 —— 闸门跳过播种，而 `copyDirNoClobber` 又对
+  已存在文件一律跳过。现在新增**载荷指纹** `buildId`：打包脚本对
+  `app-server + seed-plugins + web-dist` 三棵树做 `sha256(sorted "<label>/<relpath>|<bytes>")`
+  取前 32 位，写 `<resources>/app-server/build-stamp.json`。启动时三条触发条件任一成立
+  即重新播种：`missing`（无 version.json）/ `shell-newer`（安装包版本更高）/
+  `payload-changed`（**版本号相同但指纹不同**）。
+- **重新播种会先清空旧运行时**（否则 `copyDirNoClobber` 一个文件都复制不进来）：
+  清 `plugins/node_modules` → `app-runtime/app-server` → `app-runtime/web-dist` →
+  `plugins/{auto,manual,shared}`；`plugins/local`（用户自装）不碰。
+  **数据安全**：删除逐条目 `lstat` 判定，**链接只摘链接、绝不递归跟随**，
+  也绝不对 `app-runtime/app-server` 做 `fs.rmSync(..., {recursive:true})`
+  （那会穿透 `data` junction 删掉全部书稿）。另加两道自检：清理前若
+  `app-server/data` 是**真实非空目录**（D7.3 junction 未建成的历史遗留）则**拒绝播种**；
+  清理后自证 `<userData>/data` 仍存在。
+- **应用内更新不再被误判为陈旧**：更新器替换载荷后会把更新包里的 `buildId`
+  一并写入 `version.json`（ADR D14.5 步骤 8），避免下次启动被判成
+  `payload-changed` 而把刚装好的运行时回退成安装包里的旧载荷。
+- **开放注册（打包态）**：`apps/server/src/modules/auth.ts` 在 `ALLOW_REGISTRATION`
+  未定义时按 `NODE_ENV !== 'production'` 判定，而桌面端打包态 `NODE_ENV` 恒为
+  `'production'` ⇒ 桌面版「注册」页会被 403 拒绝，与网页版行为不一致。现由主进程
+  在打包态显式注入 `ALLOW_REGISTRATION='true'`（ADR D6 / D12.5）。
+  **注意**：这是环境变量层面的开放，**前端没有注册开关 UI**，注册页在导航上始终可见。
+- **启动日志**新增 `reseeded=` 字段，便于确认本次是否发生了重新播种。
 
 ### 变更（2026-10-07 死代码清理）
 

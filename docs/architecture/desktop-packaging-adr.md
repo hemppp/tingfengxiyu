@@ -62,14 +62,14 @@
 | 项 | 冻结值 |
 |---|---|
 | 平台 | **仅 `win32` / `x64`**（`pnpm-workspace.yaml:27-31` `supportedArchitectures: {os:[win32], cpu:[x64]}`） |
-| 分发形态 | ① NSIS 安装版 ② 单文件便携 exe（双击即用，D4.5） ③ 标准便携版 zip（解压即用，D4.4） |
+| 分发形态 | ① NSIS 安装版 ② 标准便携版 zip（解压即用，D4.4）——**单文件便携 exe 已于 D4.6 移除** |
 | 应用显示名 `productName` | `NovelMuse` |
 | 应用 ID `appId` | `com.novelmuse.desktop` |
 | 桌面壳包名 | `@novel/desktop`，版本随 `novel-companion` 根版本（当前 `0.2.0`） |
 | 快捷方式名 `shortcutName` | `听风细雨` |
 | 产物输出目录 | `F:\new1.2\release\desktop`（`/release/` 已在 `.gitignore:28`） |
 | NSIS 安装包文件名 | `NovelMuse-Setup-${version}-x64.exe` |
-| 便携版文件名（单文件 exe） | `NovelMuse-Portable-${version}-x64.exe`（自解压，D4.5） |
+| 便携版文件名（单文件 exe） | ~~`NovelMuse-Portable-${version}-x64.exe`（自解压，D4.5）~~ **已于 D4.6 移除，不再产出** |
 | 便携版文件名（绿色 zip） | `NovelMuse-Portable-${version}-x64.zip`（内含顶层 `NovelMuse/`，D4.4） |
 
 **不做**：macOS / Linux / arm64 / Squirrel / MSI / AppX。**不做** macOS/Linux 目标是硬约束（见 D18）。
@@ -281,6 +281,10 @@ pnpm install
 
 ### D4.5 单文件便携 exe（**2026-10-06 同日追加；与 D4.4 的绿色 zip 并行提供**）
 
+> ⛔ **本节已被 D4.6 取代，仅作历史记录。** `portable` target、`dist:portable` 脚本、
+> `portable.splashImage` 均已移除；下文的命令与配置**不要再执行**。
+> `#### D4.5-1` 的冒烟纪律仅对 `win-unpacked\NovelMuse.exe` 仍有参考价值。
+
 > **背景**：D4.4 把便携版改成绿色 zip 后，用户仍要「一个 exe 双击即用」。判断：zip 需「解压 → 进目录 → 双击」三步，单文件 exe 一步；D4.4 列的两条硬伤已缓解——① 负载已裁剪（240.8 MB → 68.2 MB），静默解压从 ~4.5 分钟降到 ~1–2 分钟，且配 `splashImage` 后首启全程有启动图反馈；② 未签名 exe 的拦截风险如实记录，由用户在 zip 与 exe 之间自行选择。
 
 **决策**：恢复 electron-builder 的 `portable` target，`win.target` 同时产出 `nsis` 与 `portable`；两种便携形态**并存**——zip 走 D4.4 的 `package-portable-zip.mjs`，exe 走 electron-builder 原生自解压。`build-resources/splash.bmp` 随之恢复入库。
@@ -327,6 +331,19 @@ pnpm install
 4. **失败先看 stderr 与 `<userData>\logs\main.log`**，不要以「无窗口」直接判定产物损坏。
 
 > D4.4 的 zip 路径不受症状 1 影响：`package-portable-zip.mjs` 会先复制到 `%TEMP%` 暂存再压缩，故 zip 内条目是干净 ACL（D4.4 已有同源论述）。**exe 形态才需要上面的纪律 1/2。**
+
+### D4.6 移除单文件便携 exe（**2026-10-06 决策，取代 D4.5**）
+
+**决策**（用户要求「删除 exe 那个便携式」）：便携版**只保留 zip 一种形态**。删除 `release/desktop/NovelMuse-Portable-0.2.0-x64.exe`（122219604 B）及仓库内同字节副本 `release/__t_Frel.exe`；`win.target` 回退为**只有 `nsis`**；`portable` 配置段与 `dist:portable` 脚本一并移除。
+
+**理由**：
+1. **形态冗余**：D4.4 的绿色 zip 与 D4.5 的单文件 exe 交付同一套 `win-unpacked/`，功能完全重叠；两套维护（含 `splash.bmp`、`gen-splash.py`）是净成本。
+2. **exe 形态本身最不可靠**：它是 NSIS 自解压 stub，首启实测 **64–102 s** 且依赖 `portable.nsi` 的启动图分支；而 zip 解压约 5 s、解压后直接是普通 exe，没有 stub 这一层。D4.5-1 记录的两个假象（`Error writing temporary file`、无窗口静默 exit 0）**只影响 exe 形态**。
+3. **与本地运行方式的现实一致**：用户实际运行的正是 zip 解压目录（实测 `%APPDATA%\NovelMuse\app-runtime\app-server\node_modules\better-sqlite3` junction 指向 `D:\下载\NovelMuse-Portable-0.2.0-x64\NovelMuse\resources\app.asar.unpacked\...`）。
+
+**保留项**：便携版 zip 的**文件名不变**，仍叫 `NovelMuse-Portable-<version>-x64.zip` —— 「Portable」描述的是便携形态，**不是** portable target。`package-portable-zip.mjs`、`build-resources/splash.bmp`、`scripts/gen-splash.py` 均保留（splash 只有 exe 形态引用，现为无用资产，但删除与否不影响构建）。
+
+**冒烟纪律 1/2 是否仍需要**：**不再需要为 exe 执行**（该形态已不存在）。纪律 3/4（清 `ELECTRON_RUN_AS_NODE`、先看 `logs\main.log`）对 `win-unpacked\NovelMuse.exe` 仍然有效。
 
 ---
 
@@ -395,6 +412,7 @@ stderr 行正则：  ^\[Server\] Cordis 基座已就绪 → http://localhost:(\d
 | `WEB_DIST_PATH` | 运行时计算：`<userData>/app-runtime/web-dist` | 无 | 目录可读 | 否 |
 | `DB_PATH` | 运行时计算：`<userData>/data/novelmuse.db` | `<userData>/data/novelmuse.db`（+ `-wal` / `-shm`） | 文件 `0o600` | 否 |
 | `PLUGINS_ROOT` | 运行时计算：`<userData>/plugins` | 目录 | 目录可写 | **是**（设置→更新页显示 `插件目录`） |
+| `ALLOW_REGISTRATION` | 打包期常量：打包态 `'true'`；开发态 **不处置**（既不注入也不剔除，沿用宿主环境） | 无 | — | **是**（登录页是否显示并可用「注册」入口） |
 | `JWT_SECRET` | **首启生成**：`crypto.randomBytes(32).toString('hex')`（64 个十六进制字符），之后读取复用 | `<userData>/data/.jwt-secret` | 文件 `0o600` | 否 |
 | `ADMIN_USERNAME` | **不注入**（server 默认 `'admin'`） | DB `users` 表 | — | 是（登录页） |
 | `ADMIN_PASSWORD` | **不注入**（server 随机生成，`index.ts:68` `randomBytes(16).toString('base64url')`） | DB + `<userData>/logs/initial-admin-password.txt` | 文件 `0o600` | **是**（仅首启对话框） |
@@ -469,7 +487,7 @@ stderr 行正则：  ^\[Server\] Cordis 基座已就绪 → http://localhost:(\d
 
 ### D7.2 首次启动播种（冻结）
 
-若 `<userData>/app-runtime/version.json` 不存在：
+若 `<userData>/app-runtime/version.json` 不存在（**或 D7.5 的重新播种条件成立**）：
 1. 复制 `resources/app-server` → `<userData>/app-runtime/app-server`；
 2. 复制 `resources/web-dist` → `<userData>/app-runtime/web-dist`；
 3. 复制 `resources/seed-plugins/{auto,manual,shared}` → `<userData>/plugins/{auto,manual,shared}`（已存在则跳过，**不覆盖用户改动**）；
@@ -497,6 +515,45 @@ F13 实测：`<PLUGINS_ROOT>/node_modules` 缺失时，`novel.bookscan` 与 `nov
 **冻结**：启动时确保 `<userData>/plugins/node_modules` 为**目录 junction** → `<userData>/app-runtime/app-server/node_modules`。
 
 **实测注意（F20）**：`fs.symlinkSync(target, link, 'junction')` 在 Windows 可用，但 junction 的 `fs.lstatSync(link).isDirectory()` 返回 **false** ⇒ **存在性判断必须用 `fs.statSync` / `fs.existsSync`，禁止用 `lstat().isDirectory()`**。
+
+### D7.5 重新播种 —— 版本或载荷指纹变更时（冻结）
+
+D7.2 只判「`version.json` 是否存在」，于是**在同一个版本号下重新打包后，用户装的仍是旧前端/旧后端**：`version.json` 还在 ⇒ 闸门跳过 ⇒ `copyDirNoClobber` 又对一切已存在文件跳过 ⇒ 一个字节都不会更新。用户必须手工删掉 `<userData>/app-runtime` 才能看到新界面。D7.5 补上这一环。
+
+**触发条件（`paths.ts` 的 `shouldReseed()`，三条互斥，按优先级）**：
+
+| 原因 | 条件 | 场景 |
+|---|---|---|
+| `missing` | `version.json` 不存在 | 首次安装（= D7.2 原条件） |
+| `shell-newer` | `isNewer(appVersion, version.json.appVersion)` | 装了更高版本号的安装包 |
+| `payload-changed` | `version.json.appVersion === appVersion` **且** `version.json.buildId !== build-stamp.buildId` | **同版本号重新打包** |
+
+**载荷指纹（`build-stamp.json`，冻结）**：打包脚本 `apps/desktop/scripts/build-server-payload.mjs` 在生成 `payload/app-server` 后追加一步，对 `app-server/`、`seed-plugins/`、`web-dist/` 三棵树的每个文件取 `<label>/<相对路径>|<字节数>`，**排序**后拼接做 `sha256`，取前 32 位十六进制作为 `buildId`，写 `<payload>/app-server/build-stamp.json`：
+
+```json
+{ "version": "<apps/desktop 的 version>", "buildId": "<32 位 hex>", "algorithm": "sha256(sorted \"<label>/<relpath>|<bytes>\" of app-server + seed-plugins + web-dist)" }
+```
+
+该文件**不含时间戳**（保持载荷生成器「确定性、幂等」的既有承诺），非隐藏文件名（避免 electron-builder 的 `extraResources` glob 漏掉 dotfile），随安装包与更新包一起分发。
+
+**`payload-changed` 为什么限定「版本号相同」**：应用内更新器（D14.5）装好运行时后会写入它自己的 `appVersion`（可能**高于**外壳版本）。若不限定版本号，下次启动会看到「指纹不同」而把刚装好的运行时**回退**成安装包里的旧载荷。限定后，只有「版本号一致但指纹不同」才重新播种 —— 那必然是重新打包了安装包。
+
+**重新播种必须先清空旧运行时（冻结）**：`copyDirNoClobber`（D7.2 步骤 1–3）对已存在文件一律跳过 ⇒ 不清空就一个文件都复制不进来。清理范围：`<userData>/plugins/node_modules` → `<userData>/app-runtime/app-server` → `<userData>/app-runtime/web-dist` → `<userData>/plugins/{auto,manual,shared}`（刷新插件代码；`plugins/local` 用户自装目录**不碰**），随后补建 `<userData>/app-runtime`。
+
+**★ 数据安全（D7.3 红线的延伸，冻结）**：清理**只能逐条目 `lstat` 后判定**：
+- 条目是链接（junction/symlink）⇒ 只 `unlink` 摘掉链接本身，**绝不递归进去**；
+- 条目自身是链接 ⇒ **绝不 `readdir`**（那会列到目标的真实内容），直接摘链接；
+- 真实目录 ⇒ 递归；真实文件 ⇒ `unlink`。
+
+**禁止**对 `app-runtime/app-server` 使用 `fs.rmSync(dir, { recursive: true })` —— Node 的递归删除会**穿过 reparse point**，把 `data` junction 指向的 `<userData>/data`（用户全部书稿）删掉。
+
+**两道自检（冻结）**：
+- **前置** `isSafeToClearRuntime()`：若 `app-runtime/app-server/data` 是**真实非空目录**（D7.3 junction 从未建立成功的历史遗留，项目库就落在这里）⇒ **拒绝重新播种**并打 `error`，宁可让用户继续看旧界面也不销毁书稿。
+- **后置**：清理结束后自证 `<userData>/data` 仍存在，否则打 `error` 并放弃。
+
+**可观测**：`ensureLayout()` 的返回值新增 `reseeded: boolean`；启动日志行形如 `布局：seeded=…，reseeded=…，appServerPresent=…，appServerDir=…`。
+
+**updater 侧（D14.5 步骤 8）**：更新器替换完载荷后，读更新包里的 `<appServerRoot>/build-stamp.json`，把 `buildId` 一并写进 `version.json`（缺失则维持两字段结构）。否则下次启动会被判成 `payload-changed` 而回退。
 
 ---
 
@@ -652,7 +709,7 @@ webPreferences: {
 ### D12.3 启动顺序（冻结）
 1. `app.requestSingleInstanceLock()`
 2. `app.whenReady()`
-3. `paths.ts`：解析 userData 布局；若 `version.json` 缺失则执行 D7.2 播种
+3. `paths.ts`：解析 userData 布局；若 `version.json` 缺失（或 D7.5 的 `shell-newer` / `payload-changed` 成立）则执行 D7.2 播种（D7.5 时先清空旧运行时）
 4. 建立 D7.3 / D7.4 junction
 5. `env.ts`：装配 D6 环境变量（含生成/读取 `JWT_SECRET`）
 6. `server-process.ts`：spawn 子进程 → stderr 握手（D5.1）→ `GET /api/health` 就绪探针（D5.4）
@@ -675,6 +732,7 @@ webPreferences: {
 | `PLUGINS_ROOT` | **不注入**（走 `local-scanner.ts:77-81` 的 `<repo>/apps/plugins` 默认） | `<userData>/plugins` |
 | `WEB_DIST_PATH` | **不注入**（distIndex 为 undefined，不注册静态回退） | `<userData>/app-runtime/web-dist` |
 | `JWT_SECRET` | 不注入（dev 下 `jwt.ts` 走文件回退 `<repo>/data/.jwt-secret`） | 注入 |
+| `ALLOW_REGISTRATION` | **不处置**（既不注入也不剔除，沿用宿主环境；未设时 `NODE_ENV !== 'production'` 已使注册开放） | 注入 `'true'`（否则打包态 `NODE_ENV='production'` 使注册默认关闭，与网页版行为不一致） |
 | `ELECTRON_RUN_AS_NODE` | 同打包态 | `'1'` |
 
 **注意（实测教训，冻结为纪律）**：本机 harness 全局设置了 `ELECTRON_RUN_AS_NODE=1`。**任何启动 GUI 的测试必须先 `Remove-Item Env:ELECTRON_RUN_AS_NODE`**，否则 `app.isPackaged` 流程不会启动、进程以 ExitCode=0 静默退出（探针中曾误判为「打包产物无法启动」）。
@@ -802,7 +860,7 @@ sigint.txt exists: false
       ★ 绝不动 plugins/（插件是独立更新单元）
    f. 替换 app-runtime/web-dist
    g. 重建 D7.3 / D7.4 junction
-   h. 更新 version.json
+   h. 更新 version.json（含从更新包 build-stamp.json 取来的 buildId，见 D7.5）
    i. 返回 { ok: true, version, notes }
 ③ 渲染进程 UpdateSection.tsx:77-95 收到 ok ⇒ 显示 "✅ 应用已更新到 v…，即将重启..." ⇒ 1200 ms 后调用 updaterRelaunch()
 ④ updaterRelaunch() ⇒ 优雅关闭子进程（D13.4）⇒ app.relaunch() + app.exit(0)
@@ -823,11 +881,11 @@ sigint.txt exists: false
 | 快速冒烟打包（不产安装包） | `apps\desktop\node_modules\.bin\electron-builder.cmd --win dir --x64` |
 | 正式打包（安装版） | `apps\desktop\node_modules\.bin\electron-builder.cmd --win nsis --x64` |
 | 打包便携版 zip（一步到位） | `pnpm -C apps/desktop dist:zip`（= 负载 → 壳 → `--dir` → 压 zip，见 D4.4） |
-| 打包单文件便携 exe（一步到位） | `pnpm -C apps/desktop dist:portable`（= 负载 → 壳 → `--win portable --x64`，见 D4.5） |
+| ~~打包单文件便携 exe~~ | ~~`pnpm -C apps/desktop dist:portable`~~ **已于 D4.6 移除该脚本与 target** |
 | 发布工具 | `node apps/desktop/scripts/build-update.mjs` |
 | 打包后恢复开发环境 | `pnpm install`（D8.4 硬性纪律） |
 
-**冻结**：`--win dir --x64` 为**冒烟首选**（快、无需 NSIS）；正式出包用 `nsis`（安装版）、`pnpm -C apps/desktop dist:portable`（单文件便携 exe，D4.5）与 `pnpm -C apps/desktop dist:zip`（便携版 zip，D4.4）。
+**冻结**：`--win dir --x64` 为**冒烟首选**（快、无需 NSIS）；正式出包只有两种：`nsis`（安装版）与 `pnpm -C apps/desktop dist:zip`（便携版 zip，D4.4）。单文件便携 exe 已于 **D4.6** 移除。
 
 ---
 
@@ -838,7 +896,7 @@ sigint.txt exists: false
 
 ### D16.2 配置块（冻结，逐字）
 
-> **2026-10-06 更新（D4.4 → D4.5）**：D4.4 曾把 `win.target` 的 `portable` 与整个 `portable` 段移除；**D4.5 已恢复**（zip 与单文件 exe 并行提供），故下方 `win.target` 与 `portable` 段为**当前实仓逐字**内容。另一处 D4.4 起的改动仍有效：`files` 去掉 `!node_modules/**/*`（R7 已实测：该排除会连带压掉 `asarUnpack` 需要的实体，去掉后 electron-builder 按 `asarUnpack` 自行拆分）；`extraResources` 补回 `payload/app-server/node_modules` 一条（D4.2 显式投递 node_modules，不能只靠 `from: payload/app-server` 隐式带出）。
+> **2026-10-06 更新（D4.6）**：下方配置块为**当前实仓逐字**内容 —— `win.target` 只剩 `nsis`，`portable` 段已随 **D4.6** 移除（D4.4 曾移除、D4.5 曾恢复、D4.6 再次移除且为终态）。其余 D4.4 起的改动仍有效：`files` 去掉 `!node_modules/**/*`（R7 已实测：该排除会连带压掉 `asarUnpack` 需要的实体，去掉后 electron-builder 按 `asarUnpack` 自行拆分）；`extraResources` 补回 `payload/app-server/node_modules` 一条（D4.2 显式投递 node_modules，不能只靠 `from: payload/app-server` 隐式带出）。
 
 ```jsonc
 {
@@ -884,8 +942,7 @@ sigint.txt exists: false
     ],
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        { "target": "nsis", "arch": ["x64"] }
       ],
       "icon": "build-resources/icon.ico",
       "artifactName": "NovelMuse-${version}-${arch}.${ext}"
@@ -899,11 +956,6 @@ sigint.txt exists: false
       "shortcutName": "听风细雨",
       "artifactName": "NovelMuse-Setup-${version}-${arch}.${ext}",
       "deleteAppDataOnUninstall": false
-    },
-    "portable": {
-      "artifactName": "NovelMuse-Portable-${version}-${arch}.${ext}",
-      "splashImage": "build-resources/splash.bmp",
-      "unpackDirName": "NovelMuse"
     }
   }
 }
@@ -913,9 +965,9 @@ sigint.txt exists: false
 
 **关于 `files` 里的 `!node_modules/**/*`（R7 已闭环）**：**已去掉**。该排除会连带压掉 `asarUnpack` 需要的实体；去掉后 electron-builder 按 `asarUnpack` 自行拆分，实测 `app.asar.unpacked` 含 `better-sqlite3` 实体（`better_sqlite3.node` = 1921024 B，ADR F26 期望值 ✓）。
 
-**关于便携版 `portable.splashImage`（D4.4 曾废弃，D4.5 已恢复）**：`portable` target、`splashImage` 与 `build-resources/splash.bmp` 在 D4.4 被删除，**D4.5 已全部恢复**（用户要求「一个 exe 双击即用」）。该启动图 640×400 24-bit BMP / 768054 B，由 `python apps/desktop/scripts/gen-splash.py` 生成（须入库，否则 `splashImage` 指向不存在的文件，electron-builder 会在打包期报错）。**若不配 `splashImage`，`portable.nsi:11-13` 会 `SetSilent silent` ⇒ 首启全程无窗口**，这是必须避免的形态（D4.5-1）。
+**关于便携版 `portable.splashImage`（D4.4 曾废弃 → D4.5 恢复 → **D4.6 再次废弃，终态**）**：`portable` target 已于 D4.6 移除，故 `splashImage` / `build-resources/splash.bmp` **不再被任何构建引用**。该文件（640×400 24-bit BMP / 768054 B，由 `python apps/desktop/scripts/gen-splash.py` 生成）与 `gen-splash.py` **保留在仓库**（不再参与打包，删除与否不影响构建）。D4.5-1 中「未配 `splashImage` 会走 `SetSilent silent` ⇒ 首启全程无窗口」的论述随之失效——**因为该形态本身已不存在**。
 
-**关于 `portable` 的冒烟纪律**：见 D4.5-1（工作区低完整性标签会让 Low IL 进程写不了 `%TEMP%`/`%APPDATA%`，产生`NSIS Error: Error writing temporary file` 与「无窗口静默 exit 0」两个假象）。
+**关于 `portable` 的冒烟纪律**：见 D4.5-1。D4.6 移除 exe 形态后，纪律 1/2（把产物搬到 Medium IL 位置）**仅对 `win-unpacked\NovelMuse.exe` 仍有意义**。
 
 ### D16.3 为什么 `asarUnpack` 必须含 `bindings` 与 `file-uri-to-path`
 `better-sqlite3` 通过 `bindings` 包定位 `.node` 文件，`bindings` 又依赖 `file-uri-to-path`。asar 内动态 `require` 裸说明符实测失败（探针 `Cannot find module 'bindings'`）⇒ 三者必须一起解包。同时 `**/*.node` 本身必须解包（原生模块无法从 asar 内 `dlopen`）。

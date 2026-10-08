@@ -509,6 +509,7 @@ async function main(): Promise<void> {
   }
   logger.info(
     `布局：seeded=${String(layoutResult.seeded)}，` +
+      `reseeded=${String(layoutResult.reseeded)}，` +
       `appServerPresent=${String(layoutResult.appServerPresent)}，` +
       `appServerDir=${layout.appServerDir}`,
   );
