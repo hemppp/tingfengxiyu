@@ -54,6 +54,36 @@
   平铺在压缩包根，故 zip 由 `scripts/package-portable-zip.mjs` 加壳后压缩）。
   两种形态数据落点相同：`%APPDATA%\NovelMuse`，升级覆盖文件夹即可保留书稿。
 
+### 变更（2026-10-07 死代码清理）
+
+全仓零入边扫描（421 个源文件，排除 node_modules / dist / payload）后删除 **21 个零引用文件**
+（约 2329 行 + 一张 768 KB 启动图），并清掉随之变空的 4 个目录：
+
+- **迁移遗留的插件组件（8 个）**：`manual/workbench/web/` 下的
+  `consistency/ConsistencyPanel.tsx`、`series/SeriesManager.tsx`、`snapshot/SnapshotManager.tsx`、
+  `knowledge/Heatmap.tsx`、`foreshadow/EarmarkPanel.tsx`、`foreshadow/ForeshadowsPage.tsx`、
+  `editor/extensions/MentionExtension.ts`、`editor/extensions/RealtimeRhythm.tsx`。
+  它们来自 web→插件拆分那轮迁移，拆分契约明令「不删除任何文件」，
+  之后**再没有任何注册点挂上去**（`web/index.tsx:46` 只注册了一个 `key:'chapters'` 面板）。
+- **未接入路由的页面（1 个）**：`apps/web/src/pages/ProjectSelectPage.tsx`
+  —— `App.tsx` 路由表、`lazyRoute`、字符串路径三处均无引用。
+- **零引用的兼容垫片（9 个）**：`apps/web/src/` 下 9 个 1–4 行的再导出壳
+  （`components/layout/{BottomDrawer,RightSidebar}.tsx`、`hooks/useCurrentProjectId.ts`、
+  `services/data/localUserData.ts`、`services/editor/{rhythmService,styleService}.ts`、
+  `stores/{cascadeCleanFlag,editorStore,outlineNotepadStore}.ts`）。
+  **只删壳**：它们指向的实体仍在 `@novel-plugins/{data-core,ui-kit}` 里并由插件直接引入
+  （`apps/web/src` 另有 19 个同类垫片仍被引用，保留）。
+- **无人调用的服务（1 个）**：`apps/server/src/services/demo-seed.ts`
+  （`seedDemoData` 已导出但全仓无调用点）。
+- **portable 目标移除后的孤儿资产（2 个）**：`apps/desktop/build-resources/splash.bmp`
+  （唯一消费者 `portable.splashImage` 已随 D4.6 作废）与生成它的
+  `apps/desktop/scripts/gen-splash.py`。
+
+验证：`pnpm -r type-check`（14 workspace）✓、`pnpm --filter @novel/web build` ✓、
+`pnpm verify:all` ✓。构建产物**仍是 49 个 chunk、一个都没少**
+（本次删除的代码此前就已被 tree-shaking 排除在包外），仅 chunk 文件名哈希发生漂移；
+因此 `buildId` 会变化，桌面端下次启动会按 D7.5 自动重新播种。
+
 ### 已知限制
 
 - 桌面端产物**未做代码签名**：首次运行会触发 Windows SmartScreen 提示，
