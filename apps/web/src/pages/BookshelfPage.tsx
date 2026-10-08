@@ -10,6 +10,8 @@ import type { Project } from '@novel/shared';
 import { apiClient, ApiError } from '@/services/api/apiClient';
 import { setQueryData } from '@/services/api/queryClient';
 import { queryKeys } from '@/services/api/queryKeys';
+// ★ 2026-10-07「跳转加载转圈」全修复（④）：书架条目 hover/按下即预取「进项目」链路 chunk
+import { prefetchProjectEntry } from '@/routes/prefetch';
 import { useAuthStore } from '@/stores/authStore';
 import {
   useProjectStore,
@@ -94,6 +96,11 @@ const BookCardItem = memo(function BookCardItem({
   const handleClick = useCallback(() => onOpen(book), [book, onOpen]);
   const handleEdit = useCallback(() => onEdit(book), [book, onEdit]);
   const handleDelete = useCallback(() => onDelete(book), [book, onDelete]);
+  // ★ 2026-10-07「跳转加载转圈」全修复（④）：悬停/按下即预取「进项目」链路 chunk。
+  //   与 `handleClick` 不同，这里**不依赖具体某本书** —— 四段串行链（ProjectLayout →
+  //   ProjectIndexPage → 章节数据 → ChapterEditor）与书目无关，任何一本书的意图都
+  //   值得提前把 chunk 发出去。故依赖为空数组，函数引用恒定，BookCard 的 memo 不受影响。
+  const handleIntent = useCallback(() => { prefetchProjectEntry(); }, []);
   return (
     <BookCard
       className="book-card-item"
@@ -102,6 +109,7 @@ const BookCardItem = memo(function BookCardItem({
       onClick={handleClick}
       onEdit={handleEdit}
       onDelete={handleDelete}
+      onIntent={handleIntent}
       index={index}
     />
   );

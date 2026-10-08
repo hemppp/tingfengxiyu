@@ -349,6 +349,22 @@ button.shell-statusbar-item:active {
   color: var(--vscode-editor-foreground);
 }
 
+/* ---------- 面板级加载态（Suspense fallback，见 shell/PanelFallback.tsx） ----------
+   ★ 2026-10-07「跳转加载转圈」全修复：停靠面板 chunk 未到位时只在本面板框内转圈，
+   不再冒泡到路由级 RouteFallback 吞掉整页。`dock-spin` 的 keyframes 在 dock-theme.css
+   （DockShell 静态引入 ⇒ ProjectLayout 侧也一定已加载）。 */
+.shell-panel-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  min-height: 120px;
+  color: var(--vscode-descriptionForeground);
+  background-color: var(--vscode-panel-background);
+}
+
 /* ---------- 工作台缺席占位（保留既有降级语义） ---------- */
 .shell-workbench-missing {
   display: flex;

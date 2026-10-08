@@ -13,6 +13,15 @@ interface BookCardProps {
   chapterCount?: number;
   index?: number;
   className?: string;
+  /**
+   * ★ 2026-10-07「跳转加载转圈」全修复（④）：**意图预取**钩子。
+   *
+   * 在 `mouseenter` / `focus` / `pointerdown`（用户指向本书、但点击尚未发生）时调用，
+   * 用来提前发出「进项目」链路的 chunk（见 `routes/prefetch.ts` 的
+   * `prefetchProjectEntry`）。命中模块缓存后，点击导航时四段串行只剩数据请求的真实耗时。
+   * 失败静默 —— 预取绝不能影响正常点击。
+   */
+  onIntent?: () => void;
 }
 
 /**
@@ -44,13 +53,17 @@ const DROPDOWN_ITEM_BASE: React.CSSProperties = {  display: 'flex',
   fontFamily: "'Noto Serif SC', serif",
 };
 
-const BookCard = memo(function BookCard({ book, onClick, onEdit, onDelete, chapterCount = 0, index: _index = 0, className }: BookCardProps) {
+const BookCard = memo(function BookCard({ book, onClick, onEdit, onDelete, chapterCount = 0, index: _index = 0, className, onIntent }: BookCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
-  const handlePointerDown = useGlassRipple<HTMLDivElement>();
+  // ★ 意图预取（④）：`pointerdown` 是最早的「用户确实要打开这本书」信号 ——
+  //   比 click 早、比 mouseenter 更确定。涟漪处理器本就接受一个 onPointerDown 回调，
+  //   这里把预取挂在同一个事件上（不额外加监听器、不改 DOM 结构）。
+  const handleIntentPointerDown = useCallback(() => { onIntent?.(); }, [onIntent]);
+  const handlePointerDown = useGlassRipple<HTMLDivElement>(handleIntentPointerDown);
 
   useEffect(() => {
     if (!showMenu) return;
@@ -78,7 +91,7 @@ const BookCard = memo(function BookCard({ book, onClick, onEdit, onDelete, chapt
       : `${wc.toLocaleString()} 字`;
   })();
 
-  const handleMouseEnter = useCallback(() => setIsHovered(true), []);
+  const handleMouseEnter = useCallback(() => { setIsHovered(true); onIntent?.(); }, [onIntent]);
   const handleMouseLeave = useCallback(() => { setIsHovered(false); setIsPressed(false); }, []);
   const handleMouseDown = useCallback(() => setIsPressed(true), []);
   const handleMouseUp = useCallback(() => setIsPressed(false), []);

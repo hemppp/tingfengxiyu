@@ -295,6 +295,43 @@ reseeded=true`（buildId `3b4093c6…` → **`484046b7fdc335afe040d4af0f04676b`*
 - 包路径口径保持正确：`ui-kit` / `ui-graph` / `data-core` 在 `apps/plugins/shared/*`，
   `packages/` 下只有 `core` / `db` / `shared` 三个包。
 
+### 修复（2026-10-07 跳转加载转圈 · 全修复）
+
+- **根因（实测确认）**：停靠内核（`DockShell` / `DockPanelContent`）自身**不提供任何
+  Suspense 边界**，而手写台的面板组件全是 `React.lazy`（左栏章节树、右栏 AI 对话、
+  12 个停靠面板）。dockview 经 `ReactDOM.createPortal` 把面板挂到 `DockviewReact`
+  所在节点之下，**不重置 Suspense 边界** ⇒ 面板首次读取 chunk 时挂起，会一路上溯到
+  路由级 `RouteFallback`，整页被 32px 大转圈替换。旧版 `ProjectLayout` 原本在面板
+  内容处有 `<Suspense fallback={<PanelFallback/>}>`，Dock 重构时被删掉 —— 这是
+  「点开面板 / 进项目就整页转圈」的结构性根因。
+- **① 抽出共享 `PanelFallback`**：新增 `apps/web/src/components/shell/PanelFallback.tsx`
+  （原先是 `ProjectLayout` 里的局部函数、仅服务 auto 工作台一处），并在
+  `project-shell.css` 补上此前**缺失**的 `.shell-panel-fallback` 样式（颜色取
+  `--vscode-*`，不写字面色值）。
+- **② 补面板级 Suspense 边界**（根治项）：`components/shell/dock/DockPanelContent.tsx`
+  在 `PanelErrorBoundary` 内、`.dock-panel-body` 外包一层
+  `<Suspense fallback={<PanelFallback/>}>` ⇒ 面板 chunk 未到位时，只有该面板框内显示
+  小转圈，不再让整页退化。
+- **③ `ProjectLayout` 复用共享 `PanelFallback`**：删掉本地实现，auto 工作台分支继续
+  使用同名组件；中心槽 `centerDefault={<Outlet/>}` 有意**不**额外包边界 —— 其内容是
+  `lazyRoute()` 包裹的路由元素，自身已带 Suspense，再包一层会造成双层 fallback。
+- **④ 书架条目意图预取**：新增 `routes/prefetch.ts`，把原先散在 `App.tsx` 模块作用域
+  的路由 loader 与预取表提为**单一真源**，并导出 `prefetchProjectEntry()`（走书架 →
+  项目那条完整四段链）。`BookCard` 新增可选 `onIntent`，在 `onMouseEnter` 与
+  `onPointerDown` 时触发（`onPointerDown` 复用 `useGlassRipple` 已接受的回调，不额外
+  挂监听器）；`BookshelfPage` 的卡片项传入该回调 ⇒ 鼠标刚移到书封上就开始预取，点开
+  时 chunk 多半已就绪。
+- **⑤ `RouteFallback` 防闪烁**：`routes/Lazy.tsx` 的整页 fallback 改为**延迟 180ms
+  才出现**。React.lazy 首次读取必然抛 thenable（即使 chunk 已在模块缓存），零耗时挂起
+  也会闪一次「加载中...」；延迟出现即可消除这种一闪而过。有意**不做**「最短显示
+  时长」—— 那会把已就绪内容压住不放，与「少转圈」目标相反。
+- **回归测试**：新增 `DockPanelContent.suspense.test.tsx`（2 例，验证挂起只落在面板框
+  内、外层边界不被触发；去掉 `<Suspense>` 后 2 例即失败）、`Lazy.test.tsx`（4 例，
+  延迟显示 / 卸载后不显示 / 已 resolve 不闪）、`BookCard.intent.test.tsx`（3 例，
+  hover 与 pointerdown 各触发一次预取）。验证：`pnpm -r type-check` ✓（14 workspace）、
+  隔离门禁 `verify-workbench-isolation` ✓（210 文件 0 违规）、web vitest
+  **245 例 / 21 文件全过**、`pnpm verify:all` ✓。
+
 ### 已知限制
 
 - 桌面端产物**未做代码签名**：首次运行会触发 Windows SmartScreen 提示，

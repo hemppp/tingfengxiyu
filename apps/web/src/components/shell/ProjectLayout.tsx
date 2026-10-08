@@ -52,7 +52,6 @@ import {
   User,
   Shield,
   AlertTriangle,
-  Loader2,
   ArrowLeft,
   Moon,
   Sun,
@@ -69,6 +68,9 @@ import type { Project } from '@novel/shared';
 import { WorkbenchMissing } from '@/components/shell/WorkbenchMissing';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { DockShell } from '@/components/shell/DockShell';
+// ★ 2026-10-07「跳转加载转圈」全修复：面板级加载态提为共享组件（原先只在本文件里，
+//   仅服务 auto 工作台一处；停靠内核 DockPanelContent 也需要同一种 fallback）。
+import { PanelFallback } from '@/components/shell/PanelFallback';
 import type { DockPanelDef, DockShellApi } from '@/components/shell/dock/types';
 // ★ §1.5：`resolveDockMeta` 是缺省行为的**唯一真源** —— center 判定一律经它取值，
 //   本壳不得自写 `?? false` 兜底（否则与 DockShell 的分桶口径漂移）。
@@ -95,16 +97,6 @@ import './project-shell.css';
 //   kernel 不再硬编码 `import('@novel-plugins/auto-workbench/web')` 说明符 ——
 //   那是 vite 静态可解析的模块入口字面量，auto 缺席时 `[vite:load-fallback] ENOENT`
 //   会让 build 硬失败。改由注册表取（模块缺席 ⇒ 槽为空 ⇒ 不渲染，降级语义）。
-
-/** 面板内容加载态（Suspense fallback）。VS Code 风格：无边框转圈 + 次级文字。 */
-function PanelFallback() {
-  return (
-    <div className="shell-panel-fallback" role="status" aria-label="加载中">
-      <Loader2 size={18} className="dock-spin" style={{ color: 'var(--vscode-descriptionForeground)' }} />
-      <span style={{ fontSize: 12, color: 'var(--vscode-descriptionForeground)' }}>加载中…</span>
-    </div>
-  );
-}
 
 /**
  * 应用级致命错误兜底（根 ErrorBoundary 的 renderError）。
@@ -592,6 +584,8 @@ export function ProjectLayout() {
         <main className="shell-main">
           <DockShell
             panels={allShellPanels}
+            /* 中心槽出口（章节编辑器路由）自带 Suspense —— `lazyRoute()` 已为它套了边界
+               （routes/Lazy.tsx），编辑器 chunk 未就绪时只在该出口内转圈。 */
             centerDefault={<Outlet />}
             activeCenterKey={activeCenterKey}
             apiRef={dockApiRef}

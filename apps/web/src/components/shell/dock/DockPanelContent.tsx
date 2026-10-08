@@ -9,9 +9,10 @@
 // 颜色全部取 `--vscode-*`（ADR §5.3 / 约定 C-3：不写 `var(--x, #fff)` 兜底）。
 // ============================================================
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import type { IDockviewPanelProps } from 'dockview';
+import { PanelFallback } from '../PanelFallback';
 import type { DockPanelDef } from './types';
 
 /** 传给业务面板的 params（dockview 会原样塞进 `props.params`）。 */
@@ -105,7 +106,18 @@ export function DockPanelContent(props: IDockviewPanelProps<DockPanelParams>) {
   return (
     <PanelErrorBoundary label={def.label}>
       <div className="dock-panel-body" data-panel-key={def.key}>
-        <Component />
+        {/*
+          ★ 2026-10-07「跳转加载转圈」全修复（根治项）：
+          面板组件可能是 `React.lazy`（模块内的 12 个停靠面板 / 章节左栏 / AI 对话）。
+          dockview 把面板内容经 `ReactDOM.createPortal` 挂在 `DockviewReact` 所在的
+          div 下，**它自己不提供任何 Suspense 边界** —— 面板挂起会一路上溯到
+          `routes/Lazy.tsx` 的路由级 fallback，把整页换成 32px「加载中...」大转圈
+          （实测：探针面板挂起时外层 RouteFallback 确实出现过）。
+          这里补一个面板级边界，让 chunk 加载只在本面板框内转圈（PanelFallback）。
+        */}
+        <Suspense fallback={<PanelFallback />}>
+          <Component />
+        </Suspense>
       </div>
     </PanelErrorBoundary>
   );
