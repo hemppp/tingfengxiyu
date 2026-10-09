@@ -31,6 +31,9 @@ const CONST_DISABLE_PROXY_DETECT = '1';
 const CONST_HOST_MODE = 'all';
 const CONST_ELECTRON_RUN_AS_NODE = '1';
 
+/** D6.3 宿主代理透传时注入子进程的 `NO_PROXY` 默认值（与 server 端 `proxy-agent.ts` 兜底值一致）。 */
+const DEFAULT_NO_PROXY = 'localhost,127.0.0.1,::1';
+
 /**
  * D6 冻结「**不注入**」的键（大小写不敏感匹配）。
  *
@@ -94,6 +97,51 @@ function deletePrefixInsensitive(target: Record<string, string>, prefix: string)
 }
 
 /**
+ * 把 Chromium `session.resolveProxy()` 的返回值解析成 undici 可用的代理 URL（D6.3）。
+ *
+ * Chromium 返回的是 PAC 风格的**候选列表**（`;` 分隔），实测形态：
+ *   - `DIRECT`                        —— 直连
+ *   - `PROXY 127.0.0.1:7897`          —— 普通 HTTP 代理（Clash Verge 默认端口，最常见）
+ *   - `PROXY a:1;DIRECT`              —— 首选 + 回退
+ *   - `HTTPS 127.0.0.1:7897`          —— 连代理本身要走 TLS
+ *   - `SOCKS5 127.0.0.1:1080`         —— undici 的 ProxyAgent **不支持** socks
+ *
+ * 只取第一个可用候选：`PROXY` / `HTTP` → `http://…`，`HTTPS` → `https://…`。
+ * `SOCKS*` 与 `DIRECT` 一律跳过；全部不可用时返回 null（含义：**不给子进程注代理**，
+ * 于是 server 走自己的自动探测/直连逻辑，见 `apps/server/src/lib/proxy-agent.ts`）。
+ *
+ * 纯函数、无 electron 依赖 ⇒ 可单测，也避免把 Electron API 带进环境装配模块。
+ */
+export function parseChromiumProxy(raw: string | null | undefined): string | null {
+  if (typeof raw !== 'string') {
+    return null;
+  }
+  for (const candidate of raw.split(';')) {
+    const entry = candidate.trim();
+    if (entry.length === 0) {
+      continue;
+    }
+    const match = /^(PROXY|HTTP|HTTPS|SOCKS5|SOCKS4|SOCKS)\s+(\S+)$/i.exec(entry);
+    if (match === null) {
+      continue;
+    }
+    const [, schemeRaw = '', hostPort = ''] = match;
+    if (hostPort.length === 0) {
+      continue;
+    }
+    const scheme = schemeRaw.toUpperCase();
+    if (scheme === 'PROXY' || scheme === 'HTTP') {
+      return `http://${hostPort}`;
+    }
+    if (scheme === 'HTTPS') {
+      return `https://${hostPort}`;
+    }
+    // SOCKS*：undici 不支持，继续看下一个候选
+  }
+  return null;
+}
+
+/**
  * 读取或首启生成 `JWT_SECRET`（D6 冻结）。
  *
  * 存储：`<userData>/data/.jwt-secret`，内容为
@@ -136,6 +184,14 @@ export interface BuildServerEnvOptions {
   isPackaged: boolean;
   /** 宿主环境（默认 `process.env`） */
   baseEnv?: NodeJS.ProcessEnv;
+  /**
+   * D6.3 宿主代理：`main.ts` 从 Chromium 的**系统代理**设置解析出的代理 URL
+   * （形如 `http://127.0.0.1:7897`），null / undefined 表示不注入。
+   *
+   * 只在宿主本来**没有** `HTTPS_PROXY` / `https_proxy` / `HTTP_PROXY` / `http_proxy`
+   * 时才写入子进程环境 —— 用户显式设过环境变量时以用户为准（`||` 语义）。
+   */
+  hostProxy?: string | null;
 }
 
 /**
@@ -148,6 +204,12 @@ export interface BuildServerEnvOptions {
  *   PLUGINS_ROOT=<userData>/plugins、ALLOW_REGISTRATION='true'、
  *   JWT_SECRET=<持久化密钥>、DISABLE_PROXY_DETECT='1'、
  *   HOST_MODE='all'、ELECTRON_RUN_AS_NODE='1'
+ *
+ * D6.3 宿主代理透传（**开发态与打包态相同**，2026-10-09 新增）：
+ *   宿主未设置代理环境变量时，注入 `HTTPS_PROXY` / `HTTP_PROXY` / `NO_PROXY`
+ *   = 系统代理解析结果。原因：双击启动的便携版进程环境里没有 `HTTPS_PROXY`，
+ *   而 server 的 undici **不会**读系统代理（只认环境变量），于是 AI 请求直连
+ *   被墙服务 ⇒ 面板「测试连接」报「连接被重置」。
  *
  * 开发态差异（D12.5 开发列）：
  *   NODE_ENV='development'；DB_PATH=仓库 `data/novelmuse.db`；
@@ -166,7 +228,7 @@ export function buildServerEnv(
   options: BuildServerEnvOptions,
   log: Logger,
 ): ServerEnv {
-  const { layout, isPackaged, baseEnv = process.env } = options;
+  const { layout, isPackaged, baseEnv = process.env, hostProxy = null } = options;
 
   // 从宿主环境起底（D6：子进程继承 process.env 的其余部分）
   const env: Record<string, string> = {};
@@ -222,6 +284,23 @@ export function buildServerEnv(
     deleteInsensitive(env, 'PLUGINS_ROOT');
     deleteInsensitive(env, 'WEB_DIST_PATH');
     deleteInsensitive(env, 'JWT_SECRET');
+  }
+
+  // ---- ③ 宿主代理透传（D6.3）----
+  // 宿主显式设过代理环境变量 ⇒ 上面第 ② 步已原样继承，不覆盖（用户意图优先）。
+  if (hostProxy !== null && hostProxy.length > 0) {
+    const fromHost = env.HTTPS_PROXY || env.https_proxy || env.HTTP_PROXY || env.http_proxy;
+    if (fromHost) {
+      log('info', '宿主已设置代理环境变量 ⇒ 沿用宿主值，不注入系统代理解析结果。');
+    } else {
+      env.HTTPS_PROXY = hostProxy;
+      env.HTTP_PROXY = hostProxy;
+      env.NO_PROXY = env.NO_PROXY || env.no_proxy || DEFAULT_NO_PROXY;
+      log(
+        'info',
+        `已把系统代理解析结果注入子进程（D6.3）：HTTPS_PROXY=${hostProxy}，NO_PROXY=${env.NO_PROXY}`,
+      );
+    }
   }
 
   const injectedKeys = Object.keys(env).sort();

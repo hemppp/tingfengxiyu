@@ -502,7 +502,7 @@ stderr 行正则：  ^\[Server\] Cordis 基座已就绪 → http://localhost:(\d
 | `JWT_SECRET` | **首启生成**：`crypto.randomBytes(32).toString('hex')`（64 个十六进制字符），之后读取复用 | `<userData>/data/.jwt-secret` | 文件 `0o600` | 否 |
 | `ADMIN_USERNAME` | **不注入**（server 默认 `'admin'`） | DB `users` 表 | — | 是（登录页） |
 | `ADMIN_PASSWORD` | **不注入**（server 随机生成，`index.ts:68` `randomBytes(16).toString('base64url')`） | DB + `<userData>/logs/initial-admin-password.txt` | 文件 `0o600` | **是**（仅首启对话框） |
-| `DISABLE_PROXY_DETECT` | 常量 `'1'` | 无 | — | 否 |
+| `DISABLE_PROXY_DETECT` | 常量 `'1'`（**只跳过「自动探测」，不影响 `HTTPS_PROXY` 等环境变量**，见 D6.3） | 无 | — | 否 |
 | `HOST_MODE` | 常量 `'all'` | 无 | — | 是（`/api/health.hostMode`） |
 | `ELECTRON_RUN_AS_NODE` | 常量 `'1'`（**必须显式设置**，使 `process.execPath` 以 Node 身份运行 tsx） | 无 | — | 否 |
 | `JWT_EXPIRES_IN` | **不注入**（server 默认 `'3h'`） | 无 | — | 否 |
@@ -510,7 +510,7 @@ stderr 行正则：  ^\[Server\] Cordis 基座已就绪 → http://localhost:(\d
 | `NOVELMUSE_DB_ENGINE` | **不注入**（默认走 better-sqlite3，失败自动回退 sql.js） | 无 | — | 是（启动日志 `[DB] …`） |
 | AI 供应商变量（`AI_PROVIDER` / `OPENAI_*` / `OLLAMA_*` / `CUSTOM_AI_*`） | **不注入**（由用户在应用内配置，落 DB） | DB | — | 是 |
 | `AI_SSRF_*` | **不注入**（沿用代码默认） | 无 | — | 否 |
-| `HTTPS_PROXY` / `HTTP_PROXY` / `NO_PROXY` / `no_proxy` | **继承宿主**，但 `DISABLE_PROXY_DETECT=1` 已使代理探测短路（实测 stdout `[Proxy] 已跳过代理探测（DISABLE_PROXY_DETECT=1）`） | 无 | — | 否 |
+| `HTTPS_PROXY` / `HTTP_PROXY` / `NO_PROXY` / `no_proxy` | **继承宿主**；宿主没有时由主进程 `resolveProxy()` 解析系统代理后注入（见 D6.3） | 无 | — | 否 |
 
 ### D6.1 为什么 `JWT_SECRET` 必须注入（**关键**）
 
@@ -539,6 +539,36 @@ stderr 行正则：  ^\[Server\] Cordis 基座已就绪 → http://localhost:(\d
 4. 未捕获到（非首启）则静默。
 
 若 `ADMIN_PASSWORD` 被注入，server 改为每次启动同步密码（`index.ts:90-96`，日志 `[Server] 已按 ADMIN_PASSWORD 环境变量同步管理员密码（admin）`）⇒ 本 ADR **不注入**该变量，以保留「随机初始密码 + 用户自行修改」的安全语义。
+
+### D6.3 宿主代理透传（**2026-10-09 决策，修正 D6 表 `HTTPS_PROXY` 行**）
+
+**问题**（用户实测「设置 → AI 设置 → 测试连接」失败，报 `连接被重置：目标服务强制断开了连接（未配置代理，可能被防火墙拦截，请启动代理软件或设置 HTTPS_PROXY 环境变量）`，而本机 Clash 正在 `127.0.0.1:7897` 监听）：
+`apps/server/src/lib/proxy-agent.ts` 的 `initProxy()` 把 `DISABLE_PROXY_DETECT === '1'` 的**早退放在读环境变量之前** ⇒ 桌面端（D6 表恒注入 `DISABLE_PROXY_DETECT='1'`）即使继承了 `HTTPS_PROXY` 也会被整段丢弃，所有出站 AI 请求走直连。「禁用自动探测」被误实现成了「禁用代理」。
+
+**决策（三档优先级，冻结）**：
+1. **环境变量**（`HTTPS_PROXY` / `https_proxy` / `HTTP_PROXY` / `http_proxy`）—— 最高优先；
+2. **自动探测** —— 仅当 ① 为空且**未**注入 `DISABLE_PROXY_DETECT='1'` 时执行（桌面端恒跳过）；
+3. **直连**。
+
+即 `DISABLE_PROXY_DETECT` **只关 ②，不关 ①**。
+
+**宿主代理的两条来源**（`apps/desktop/src/main.ts` → `resolveHostProxy()`，在 `startServer()` 前 `await`）：
+- **A 环境变量继承**：宿主已有 `HTTPS_PROXY`/`HTTP_PROXY` ⇒ 不解析，直接让子进程继承（`buildServerEnv()` 以 `{...process.env}` 起底）；
+- **B 系统代理解析**：宿主没有 ⇒ `session.defaultSession.resolveProxy('https://api.openai.com/')` → `parseChromiumProxy()` 解析 Chromium PAC 结果（接受 `PROXY` / `HTTP` / `HTTPS` 前缀；`SOCKS*` / `DIRECT` 跳过），命中则写 `HTTPS_PROXY` / `HTTP_PROXY`，并补默认 `NO_PROXY=localhost,127.0.0.1,::1`（**不覆盖**宿主已有值）。
+解析不到或抛错 ⇒ 不注入、不阻断启动，落一条 INFO 日志。
+
+**实测（2026-10-09，`win-unpacked\NovelMuse.exe` + 新建 `--user-data-dir`，两句均逐字来自日志）**：
+
+| 场景 | `logs/main.log` | `logs/server.out.log` |
+|---|---|---|
+| A 宿主有 `HTTPS_PROXY=http://127.0.0.1:7897` | `宿主已有代理环境变量（HTTPS_PROXY/HTTP_PROXY）⇒ 子进程直接继承，不解析系统代理。` | `[Proxy] 已启用代理(来自环境变量): http://127.0.0.1:7897 (NO_PROXY: localhost,127.0.0.1,::1,[::1])` |
+| B 宿主无代理变量 | `已从系统代理解析出可用代理：http://127.0.0.1:7897（resolveProxy="PROXY 127.0.0.1:7897"）`、`已把系统代理解析结果注入子进程（D6.3）：HTTPS_PROXY=http://127.0.0.1:7897，NO_PROXY=localhost,127.0.0.1,::1,[::1]` | 同上 |
+
+**端到端（B 场景）**：经 `POST /api/ai/config` 把 `baseUrl` 改为 `https://api.openai.com/v1` 后调 `POST /api/ai/config/test` ⇒
+`{"success":false,"data":{"connected":false,"error":"AI API 错误 403"}}` —— 请求**已穿过代理抵达上游**（403 = 无有效密钥），而不再是此前的网络层失败。
+同一场景 `curl --proxy http://127.0.0.1:7897 https://api.openai.com/v1/models` 同样返回 403（代理本身可用）。
+
+**如实记录的残留（非本 ADR 缺陷）**：内置公益线路 `https://new-api.dadfafwada.dpdns.org/v1` 在本机**不可达**，与代理无关 —— 直连 `curl` 报 `Could not resolve host`，经 Clash 报 `schannel: failed to receive handshake`。面板错误文案已相应区分「已走代理」与「未配置代理」两种情况。
 
 ---
 

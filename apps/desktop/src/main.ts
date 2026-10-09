@@ -8,7 +8,8 @@
  *   ② `await app.whenReady()`
  *   ③ 解析 userData 布局（`ensureLayout`，内部已含 D7.2 播种 + D7.3/D7.4 junction）
  *   ④ 确认 D7.3/D7.4 junction 状态（`ensureLayout` 已建立，此处只读报告）
- *   ⑤ 装配 D6 环境变量（`buildServerEnv`，含 JWT_SECRET 生成/读取）
+ *   ⑤ 装配 D6 环境变量（`buildServerEnv`，含 JWT_SECRET 生成/读取）；
+ *      并把系统代理解析结果（D6.3 `hostProxy`）一并透传给子进程
  *   ⑥ spawn server 子进程 → stderr 端口握手（D5.1）→ `/api/health` 就绪探针（D5.4）
  *   ⑦ 创建窗口并 `loadURL(<origin>)`
  *   ⑧ 注册优雅退出（`before-quit` / `window-all-closed`）
@@ -17,12 +18,12 @@
  * 超时 `taskkill /PID <pid> /T /F` → `app.exit(0)`。**绝不使用 `child.kill('SIGTERM')`**
  * （ADR F7 实测证伪：Windows 上走 TerminateProcess，子进程信号处理器不执行）。
  */
-import { app, dialog, ipcMain } from 'electron';
+import { app, dialog, ipcMain, session } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { IPC, IPC_CHANNEL_COUNT } from './ipc-channels.js';
-import { buildServerEnv } from './env.js';
+import { buildServerEnv, parseChromiumProxy } from './env.js';
 import { ShellLogger } from './logger.js';
 import { ensureLayout, findRepoRoot } from './paths.js';
 import { ServerProcessController } from './server-process.js';
@@ -268,13 +269,53 @@ function registerIpcHandlers(): void {
   }
 }
 
+/**
+ * 步骤 ⑤.5：解析宿主**系统代理**，供 D6.3 透传给 server 子进程。
+ *
+ * 为什么需要：server 侧的 undici **只认** `HTTPS_PROXY` / `HTTP_PROXY` 环境变量，
+ * 不读系统代理设置；而双击启动的便携版/安装版进程环境里本就没有这些变量
+ * ⇒ AI 请求直连被墙服务（面板「测试连接」报「连接被重置」，2026-10-09 实测）。
+ * Chromium 自己走系统代理，`session.resolveProxy()` 就是取那条配置的通道。
+ *
+ * 宿主**已显式设置**代理环境变量时直接返回 null —— 子进程默认继承 `process.env`，
+ * 用户意图优先，不去覆盖（与 `buildServerEnv` 的 `||` 语义一致）。
+ */
+async function resolveHostProxy(): Promise<string | null> {
+  const fromEnv =
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy;
+  if (fromEnv) {
+    logger?.info('宿主已有代理环境变量（HTTPS_PROXY/HTTP_PROXY）⇒ 子进程直接继承，不解析系统代理。');
+    return null;
+  }
+
+  try {
+    const raw = await session.defaultSession.resolveProxy('https://api.openai.com/');
+    const proxyUrl = parseChromiumProxy(raw);
+    if (proxyUrl === null) {
+      logger?.info(
+        `系统代理解析结果不适用于子进程（resolveProxy="${raw.trim()}"）⇒ 不注入，子进程自行直连。`,
+      );
+      return null;
+    }
+    logger?.info(`已从系统代理解析出可用代理：${proxyUrl}（resolveProxy="${raw.trim()}"）`);
+    return proxyUrl;
+  } catch (error) {
+    logger?.warn(`解析系统代理失败：${String(error)} ⇒ 不注入，子进程自行直连。`);
+    return null;
+  }
+}
+
 /** 步骤 ⑥：spawn + 握手 + 就绪探针；首选失败时回退 tsx cli（D4.2 备选）。 */
 async function startServer(
   isPackaged: boolean,
   layoutValue: UserDataLayout,
   target: ServerTarget,
 ): Promise<string | null> {
-  const envOptions = { layout: layoutValue, isPackaged, repoRoot: target.repoRoot };
+  const hostProxy = await resolveHostProxy();
+  const envOptions = { layout: layoutValue, isPackaged, repoRoot: target.repoRoot, hostProxy };
   const serverEnv = buildServerEnv(envOptions, logger!.log);
   logger!.info(
     `D6 环境变量装配完成：注入 ${serverEnv.injectedKeys.length} 项` +

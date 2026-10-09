@@ -13,6 +13,12 @@
 //
 // 若环境变量未设置，会自动探测本机常见代理软件的监听端口
 // （Clash Verge 默认 7897、Clash 默认 7890、v2rayN 默认 10809 等）。
+//
+// ★ 优先级（2026-10-09 修正）：① 环境变量 > ② 自动探测 > ③ 直连。
+//   `DISABLE_PROXY_DETECT=1`（桌面端注入，省 ~400ms 启动探测）**只关 ②**，
+//   不关 ①：桌面端主进程从系统代理（Chromium `resolveProxy`）解析出的
+//   HTTPS_PROXY 正是在 ① 生效，见 ADR-0008 D6「宿主代理透传」。
+//   （修正前的实现把该常量判在 ① 之前，导致注入的代理被整段丢弃。）
 // ============================================================
 
 import { EnvHttpProxyAgent, setGlobalDispatcher } from 'undici';
@@ -52,16 +58,11 @@ async function detectProxyPortAsync(): Promise<number | null> {
 export async function initProxy(): Promise<void> {
   if (proxyConfigured) return;
 
-  // 桌面端（Electron）设置 DISABLE_PROXY_DETECT=1 跳过自动探测
-  // 用户机器上可能没有代理软件，探测会浪费 400ms 启动时间
-  if (process.env.DISABLE_PROXY_DETECT === '1') {
-    proxySource = 'none';
-    proxyConfigured = true;
-    console.log('[Proxy] 已跳过代理探测（DISABLE_PROXY_DETECT=1）');
-    return;
-  }
-
   // 1) 优先读取环境变量
+  // ★ 本步必须**先于** DISABLE_PROXY_DETECT 判断：该常量只关「自动探测」，
+  //   不关「环境变量」。桌面端（Electron）由主进程解析系统代理后注入
+  //   HTTPS_PROXY（ADR-0008 D6 宿主代理透传）；若在环境变量之前短路，
+  //   注入的代理会被整段丢弃 ⇒ AI 请求仍直连被墙服务（症状：连接被重置）。
   const envProxyUrl =
     process.env.HTTPS_PROXY ||
     process.env.https_proxy ||
@@ -94,11 +95,21 @@ export async function initProxy(): Promise<void> {
 
   if (envProxyUrl && applyProxy(envProxyUrl, 'env')) return;
 
-  // 2) 自动探测本机常见代理端口（仅当环境变量未设置时）
+  // 2) 桌面端（Electron）设置 DISABLE_PROXY_DETECT=1 ⇒ 只跳过**自动探测**
+  //    （用户机器上可能没装代理软件，探测会白等 ~400ms 启动时间）。
+  //    走到这里必然是「没有环境变量代理」⇒ 直连。
+  if (process.env.DISABLE_PROXY_DETECT === '1') {
+    proxySource = 'none';
+    proxyConfigured = true;
+    console.log('[Proxy] 已跳过代理探测（DISABLE_PROXY_DETECT=1，且未提供 HTTPS_PROXY/HTTP_PROXY）');
+    return;
+  }
+
+  // 3) 自动探测本机常见代理端口（仅当环境变量未设置时）
   const detectedPort = await detectProxyPortAsync();
   if (detectedPort && applyProxy(`http://127.0.0.1:${detectedPort}`, 'auto-detected')) return;
 
-  // 3) 未找到代理
+  // 4) 未找到代理
   proxySource = 'none';
   proxyConfigured = true;
   console.log(`[Proxy] 未检测到代理。若访问被墙服务超时，请：`);

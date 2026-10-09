@@ -481,6 +481,62 @@ reseeded=true`（buildId `3b4093c6…` → **`484046b7fdc335afe040d4af0f04676b`*
     补这层是因为数据层单测只证明「纯函数算得对」，而**「设置页 → AI 设置」这条链
     是否真能渲染出东西**才是本次要修的缺陷形态。
 
+### 修复（2026-10-09 桌面端代理透传 + CI 门禁复活）
+
+- **桌面端从不使用宿主代理（已修，见 ADR D6.3）**：用户实测
+  「设置 → AI 设置 → 测试连接」报 `连接被重置：目标服务强制断开了连接
+  （未配置代理，可能被防火墙拦截…）`，而本机 Clash 正在 `127.0.0.1:7897` 监听。
+  根因是 `apps/server/src/lib/proxy-agent.ts` 的 `initProxy()` 把
+  `DISABLE_PROXY_DETECT === '1'` 的**早退放在读环境变量之前** ⇒ 桌面端
+  （D6 契约恒注入该变量）即使继承了 `HTTPS_PROXY` 也会被整段丢弃，
+  **所有出站 AI 请求走直连**：「禁用自动探测」被误实现成了「禁用代理」。
+  - 改为三档优先级（冻结）：① 环境变量 → ② 自动探测（`DISABLE_PROXY_DETECT`
+    只关这一档，桌面端恒跳过）→ ③ 直连。
+  - 宿主代理两条来源（`apps/desktop/src/main.ts` 新增 `resolveHostProxy()`，
+    在 `startServer()` 前 `await`）：宿主已有 `HTTPS_PROXY`/`HTTP_PROXY` ⇒
+    子进程直接继承；否则 `session.defaultSession.resolveProxy()` 解析系统代理，
+    经新增纯函数 `parseChromiumProxy()`（`apps/desktop/src/env.ts`，接受
+    `PROXY`/`HTTP`/`HTTPS` 前缀，`SOCKS*`/`DIRECT` 跳过）注入
+    `HTTPS_PROXY`/`HTTP_PROXY`，并补默认 `NO_PROXY=localhost,127.0.0.1,::1`
+    （不覆盖宿主已有值）。解析不到不阻断启动。
+  - 实测（`win-unpacked` + 新建 `--user-data-dir`，逐字来自日志）：
+    宿主有代理变量时 `logs/main.log` 记「宿主已有代理环境变量…子进程直接继承」；
+    宿主无变量时记「已从系统代理解析出可用代理：http://127.0.0.1:7897
+    （resolveProxy="PROXY 127.0.0.1:7897"）」；两种场景
+    `logs/server.out.log` 均出现
+    `[Proxy] 已启用代理(来自环境变量): http://127.0.0.1:7897`。
+    端到端把 `baseUrl` 指向 `https://api.openai.com/v1` 后调
+    `POST /api/ai/config/test` ⇒ `AI API 错误 403`（请求**已穿过代理抵达上游**，
+    403 = 无有效密钥），而不再是网络层失败。
+  - 如实记录的残留（与本次改动无关）：内置公益线路
+    `https://new-api.dadfafwada.dpdns.org/v1` 在本机不可达 —— 直连 `curl`
+    报 `Could not resolve host`，经 Clash 报 `schannel: failed to receive handshake`；
+    面板文案已区分「已走代理」与「未配置代理」两种情况。
+- **CI 自 2026-10-06 起每次 push 都是红的（已修）**：流水线在 `Setup pnpm`
+  就失败，后续 Install / Type check / Lint / Test 全部被跳过（界面是「-」而非「X」），
+  因此远端从未真正跑过质量门。两个根因各自暴露过一次：
+  - **版本冲突**（`f1d3794`）：workflow 里 `with: version: 11` 与 `package.json` 的
+    `packageManager: pnpm@11.8.0+sha512.…` 撞车 ⇒
+    `Multiple versions of pnpm specified … ERR_PNPM_BAD_PM_VERSION`。
+    删除 workflow 里的版本声明（版本统一由 `packageManager` 决定），
+    并把 `actions/checkout` 升到 `@v5`。
+  - **平台原生包缺失**（`18a2238`）：`pnpm-workspace.yaml` 的
+    `supportedArchitectures.os` 只列 `win32`（本机优化），而它是 pnpm 的
+    **安装期**过滤器 ⇒ ubuntu runner 不安装 linux 原生可选包，
+    `packages/core` 测试启动即 `Cannot find module @rollup/rollup-linux-x64-gnu`
+    （`[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] @novel/core@0.2.0 test`）。
+    补 `linux` 即可，lockfile 本身是全平台的（无需重新生成）。
+  - 随后本次又把 `pnpm/action-setup` 与 `actions/setup-node` 升到 `@v5`
+    （运行时 node24），清掉 Node 20 deprecation 告警。
+  - 验证：`gh run list` 显示最新 run **✓ 全绿 1m7s**（8 个步骤全过），
+    `gh api …/commits/<sha>/check-runs` 返回
+    `Type Check / Lint / Test: completed/success`。
+- **验证（本地全实跑）**：`pnpm -r type-check` exit 0；
+  `pnpm -r lint` exit 0（3 个 server warning 为既有）；
+  `pnpm -r test` exit 0（apps/web 23 文件 / 276 用例）；
+  `verify-workbench-isolation.mjs --with-tests` exit 0（0 违规 / 0 缺失，
+  断言 E 基线：type-check 0、test 0、**用例数 276** ≥ 182）。
+
 ### 已知限制
 
 - 桌面端产物**未做代码签名**：首次运行会触发 Windows SmartScreen 提示，
