@@ -26,10 +26,16 @@ onlyBuiltDependencies:
   - esbuild
   - electron
 
-# ★ 仅 Windows x64：跳过 linux/darwin 等平台的 rollup 等可选包，避免慢速镜像浪费下载
+# ★ 本机开发是 Windows x64，但 CI（.github/workflows/ci.yml）跑在 ubuntu-latest ⇒ linux
+#   必须一并列出。supportedArchitectures 是 pnpm 的**安装期**过滤器：只写 win32 时
+#   Linux runner 不会安装 rollup / esbuild 的 linux 原生可选包，vitest 启动即
+#   `Cannot find module '@rollup/rollup-linux-x64-gnu'`（2026-10-09 实测，CI run
+#   37887469489 的 Test 步）。lockfile 本身是全平台的（含 rollup-linux /
+#   esbuild/linux 条目），故本改动不需要重新生成 lockfile。
 supportedArchitectures:
   os:
     - win32
+    - linux
   cpu:
     - x64
 

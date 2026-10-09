@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useStatsStore } from '@/stores';
 import { Lock, Trash2, Settings2, Palette, Bot, ShieldCheck, Plug, Keyboard, MonitorUp, ArrowLeft } from 'lucide-react';
 import { AppearancePanel } from '@/components/settings/AppearancePanel';
+import { AIConfigPanel } from '@/components/settings/AIConfigPanel';
 import { safeConfirm } from '@/utils/safeConfirm';
 import { useNavigate } from 'react-router-dom';
 import { PATHS } from '@/routes/paths';
@@ -234,12 +235,18 @@ export function SettingsPage() {
 
             {category === 'appearance' && <AppearancePanel />}
 
-            {/* ★ D40/t5：AI 设置区不再由 kernel 硬编码渲染。
-                AIConfigPanel 已随 auto 模块迁至
-                apps/plugins/auto/workbench/web/discuss/settings/，由该模块经
-                ctx.registerSettingsSection({ category:'ai' }) 注册；下方统一的
-                <PluginSettingsSections category={category} /> 会渲染它。
-                ⇒ 移除 auto 模块时「AI 设置」栏目自然为空，手写台不受影响。 */}
+            {/* ★ AI 设置回归 kernel（2026-10-08）。
+                D40/t5 曾把 AIConfigPanel 划给 auto 模块、改由
+                ctx.registerSettingsSection({ category:'ai' }) 注册，但 auto 的 web 入口
+                是有意为之的空实现 ⇒ 该栏目内**没有任何注册项**，
+                PluginSettingsSections 空集返回 null，点进来是一片空白。
+                而 apps/desktop/src/env.ts 又把 AI_PROVIDER / OPENAI_* / OLLAMA_* /
+                CUSTOM_AI_* 前缀冻结为「不注入」——提供商只能在应用内配置。
+                两件事叠加 ⇒ 便携版完全无法配置 AI。故此处重新由 kernel 渲染，
+                全模式可用（手写台也要配）。
+                下方 <PluginSettingsSections category={category} /> 保留：将来若有插件
+                自己注册 'ai' 设置区，仍会追加在本面板之后。 */}
+            {category === 'ai' && <AIConfigPanel />}
 
             {category === 'security' && (
               <section className="nm-card p-6">

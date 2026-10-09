@@ -424,10 +424,70 @@ reseeded=true`（buildId `3b4093c6…` → **`484046b7fdc335afe040d4af0f04676b`*
   断言 E 基线：type-check 0、test 0、**用例数 245** ≥ 182）；
   `verify-plugin-mode-separation.mjs` 全过。
 
+### 修复（2026-10-08 AI 设置面板回归 kernel）
+
+- **修掉「设置 → AI 设置」整页空白**：该分类下只有 `PluginSettingsSections`
+  （无注册项时空集 `return null`），而全仓**没有任何** `category:'ai'` 注册 ——
+  D5 裁决把 `AIConfigPanel` / `LocalModelPanel` 划给 `auto` 模块，kernel 侧那一半
+  做了（`SettingsPage` 改为注册表渲染），但目的地没建：auto 的 web 入口
+  （`apps/plugins/auto/workbench/web/index.tsx`）是**有意为之的空实现**
+  （实现已随 t10 移出本仓）⇒ 点进去没有任何可渲染内容。
+  更硬的一条：`apps/desktop/src/env.ts:55-62` 把 `AI_PROVIDER` / `OPENAI_` /
+  `OLLAMA_` / `CUSTOM_AI_` / `AI_SSRF_` 冻结为**不注入**，意即提供商
+  **只能**在应用内配置 —— 入口不存在，便携版就完全配不了 AI。
+  故按用户裁决**回归 kernel 全模式可用**（手写台也能配），与 D5 原裁决相反。
+- **新增 `apps/web/src/components/settings/AIConfigPanel.tsx`**（两段卡片）：
+  「模型提供商」= 提供商切换（openai / ollama / custom，带预设 baseUrl 提示）、
+  baseUrl、API Key（回显服务端脱敏提示 `***xxxx`；清除走二次确认态 + 撤消）、
+  模型（`<datalist>` 可选可手填）、**测试连接**、**拉取模型列表**；
+  「生成参数」= temperature / top_p / 频率惩罚 / 存在惩罚（范围与后端 zod 一致，
+  留空 = 不干预，不是 0）。
+  - **关键交互**：「测试连接」「拉取列表」打的都是**服务端已保存**的配置
+    （`ai.ts:1922-1935` / `ai.ts:2024-2044`），故表单有未保存改动时会先落库
+    再请求，按钮文案随之变为「保存并测试连接」—— 否则测的是旧配置、结果会骗人。
+  - 来源非 `user_db`（`server_env` / `builtin_relay`）或未配置密钥时给出黄条，
+    否则用户会以为「我配的怎么没生效」。
+- **新增 `apps/web/src/services/api/aiConfigService.ts`**（数据层，纯函数 + 四个端点）：
+  三态语义在此收口 —— `baseUrl`/`model` 恒提交（空串 = 清空并回落服务端默认）、
+  `apiKey` 仅在非空时提交且与 `clearApiKey` 互斥、采样参数「输入非空 → number /
+  输入空且服务端原本有值 → `null`（显式恢复默认）/ 输入空且原本无值 → 省略」。
+  端点与超时：`GET /ai/config`、`POST /ai/config`（20 s）、
+  `POST /ai/config/test`（60 s，会真发一次 chat）、`GET /ai/models`（30 s，
+  该端点**响应体没有 `data` 键** ⇒ 不脱壳、整体返回 `{ok,models|error}`）。
+  全部 `silent:true`，错误在面板内联展示。
+- **目录归属（隔离门禁教训，勿回退）**：服务一度放在
+  `apps/web/src/services/ai/aiConfigService.ts`，被隔离门禁同时判为
+  **K2A**（kernel→auto 跨域 import）与 **B-ENTRY**（kernel 深引模块内部路径）——
+  因为契约 §5 把 `@/services/ai/**` 冻结为 **auto 域飞地**
+  （`docs/architecture/web-workbench-split-contract.md:18,185`、`:202` t5 行；
+  `verify-workbench-isolation.mjs:167` 的 `DOMAIN_BY_PATH` 同口径）。
+  kernel 侧**不要**占该前缀；本服务是 kernel 自有，与 `authApi.ts` 同放
+  `services/api/`（该前缀在 `DOMAIN_BY_PATH:162` 明列为 kernel）。
+- **验证**：web 段 `tsc --noEmit` exit 0；`pnpm --filter @novel/web test`
+  **22 文件 / 276 用例全过**（新增数据层 27 用例 + 面板挂载 4 用例）；
+  `pnpm --filter @novel/web build` ✓（8.79 s）；`pnpm -r lint` 0 error
+  （3 个 server warning 为既有）；隔离门禁
+  `verify-workbench-isolation.mjs --with-tests` exit 0（**A=0 / A'=0 / B=0 / C=0、
+  0 违规 / 0 缺失**，断言 E 基线：type-check 0、test 0、**用例数 276** ≥ 182）；
+  `verify-plugin-mode-separation.mjs` 全过。
+  - 断言 E 的 L2 曾拦下新测试的两处 TS 错（`getAllByRole(...)[0]` 是
+    `HTMLElement | undefined` → TS2345；`mock.calls[0]` 解构 → TS2488，
+    均为 `noUncheckedIndexedAccess` 所致），补 `!` 后归零 —— 单跑 vitest
+    **不会**暴露这两处，故改测试后必须跑门禁或 `type-check`。
+  - 面板新增 `apps/web/src/components/settings/AIConfigPanel.test.tsx`（4 用例）：
+    挂载即读配置并回填且不误报脏态、改动 → 脏态与「保存并测试连接」文案、
+    点保存发出的**完整请求体**（`{provider,baseUrl,model}`，密钥不出现在体里、
+    无基线时不发采样字段）、读取失败 → 错误态 → 「重试」恢复。
+    补这层是因为数据层单测只证明「纯函数算得对」，而**「设置页 → AI 设置」这条链
+    是否真能渲染出东西**才是本次要修的缺陷形态。
+
 ### 已知限制
 
 - 桌面端产物**未做代码签名**：首次运行会触发 Windows SmartScreen 提示，
   选择「仍要运行」即可。
+- **AI 提供商只能在应用内配置**：`apps/desktop/src/env.ts` 有意冻结
+  `AI_PROVIDER` / `OPENAI_` / `OLLAMA_` / `CUSTOM_AI_` 等变量前缀不受理环境变量，
+  配置入口是「设置 → AI 设置」（配置落本机 DB）。
 - AI 自动写作模块（`novel.autowrite` 引擎与 `novel.auto.workbench` 界面）
   处于剥离态：打开 `mode=auto` 的项目会显示「AI 写作台未安装」占位，
   这是预期行为，不会崩溃或白屏。

@@ -17,12 +17,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        # v5：v4 等旧版 action 仍声明 Node 20，在 Node 24 runner 上会刷
+        # "Node.js 20 is deprecated" 告警（2026-10-09 实测）
+        uses: actions/checkout@v5
 
       - name: Setup pnpm
+        # ★ 不要写 with.version —— package.json 已有 packageManager（pnpm@11.8.0），
+        #   两处同时指定会被 action-setup 直接拒绝：
+        #   "Multiple versions of pnpm specified: version 11 ... / pnpm@11.8.0+sha512..."
+        #   失败于本步（约 5~8 秒），使 2026-10-06 起每次 push 的 CI 均为红。
         uses: pnpm/action-setup@v4
-        with:
-          version: 11
 
       - name: Setup Node
         uses: actions/setup-node@v4
