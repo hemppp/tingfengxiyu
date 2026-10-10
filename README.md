@@ -40,15 +40,15 @@ apps/server = cordis Context 宿主
     ├─ 20 个业务模块       auth / projects / chapters / …（modes: shared）
     ├─ novel.ai           tools / skills / agents
     ├─ novel.admin        插件管理（plugin-manager，shared）
-    └─ 模式插件            manual: worldbuilding / novel.bookscan
-                          auto:   novel.autowrite
+    └─ 目录插件（6）       manual: worldbuilding（示例） / novel.bookscan / novel.manual.workbench
+                          auto:   novel.autowrite / novel.auto.workbench
                           shared: novel.typography
 ```
 
-服务端已全面迁移到 cordis 插件基座 —— **20 个 API 模块 + AI 层 + 管理端 + 外部插件**全部以插件形式装配（运行时共 25 个插件）；`packages/core` 退化为**纯契约包**。
+服务端已全面迁移到 cordis 插件基座 —— **20 个 API 模块 + AI 层 + 管理端 + 目录插件**全部以插件形式装配（运行时共 **27** 个插件，`GET /api/health` 实测）；`packages/core` 退化为**纯契约包**。
 插件契约：`{ name, inject, apply(ctx, config) }`，通过 `ctx.routes / ctx.db / ctx.ai / ctx.events` 注入能力，`ctx.plugin()` 挂载、fiber 隔离、`dispose()` 卸载。
 
-**插件按创作模式物理拆分**（2026-09）：`apps/plugins/{manual,auto,shared,local}`，父目录名即插件适用模式；manifest 新增 `modes` 字段（`manual`/`auto`/`shared`，缺省 `['shared']`）。宿主 `HOST_MODE=manual|auto|all` 可在启动期裁剪插件集合；跨模式请求 `/api/plugins/*` 返回 404 `PLUGIN_MODE_MISMATCH`；目录与 `modes` 不一致由安装门 G2.5 拒绝（`MODE_MISMATCH`）。详见 [`docs/architecture/plugin-standard.md`](docs/architecture/plugin-standard.md)。
+**插件按创作模式物理拆分**（2026-09）：`apps/plugins/{manual,auto,shared}`（另有运行时动态区 `local/`，不随仓库分发），父目录名即插件适用模式；manifest 新增 `modes` 字段（`manual`/`auto`/`shared`，缺省 `['shared']`）。宿主 `HOST_MODE=manual|auto|all` 可在启动期裁剪插件集合；跨模式请求 `/api/plugins/*` 返回 404 `PLUGIN_MODE_MISMATCH`；目录与 `modes` 不一致由安装门 G2.5 拒绝（`MODE_MISMATCH`）。详见 [`docs/architecture/plugin-standard.md`](docs/architecture/plugin-standard.md)。
 
 详见 [`docs/architecture/`](docs/architecture/)。
 
@@ -94,17 +94,17 @@ pnpm --filter @novel/web test:coverage
 apps/
 ├── web/          React SPA（前端插件注册表 @novel/core/web）
 ├── server/       cordis 宿主：业务模块 + AI 层 + 管理端
+├── desktop/      Electron 桌面壳（便携版打包，见 docs/architecture/desktop-packaging-adr.md）
 ├── agents/       Python Strands Agents 微服务（可选，docker profile）
 └── plugins/            按创作模式物理拆分（父目录名 = 适用模式）
-    ├── manual/          仅手写台：worldbuilding（示例）/ novel.bookscan
-    ├── auto/            仅 AI 写作：novel.autowrite
-    ├── shared/          两种模式共享：novel.typography
-    └── local/           AI 对话动态创建区（默认 shared，当前为空）
+    ├── manual/          仅手写台：worldbuilding（示例）/ novel.bookscan / workbench
+    ├── auto/            仅 AI 写作：novel.autowrite / workbench
+    └── shared/          两种模式共享：typography（插件）/ data-core · ui-kit · ui-graph（前端共享包）
 packages/
 ├── core/         纯契约包（manifest zod + 类型 + 浏览器安全入口）
 ├── db/           数据库 Schema 与迁移
 └── shared/       共享类型定义
-scripts/          验证与运维脚本
+scripts/          验证与运维脚本（verify / desktop / e2e / docker / tools）
 docs/             项目文档
 ```
 

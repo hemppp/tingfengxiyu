@@ -2036,15 +2036,6 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   100% { transform: translate(0, 0) rotate(0deg); }
 }
 
-/* ════ 快捷短语（QuickPhraseBubble）专属动画：已随 2026-10-08 的底部面板改造整体退役 ════
- * 「快捷短语」不再是编辑器正文上方的 position:fixed 漂移水珠气泡，而是底部面板
- * 底部面板里的一栏（QuickPhrasePanel，kernel 扩展点 registerBottomPanelSection）。
- * 下列 nm-qp-blob-* / nm-qp-edge-wave 类与 nm-qp-* 关键帧仅服务于那枚水珠气泡，
- * 已无任何引用，故连同 prefers-reduced-motion 兜底一并删除。
- *
- * 保留的 nm-qbubble* （AI 浮窗功能气泡栏，ui-kit/aiBars.tsx 使用）与本段无关。
- * ═══════════════════════════════════════════════════════════════════════════ */
-
 /* ============================================================
  * 全局底色（VS Code Dark Modern）
  *

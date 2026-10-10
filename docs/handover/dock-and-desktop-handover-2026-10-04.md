@@ -208,7 +208,7 @@
 
 - 结构 `apps/plugins/{manual,auto,shared}/…`，父目录名即适用模式；manifest 新增 `modes` 字段（缺省 `['shared']`）；`HOST_MODE=manual|auto|all` 启动期裁剪；跨模式 `/api/plugins/*` 返回 **404 `PLUGIN_MODE_MISMATCH`**；目录与 `modes` 不一致由安装门 **G2.5 拒绝（`MODE_MISMATCH`）** `[报告]` README L51、`docs/architecture/plugin-standard.md`。
 - 仓库内实际 `plugin.json` 共 **5 份** `[实测]`：`novel.autowrite`(modes `["auto"]`)、`novel.auto.workbench`(`["auto"]`)、`novel.bookscan`(`["manual"]`)、`novel.manual.workbench`(`["manual"]`)、`novel.typography`(`["shared"]`)。另外 `apps/plugins/manual/worldbuilding`、`shared/{data-core,ui-graph,ui-kit}` 只有 `package.json`、无 `plugin.json`（属被插件消费的工作区包）。
-  > 「27 个插件」是 CHANGELOG 0.1.0 与桌面 e2e 的口径（`GET /api/health` 的 `plugins[]` 记到 `plugins=27`）；`docs/architecture/plugins-inventory.md`（2026-09-29）记的是 **25 个**。**「27」与「5 份 plugin.json」不是同一计量单位，未验证其换算关系。**
+  > 「27」与「25」的差额已于 **2026-10-09 复核**对齐（`GET /api/health` 实测）：`plugins=27` = 20 个业务模块 + 1 个插件管理器 + **6 个目录插件**（`worldbuilding`、`novel.bookscan`、`novel.manual.workbench`、`novel.autowrite`、`novel.auto.workbench`、`novel.typography`）。`plugins-inventory.md` 旧版记 25 是**漏了两个 `workbench` 目录插件**，该文档已于同日改为 27。**「27」与「5 份 `plugin.json`」确实不是同一计量单位**：`worldbuilding` 只有 `package.json`、无 `plugin.json`，故「目录插件 6 个 ↔ `plugin.json` 5 份」。
 - 更新安装包口径：`release/updates/` 里的插件 zip 恰 **5 个**（auto.workbench / autowrite / bookscan / manual.workbench / typography），与 5 份 `plugin.json` 一一对应 `[实测]`。
 - 拆分增量**已随 `b567758` 入库**（下面是提交前实测的清单）：`?? apps/plugins/auto/workbench/web/index.tsx`、`M apps/plugins/manual/workbench/web/{editor/BookScanDirectory.tsx, editor/panels/QuickPhraseBubble.tsx, index.tsx, outline/OutlineManager.tsx, panels.tsx}`、`M apps/plugins/shared/typography/web/index.tsx`、`M apps/plugins/shared/ui-kit/{package.json, src/aiBars.tsx, src/index.ts, src/themeStore.ts}`、`D apps/plugins/shared/ui-kit/src/InkBackButton.tsx`；同提交还带上 `pnpm-lock.yaml`、`pnpm-workspace.yaml`、`scripts/e2e/{e2e-core-flows,e2e-mode-separation}.mjs`（`git show --name-only b567758`）`[实测]`。
   > ⚠️ `apps/web/src/components/shell/DockShell.tsx` **原本被列在本行**，但 C2 的树已重建 ⇒ 该文件**不在 `b567758` 的清单里**（只在 C1 `3e3754e`）。
@@ -299,7 +299,7 @@ node scripts/verify/measure-ink-consumers.mjs # 主题变量三口径（测量�
 | `docs/reports/desktop-packaging-closeout.md` | 桌面打包收尾：D1–D21、§5 未验证 9 项（255 行，20:39）；**§1.1 的产物哈希已过期，发布校验以 §A.1「发布产物实测基线」（现 215–255 行，2026-10-04 增补）为准**；§A.2 是「`build` 块恢复 → 21:13 重新打包」的时间链 |
 | `docs/reports/desktop-shell-audit.md` | 桌面壳审计（52,141 B，17:12）——DEV-09 闭包超基线 |
 | `docs/architecture/plugin-standard.md` | 插件标准：模式拆分、`modes`、G2.5 门 |
-| `docs/architecture/plugins-inventory.md` | 插件清单（2026-09-29 版，记 25 个） |
+| `docs/architecture/plugins-inventory.md` | 插件清单（2026-10-09 复核版，记 27 个） |
 | `apps/plugins/shared/ui-kit/src/themeStore.ts` | 主题 store 现状（单档，`ThemeId = 'vscode-dark-modern'`） |
 | `README.md` L117–121 | 接手开发指路牌（`docs/handover/` 在先） |
 | `docs/handover/dock-and-desktop-handover-2026-10-04.md` | **本文件**：四条工作线的接手交接；入库后现状见 §1、commit 归属 §6.2 |

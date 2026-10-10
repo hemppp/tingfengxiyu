@@ -14,7 +14,9 @@ concurrency:
 jobs:
   quality-gate:
     name: Type Check / Lint / Test
-    runs-on: ubuntu-latest
+    # 固定 24.04：ubuntu-latest 会在 2026-10-19 迁到 Ubuntu 26，届时 runner 镜像
+    # 变化会引入无谓噪声；等本仓库显式验证过 26.04 再升（annotation 也随之消失）
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         # v5：v4 等旧版 action 仍声明 Node 20，在 Node 24 runner 上会刷

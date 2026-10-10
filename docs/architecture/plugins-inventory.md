@@ -1,19 +1,21 @@
 # NovelMuse 插件化清单
 
-> 生成于 **2026-09-15**；**2026-09-29 更新**（插件层按创作模式物理拆分 `manual / auto / shared / local`）。
+> 生成于 **2026-09-15**；**2026-09-29 更新**（插件层按创作模式物理拆分 `manual / auto / shared / local`）；**2026-10-09 复核**：`GET /api/health` 实测 = **27** 个插件 —— 上表漏记了 `manual/workbench` 与 `auto/workbench` 两个目录插件，且 `apps/plugins/local/` 当前并不存在（不随仓库分发）。
 > 数据来源：`GET /api/health` 实测 + 源码静态扫描（行数、路由、模式归属均实测，非文档推测）。
 > 装配入口：`apps/server/src/plugin/host.ts`。HTTP 层由 `@deepseek-ai/dsh-host-webserver` 提供，业务路由经 `lib/hono-adapter.ts` 接入 Hono。
 > 模式契约见 [`plugin-standard.md`](./plugin-standard.md) §1.4 / §3.1 / §6。
 
-## 一、总览：25 个插件怎么来的
+## 一、总览：27 个插件怎么来的
 
 | 类别 | 数量 | 来源 | 模式归属 | 装配方式 |
 |---|---|---|---|---|
 | 核心业务模块 | **20** | `apps/server/src/modules/*.ts` | `shared` | 宿主统一包装后 `ctx.plugin()` 挂载 |
 | 宿主管理插件 | **1** | `apps/server/src/plugin/manager.ts` | `shared` | 宿主启动时以"插件"身份挂载 |
-| 示例插件 | **1** | `apps/plugins/manual/worldbuilding/` | `manual` | 扫描 `apps/plugins/{manual,auto,shared,local}/*/` 自动加载 |
-| 模式插件 | **3** | `apps/plugins/{manual,auto,shared}/*/` | `manual` / `auto` / `shared` | 扫描 + `guardian` 隔离审查 |
-| | **25** | | | |
+| 示例插件 | **1** | `apps/plugins/manual/worldbuilding/` | `manual` | 扫描 `apps/plugins/{manual,auto,shared}/*/` 自动加载 |
+| 模式插件 | **5** | `apps/plugins/{manual,auto,shared}/*/` | `manual` / `auto` / `shared` | 扫描 + `guardian` 隔离审查 |
+| | **27** | | | |
+
+> 5 个模式插件（2026-10-09 实测）：`manual` = `novel.bookscan`、`novel.manual.workbench`；`auto` = `novel.autowrite`、`novel.auto.workbench`；`shared` = `novel.typography`。
 
 > 模式归属规则：内置 API 模块与插件管理器为 `shared`（两种模式都复用其数据 / 能力）；
 > 目录插件按父目录名推导（`local` → `shared`）。缺省（未声明）一律按 `shared`。
@@ -98,7 +100,7 @@
 
 ## 四、模式插件（`apps/plugins/{manual,auto,shared}/*/`）
 
-这三个是真正的业务插件，均有自己的 `plugin.json` manifest；**父目录名 = 适用模式**（`local/` 为 AI 动态创建区，当前为空）。
+这里的 **5 个**插件都有各自的 `plugin.json` manifest；**父目录名 = 适用模式**（`local/` 为运行时 AI 动态创建区，不随仓库分发）。
 
 ### 4.1 `novel.autowrite` —— 自动写作引擎（`auto/`，53 个文件，本仓最重插件）
 
@@ -130,6 +132,23 @@
 - **作用**：调整编辑器文字的显示粗细与颜色（实时预览，**项目无关的用户级设置**）
 - **权限**：`routes`、`db:global`
 - ⚠️ 已知问题：三条路由 `GET/PUT/DELETE /settings` **缺 `requireAuth`**（安全报告 C7）
+
+### 4.4 `novel.manual.workbench` —— 手写台（`manual/`，73 个文件）
+
+- **manifest 描述**：手写台大模块 —— 12 个内置面板（参考书 / 笔记 / 统计 / 大纲 / 时间线 / 角色 / 地点 / 伏笔 / 物品 / 关系图 / 地图 / 导出）+ 章节编辑器 + 章节气泡浮窗；大类子插件以 `web/<大类>/` 目录体现
+- **模式**：`manual`（目录 `manual/` + `modes: ["manual"]`）
+- **权限**：`[]`（无服务端权限声明）
+- **web 注入**：`projectPanels`、`builtinBubble`；入口 `web/index.tsx`
+- **近期变更**：「快捷短语」从编辑器正文上方的固定漂移气泡改为**底部面板的一栏**（新 kernel 扩展点 `registerBottomPanelSection`，见 `apps/web/src/components/shell/bottomSections.tsx`）
+
+### 4.5 `novel.auto.workbench` —— AI 写作台（`auto/`，8 个文件）
+
+- **manifest 描述**：AI 写作台大模块 —— AI 对话浮窗 + 编辑器气泡栏 + 自动写作工作台 + 技能库 + 流水线 / 记忆面板
+- **模式**：`auto`（目录 `auto/` + `modes: ["auto"]`）
+- **权限**：`[]`（无服务端权限声明）
+- **web 注入**：`projectPanels`、`builtinBubble`、`chatRail`、`workbench`、`settings`、`capability`；入口 `web/index.tsx`
+
+> 这两个 `workbench` 插件在 2026-10-09 的复核中被补入总览：它们各自带 `plugin.json` 与 web 入口，会被目录扫描加载（`GET /api/health` 实测可见），但**不在 `pnpm verify:modes` 的断言清单内**。
 
 ---
 
