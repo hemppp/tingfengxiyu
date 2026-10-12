@@ -47,7 +47,7 @@ import { getSdkProvider, runWithThinkingSink } from '../ai/agents/sdk/provider.j
 import { getAllSdkTools, type NovelAgentContext } from '../ai/agents/sdk/tools.js';
 import { createSqliteKvService } from './kv-service.js';
 import { createStaticFallback } from './frontend-static.js';
-import { createPluginGuardian, createGuardedPluginHandle, type GuardianSnapshot } from './guardian.js';
+import { createPluginGuardian, createGuardedPluginHandle, attributeBuiltinRoutes, type GuardianSnapshot } from './guardian.js';
 
 export interface ServerPluginHostOptions {
   port?: number;
@@ -751,6 +751,11 @@ export function createServerPluginHost(options: ServerPluginHostOptions = {}): S
         const handle = createGuardedPluginHandle(mod as PluginModule, entry.id, guardian, entry.manifest?.permissions ?? []);
         mountedMod = handle.mod;
         guardedBags.set(entry.id, handle.disposeTracked);
+      } else {
+        // ★ 内置条目也做轻量 routes 归因（仅透传 pluginId，不进守护器计数）：
+        //   否则其 /api/plugins/* 路由在宿主模式门禁的 routeModes 里查不到 pluginId，
+        //   manual 插件对 auto 项目会被静默放行（novel.worldbuilding 即此情形）。
+        mountedMod = attributeBuiltinRoutes(mountedMod, entry.id);
       }
       const fiber = await ctx.plugin(mountedMod as Plugin, {});
       fibers.set(entry.id, fiber as unknown as { dispose(): unknown });

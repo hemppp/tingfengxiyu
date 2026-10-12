@@ -96,8 +96,12 @@ export const rhythmService = {
    * 分析章节内容的节奏标记
    *
    * 调用后端 POST /ai/analyze-rhythm，失败时回退本地启发式并标注 isLocalFallback=true。
+   *
+   * ★ signal 参数（F-F 修复，2026-10-10）：与 `analyzeStyle` 同因同治 ——
+   *   此前签名没有 signal，调用点建了 AbortController 也传不进来 ⇒ 请求不可取消，
+   *   被 abort 后仍占同源连接至 `timeoutMs`（60 s）。参数可选，不传时行为不变。
    */
-  async analyzeRhythm(text: string, chapterTitle?: string): Promise<RhythmAnalysisResult> {
+  async analyzeRhythm(text: string, chapterTitle?: string, signal?: AbortSignal): Promise<RhythmAnalysisResult> {
     const plain = text.replace(/<[^>]*>/g, '');
     if (!plain.trim()) {
       return { marks: [], summary: '章节内容为空', isLocalFallback: true };
@@ -108,7 +112,7 @@ export const rhythmService = {
       const data = await apiClient.post<ServerRhythmResult>(
         '/ai/analyze-rhythm',
         { text: plain, chapterTitle },
-        { silent: true, timeoutMs: 60_000 },
+        { silent: true, timeoutMs: 60_000, signal },
       );
       return {
         marks: data.marks ?? [],

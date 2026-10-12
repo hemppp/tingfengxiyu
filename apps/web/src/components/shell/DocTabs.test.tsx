@@ -1,11 +1,12 @@
 // ============================================================
-// DocTabs.test.tsx —— 文档标签行的运行时冒烟（t1 自证 / t6 去层后更新）
+// DocTabs.test.tsx —— 文档标签行的运行时冒烟（t1 自证 / t6 去层 / ★ 全动态标签）
 //
-// 证明截图里的标签行**真的能切/关/加**：
-//   · 三类标签（章节正文 / 人物设定 / 大纲 · 卷一）与「+」都在 DOM 里
-//   · 激活态可见（`.shell-doctab.is-active`）
-//   · × 关闭后切到**相邻**标签；关到 0 个不崩
-//   · 「+」菜单能重新打开
+// 证明标签行**只表达「打开了什么」**：
+//   · 第 1 格恒为「章节正文」（基础标签），其后每个已打开面板一条标签
+//   · 「全部功能」一视同仁：章节树 / AI 对话 / 人物设定 / 大纲 / 时间线 … 都有标签
+//   · × 关闭 = 关闭它代表的真实面板；面板在别处被关 ⇒ 标签自动消失
+//   · 「+」菜单 = 正文 + 面板候选池（已打开带标记），点击即打开
+//   · 激活态可见（`.shell-doctab.is-active`），面板被聚焦 ⇒ 对应标签激活
 //   · 标题取自真实 store（章节名 / 大纲卷名），无数据时回落静态标题
 //
 // ★ t6 去层后的两处口径变化：
@@ -17,8 +18,10 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { act, render, fireEvent } from '@testing-library/react';
-import { DocTabsHeader, DOC_TAB_CATALOG } from '@/components/shell/DocTabs';
+import { DocTabsHeader, DOC_BASE_TAB } from '@/components/shell/DocTabs';
 import { useChapterStore, useOutlineStore } from '@/stores';
+import { usePanelOpenStore } from '@/stores/panelOpenStore';
+import { usePluginRegistry } from '@/plugin/registry';
 
 function tabLabels(container: HTMLElement): string[] {
   return Array.from(container.querySelectorAll('.shell-doctab-label')).map(
@@ -30,65 +33,148 @@ function activeLabel(container: HTMLElement): string | null {
   return container.querySelector('.shell-doctab.is-active .shell-doctab-label')?.textContent ?? null;
 }
 
+/** 注册面板定义（活动栏 / 面板本体 / 标签行 / 「+」菜单读的是同一份注册表 label）。 */
+function registerPanels(list: Array<[key: string, label: string]>) {
+  act(() => {
+    usePluginRegistry.setState({
+      projectPanels: list.map(([key, label]) => ({ key, label }) as never),
+    });
+  });
+}
+
+/** 模拟面板打开集合的落点（活动栏点开 / 命令式 open / 视图上报后的真实取值）。 */
+function openPanels(keys: string[], activeKey: string | null = null) {
+  act(() => {
+    usePanelOpenStore.setState({ keys, activeKey });
+  });
+}
+
 beforeEach(() => {
   act(() => {
     useOutlineStore.setState({ nodes: [] });
     useChapterStore.setState({ currentChapterId: null });
+    // ★ 全动态标签的两处真源 —— 每例前清空，避免跨例泄漏
+    //   （含 baseOpen：基础标签也当动态标签，可关，测试间需归位为打开）
+    usePanelOpenStore.setState({ keys: [], activeKey: null, baseOpen: true });
+    usePluginRegistry.setState({ projectPanels: [], builtinPanels: [] });
   });
 });
 
 describe('DocTabsHeader 文档标签行', () => {
-  it('默认渲染三类标签 + 「+」，且「章节正文」为激活态', () => {
+  it('没开任何面板时只有基础标签「章节正文」+「+」', () => {
     const { container } = render(<DocTabsHeader />);
-    expect(DOC_TAB_CATALOG).toHaveLength(3);
-    expect(tabLabels(container)).toEqual(['章节正文', '人物设定', '大纲 · 卷一']);
+    expect(DOC_BASE_TAB.id).toBe('doc:chapter');
+    expect(tabLabels(container)).toEqual(['章节正文']);
     expect(activeLabel(container)).toBe('章节正文');
     expect(container.querySelectorAll('.shell-doctab.is-active').length).toBe(1);
     expect(container.querySelector('.shell-doctab-add')).toBeTruthy();
   });
 
-  it('点标签切换激活态（同一时刻只有一个激活）', () => {
+  it('★ 全部功能一视同仁：每个已打开的面板都出一条带 × 的标签', () => {
+    registerPanels([
+      ['chapters', '章节'],
+      ['ai-chat', 'AI 对话'],
+      ['characters', '人物设定'],
+      ['outline', '大纲'],
+      ['timeline', '时间线'],
+    ]);
     const { container } = render(<DocTabsHeader />);
-    const mains = container.querySelectorAll('.shell-doctab-main');
-    fireEvent.click(mains[1] as HTMLElement);
-    expect(activeLabel(container)).toBe('人物设定');
+    openPanels(['chapters', 'ai-chat', 'characters', 'outline', 'timeline'], 'timeline');
+
+    // 顺序 = 打开顺序；标题取自注册表（大纲面板带真实卷名）
+    expect(tabLabels(container)).toEqual([
+      '章节正文',
+      '章节',
+      'AI 对话',
+      '人物设定',
+      '大纲 · 卷一',
+      '时间线',
+    ]);
+    // 每条标签都有自己的 ×
+    expect(container.querySelectorAll('.shell-doctab-close').length).toBe(6);
+    // 被聚焦的面板 ⇒ 对应标签是激活项
+    expect(activeLabel(container)).toBe('时间线');
     expect(container.querySelectorAll('.shell-doctab.is-active').length).toBe(1);
-    // 嵌在组头的 role="tab" 内部 ⇒ 用 aria-current 表达当前文档（不再是 aria-selected）
-    expect(
-      container.querySelector('.shell-doctab.is-active .shell-doctab-main')?.getAttribute('aria-current'),
-    ).toBe('true');
   });
 
-  it('× 关闭激活标签 → 切到相邻标签；关到 0 个不崩；「+」可再打开', () => {
+  it('★ × 关标签 = 关真实面板；面板在别处被关 ⇒ 标签自动消失', () => {
+    registerPanels([
+      ['chapters', '章节'],
+      ['ai-chat', 'AI 对话'],
+      ['timeline', '时间线'],
+    ]);
     const { container } = render(<DocTabsHeader />);
+    openPanels(['chapters', 'ai-chat', 'timeline'], 'timeline');
 
-    // 先激活「人物设定」（列表第 2 项），再关它 → 右邻「大纲 · 卷一」接管
+    // 点「时间线」的 × ⇒ 真实面板关闭（store 里真的没了），标签随之消失；
+    // 激活态按既有契约切到左邻（它是最后一格）
+    fireEvent.click(container.querySelectorAll('.shell-doctab-close')[3] as HTMLElement);
+    expect(usePanelOpenStore.getState().keys).toEqual(['chapters', 'ai-chat']);
+    expect(tabLabels(container)).toEqual(['章节正文', '章节', 'AI 对话']);
+    expect(activeLabel(container)).toBe('AI 对话');
+
+    // 面板在别处关闭（活动栏再点一次 / 上限淘汰 / 视图上报）⇒ 标签消失，激活回落基础标签
+    act(() => {
+      usePanelOpenStore.getState().close('ai-chat');
+    });
+    expect(tabLabels(container)).toEqual(['章节正文', '章节']);
+    expect(activeLabel(container)).toBe('章节正文');
+    expect(usePanelOpenStore.getState().keys).toEqual(['chapters']);
+  });
+
+  it('点标签主体 = 聚焦该面板（已打开 ⇒ 不重复开、不重复出标签）', () => {
+    registerPanels([['notes', '笔记']]);
+    const { container } = render(<DocTabsHeader />);
+    openPanels(['notes'], null);
+    expect(activeLabel(container)).toBe('章节正文');
+
     fireEvent.click(container.querySelectorAll('.shell-doctab-main')[1] as HTMLElement);
-    expect(activeLabel(container)).toBe('人物设定');
-    fireEvent.click(container.querySelectorAll('.shell-doctab-close')[1] as HTMLElement);
-    expect(tabLabels(container)).toEqual(['章节正文', '大纲 · 卷一']);
-    expect(activeLabel(container)).toBe('大纲 · 卷一');
+    expect(tabLabels(container)).toEqual(['章节正文', '笔记']);
+    expect(activeLabel(container)).toBe('笔记');
+    expect(usePanelOpenStore.getState().keys).toEqual(['notes']);
+  });
 
-    // 全关光 → 0 个标签，不崩
-    fireEvent.click(container.querySelector('.shell-doctab-close') as HTMLElement);
+  it('「+」菜单 = 正文 + 全部面板候选池（已打开的带标记），点一项即打开', () => {
+    registerPanels([
+      ['chapters', '章节'],
+      ['timeline', '时间线'],
+      ['notes', '笔记'],
+    ]);
+    const { container } = render(<DocTabsHeader />);
+    openPanels(['chapters'], 'chapters');
+
+    fireEvent.click(container.querySelector('.shell-doctab-add') as HTMLElement);
+    const items = Array.from(document.querySelectorAll('.shell-doctab-menu-item'));
+    expect(items.map((el) => el.textContent)).toEqual(['章节正文', '章节', '时间线', '笔记']);
+    // 已打开（正文 + 章节）带 is-open 标记，未打开的不带
+    expect(items.map((el) => el.classList.contains('is-open'))).toEqual([true, true, false, false]);
+
+    // 点未打开的「时间线」⇒ 打开真实面板 + 标签出现 + 菜单收起
+    fireEvent.click(items[2] as HTMLElement);
+    expect(usePanelOpenStore.getState().keys).toEqual(['chapters', 'timeline']);
+    expect(tabLabels(container)).toEqual(['章节正文', '章节', '时间线']);
+    expect(document.querySelector('.shell-doctab-menu')).toBeNull();
+
+    // 再打开菜单点已打开的「章节」⇒ 只聚焦，不新增
+    fireEvent.click(container.querySelector('.shell-doctab-add') as HTMLElement);
+    fireEvent.click(document.querySelectorAll('.shell-doctab-menu-item')[1] as HTMLElement);
+    expect(usePanelOpenStore.getState().keys).toEqual(['chapters', 'timeline']);
+    expect(tabLabels(container)).toEqual(['章节正文', '章节', '时间线']);
+  });
+
+  it('基础标签关掉后可从「+」菜单恢复', () => {
+    const { container } = render(<DocTabsHeader />);
     fireEvent.click(container.querySelector('.shell-doctab-close') as HTMLElement);
     expect(tabLabels(container)).toEqual([]);
     expect(container.querySelector('.shell-doctab.is-active')).toBeNull();
     expect(container.querySelector('.shell-doctabs-list')).toBeTruthy();
 
-    // 「+」菜单 → 三项候选 → 打开「章节正文」
-    // 注意：菜单是 portal（挂在 document.body 下，见 F2），故不在 container 内查询。
     fireEvent.click(container.querySelector('.shell-doctab-add') as HTMLElement);
-    const items = document.querySelectorAll('.shell-doctab-menu-item');
-    expect(Array.from(items).map((el) => el.textContent)).toEqual([
-      '章节正文',
-      '人物设定',
-      '大纲 · 卷一',
-    ]);
+    const items = Array.from(document.querySelectorAll('.shell-doctab-menu-item'));
+    expect(items.map((el) => el.textContent)).toEqual(['章节正文']);
     fireEvent.click(items[0] as HTMLElement);
     expect(tabLabels(container)).toEqual(['章节正文']);
     expect(activeLabel(container)).toBe('章节正文');
-    // 选完即收起菜单
     expect(document.querySelector('.shell-doctab-menu')).toBeNull();
   });
 
@@ -117,8 +203,10 @@ describe('DocTabsHeader 文档标签行', () => {
     expect(document.querySelector('.shell-doctab-menu')).toBeNull();
   });
 
-  it('标题取真实 store：章节名覆盖「章节正文」，act 标题覆盖卷名', () => {
+  it('标题取真实 store：章节名覆盖基础标签，act 标题覆盖大纲面板标签', () => {
+    registerPanels([['outline', '大纲']]);
     const { container } = render(<DocTabsHeader />);
+    openPanels(['outline']);
 
     act(() => {
       useChapterStore.setState({
@@ -152,6 +240,6 @@ describe('DocTabsHeader 文档标签行', () => {
       } as never);
     });
 
-    expect(tabLabels(container)).toEqual(['第一章 山雨欲来', '人物设定', '大纲 · 山雨卷']);
+    expect(tabLabels(container)).toEqual(['第一章 山雨欲来', '大纲 · 山雨卷']);
   });
 });

@@ -9,7 +9,8 @@
   "web": {
     "inject": [
       "projectPanels",
-      "builtinBubble"
+      "builtinBubble",
+      "capability"
     ]
   },
   "serverEntry": "./server/index.ts",

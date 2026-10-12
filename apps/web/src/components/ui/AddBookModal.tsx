@@ -268,14 +268,15 @@ export function AddBookModal({ isOpen, onClose, onSubmit, editBook }: AddBookMod
     backdropFilter: 'blur(8px)',
     WebkitBackdropFilter: 'blur(8px)',
     outline: 'none',
-    transition: 'border-color 0.2s, box-shadow 0.2s, background 0.2s',
+    transition: 'border-color 0.2s, background 0.2s',
     boxSizing: 'border-box',
   };
 
+  // ★ 2026-10-11：原聚焦加 4px 光晕 + inset 高光（输入时整框泛光），按反馈移除 ——
+  //   只保留边框变色 + 底色微亮，不再泛光。
   const inputFocusStyle: React.CSSProperties = {
     borderColor: 'hsl(var(--ring) / 0.7)',
     background: 'rgb(var(--glass-tint) / 0.6)',
-    boxShadow: '0 0 0 4px hsl(var(--ring) / 0.12), inset 0 1px 0 rgb(var(--glass-highlight) / 0.4)',
   };
 
   const labelStyle: React.CSSProperties = {

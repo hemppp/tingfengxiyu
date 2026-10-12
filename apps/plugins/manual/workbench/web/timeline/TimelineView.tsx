@@ -46,6 +46,16 @@ export function TimelineView() {
   const [extracting, setExtracting] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
+  // ★ 2026-10-11 实测：`ai.timelineExtract` 能力缺失时此前只做了 handleExtract 内静默
+  //   return —— 按钮照常渲染，点了转圈又复原（「亮着的死按钮」）。合同要求
+  //   **入口隐藏**（docs/architecture/web-workbench-split.md §5.3 / L628：
+  //   「ai.timelineExtract 缺失 → 『从正文提取事件』入口隐藏；时间线手动增删改查完整」）。
+  //   在组件体内求值（每次渲染现取）：模块加载可能早于插件 apply() 注册能力，
+  //   模块级常量会把 null 冻死。
+  const extractCap = getCapability<{ extractEventsByKeyword: (...a: unknown[]) => Promise<void> }>(
+    'ai.timelineExtract',
+  );
+
   const currentChapter = useMemo(
     () => chapters.find((c) => c.id === currentChapterId),
     [chapters, currentChapterId]
@@ -141,6 +151,7 @@ export function TimelineView() {
       return;
     }
 
+    if (!extractCap) return; // 能力缺失：入口已隐藏（合同 §5.3），此处仅防御
     if (!currentChapter) return;
 
     // 取消上一次请求
@@ -154,9 +165,7 @@ export function TimelineView() {
     let baseOrder = Date.now();
 
     try {
-      const extractCap = getCapability<{ extractEventsByKeyword: (...a: unknown[]) => Promise<void> }>('ai.timelineExtract');
-        if (!extractCap) return; // 能力缺失：入口隐藏（设计 §5.3）
-        await extractCap.extractEventsByKeyword(
+      await extractCap.extractEventsByKeyword(
         currentChapter.content,
         currentChapter.title,
         currentChapter.order,
@@ -227,17 +236,22 @@ export function TimelineView() {
               type="text"
               value={newEventTitle}
               onChange={(e) => setNewEventTitle(e.target.value)}
-              placeholder="输入关键词（如角色名）提取事件，或直接添加..."
-              className="glass-surface flex-1 px-3 py-1.5 text-sm rounded-[14px] outline-none focus:ring-2 focus:ring-[hsl(var(--ring)/0.4)]"
+              placeholder={
+                extractCap
+                  ? '输入关键词（如角色名）提取事件，或直接添加...'
+                  : '输入事件标题，回车或点右侧 + 添加...'
+              }
+              className="glass-surface flex-1 px-3 py-1.5 text-sm rounded-[14px] outline-none"
               style={inputGlassStyle}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') handleExtract();
+                // 无 AI 提取能力时回车回落为「直接添加」（否则又是无声死键）
+                if (e.key === 'Enter') (extractCap ? handleExtract() : handleAddDirect());
               }}
             />
             <select
               value={newEventType}
               onChange={(e) => setNewEventType(e.target.value as TimelineEvent['type'])}
-              className="glass-surface text-sm rounded-[14px] px-2 py-1.5 outline-none focus:ring-2 focus:ring-[hsl(var(--ring)/0.4)]"
+              className="glass-surface text-sm rounded-[14px] px-2 py-1.5 outline-none"
               style={inputGlassStyle}
             >
               {DEFAULT_EVENT_TYPES.map((t) => (
@@ -246,16 +260,18 @@ export function TimelineView() {
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              onClick={handleExtract}
-              disabled={extracting}
-              className="nm-btn-apple nm-btn-apple-primary text-sm shrink-0"
-              title="从当前章节内容中提取相关事件"
-            >
-              {extracting ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-              提取
-            </button>
+            {extractCap && (
+              <button
+                type="button"
+                onClick={handleExtract}
+                disabled={extracting}
+                className="nm-btn-apple nm-btn-apple-primary text-sm shrink-0"
+                title="从当前章节内容中提取相关事件"
+              >
+                {extracting ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                提取
+              </button>
+            )}
             <button
               type="button"
               onClick={handleAddDirect}

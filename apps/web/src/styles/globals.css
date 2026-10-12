@@ -835,14 +835,6 @@
   to   { opacity: 1; }
 }
 
-.nm-pulse-glow {
-  animation: nm-pulse 1.2s ease-out;
-}
-@keyframes nm-pulse {
-  0%   { box-shadow: 0 0 0 0 hsl(var(--mountain-cyan) / 0.4); }
-  100% { box-shadow: 0 0 0 12px transparent; }
-}
-
 .nm-slide-in {
   animation: nm-slide 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -851,17 +843,16 @@
   to   { opacity: 1; transform: translateX(0); }
 }
 
-/* —— 输入聚焦：液态玻璃环 —— */
+/* —— 输入聚焦：只做边框变色，不做发光环 ——
+   ★ 2026-10-11：原「液态玻璃环」给所有 input/textarea/select 叠 4px 光晕 +
+   inset 高光，输入时整框泛光。按反馈移除：聚焦反馈收敛为边框变色一种。 */
 input, textarea, select {
-  transition: box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s;
+  transition: border-color 0.2s ease;
 }
 
 input:focus-visible, textarea:focus-visible, select:focus-visible {
   outline: none;
   border-color: hsl(var(--ring) / 0.6);
-  box-shadow:
-    0 0 0 4px hsl(var(--ring) / 0.12),
-    inset 0 1px 0 hsl(var(--glass-highlight) / 0.4);
 }
 
 .storymap-marker {
@@ -1301,7 +1292,6 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 .nm-input::placeholder { color: hsl(var(--ink-light) / 0.5); }
 .nm-input:focus {
   border-color: hsl(var(--mountain-cyan) / 0.5);
-  box-shadow: 0 0 0 3px hsl(var(--mountain-cyan) / 0.1);
   background: rgb(var(--glass-tint) / 0.7);
 }
 
@@ -1406,7 +1396,6 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 }
 .nm-input-sm:focus {
   border-color: hsl(var(--mountain-cyan) / 0.5);
-  box-shadow: 0 0 0 3px hsl(var(--mountain-cyan) / 0.1);
 }
 
 /* 危险描边按钮（清除/删除） */
@@ -1672,7 +1661,6 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 }
 .selection-menu-textarea:focus {
   border-color: hsl(var(--ring));
-  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.14);
 }
 .selection-menu-select {
   width: 100%;
@@ -1813,7 +1801,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
   color: hsl(var(--foreground));
   outline: none;
   font-family: inherit;
-  transition: border-color 0.1s, box-shadow 0.1s;
+  transition: border-color 0.1s;
 }
 .nm-modal-textarea {
   resize: none;
@@ -1822,7 +1810,6 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 .nm-modal-textarea:focus,
 .nm-modal-select:focus {
   border-color: hsl(var(--ring));
-  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.14);
 }
 .nm-modal-btn {
   display: inline-flex;

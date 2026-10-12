@@ -479,3 +479,47 @@ export function createGuardedPluginHandle(
     },
   };
 }
+
+/**
+ * 轻量 routes 包装：只把 `register` 的 pluginId 透传给宿主（不做错误归因 / 资源跟踪）。
+ *
+ * 为什么内置条目也需要：宿主运行时模式门禁（host.ts 的 /api/plugins/* gate）读的是
+ * `routeModes`（prefix → pluginId），而该映射**只有 register 携带 pluginId 才会登记**。
+ * 非内置插件由守护包装层（wrapRoutes）透传；内置条目拿的是裸 ctx —— 于是经
+ * builtin.ts `moduleEntry` 装载的 /api/plugins/* 路由（novel.worldbuilding）在门禁
+ * 查表时查不到 → manual 插件对 auto 项目被静默放行（可读可写）。
+ *
+ * 只在 /api/plugins/* 前缀上注入：内置模块的宿主前缀（/api/chapters 等）不在门禁
+ * 作用域内，且宿主对「携带 pluginId 的非插件前缀注册」有硬性拒绝（host.ts 前缀边界）。
+ */
+export function attributeBuiltinRoutes(mod: PluginModule, pluginId: string): PluginModule {
+  const rawApply = mod.apply;
+  return {
+    name: mod.name,
+    inject: mod.inject,
+    defaultConfig: mod.defaultConfig,
+    apply(pluginCtx: never, config?: Record<string, unknown>) {
+      const ctx = new Proxy(pluginCtx as unknown as object, {
+        get(target, prop) {
+          if (String(prop) === 'routes') {
+            const svc = (target as AnyRecord).routes as AnyRecord | undefined;
+            if (!svc || typeof svc !== 'object') return svc;
+            return {
+              ...svc,
+              register: (prefix: string, router: unknown, opts?: { pluginId?: string }) =>
+                (svc.register as (p: string, r: unknown, o?: { pluginId?: string }) => () => void).call(
+                  svc,
+                  prefix,
+                  router,
+                  prefix.startsWith('/api/plugins/') ? { ...(opts ?? {}), pluginId } : opts,
+                ),
+            };
+          }
+          // receiver 绑定原始 target：保证 cordis 自有方法（effect/plugin/…）的 this 不漂移
+          return Reflect.get(target, prop, target);
+        },
+      });
+      return rawApply(ctx as never, config);
+    },
+  };
+}

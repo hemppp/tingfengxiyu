@@ -594,12 +594,23 @@ button.shell-statusbar-item:active {
   position: fixed;
   z-index: 2000;
   min-width: 132px;
+  /* ★ 2026-10-11：菜单口径由「目录三件套」扩为**全部功能面板**（候选池可到十几项）
+     ⇒ 超高时菜单自身滚动，不把浮层撑出屏幕。 */
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
   padding: 4px;
   border: 1px solid var(--vscode-panel-border);
   border-radius: 5px;
   background-color: var(--vscode-menu-background);
   color: var(--vscode-menu-foreground);
   box-shadow: 0 2px 8px var(--vscode-widget-shadow);
+}
+
+/* 基础标签（正文）与面板候选池之间的分隔线（正文不是功能面板，分组以示区别） */
+.shell-doctab-menu-sep {
+  height: 1px;
+  margin: 4px 2px;
+  background-color: var(--vscode-panel-border);
 }
 
 .shell-doctab-menu-item {
@@ -619,6 +630,14 @@ button.shell-statusbar-item:active {
 
 .shell-doctab-menu-item:hover {
   background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+/* 已打开的项：右侧灰字标记（::after 不参与 textContent，单测按标签文本断言不受影响） */
+.shell-doctab-menu-item.is-open::after {
+  content: '已打开';
+  margin-left: 8px;
+  font-size: 10px;
+  opacity: 0.55;
 }
 
 /* ---------- 底部细条展开后的问题清单（DockShell 的 .dock-bottom-body 内） ---------- */

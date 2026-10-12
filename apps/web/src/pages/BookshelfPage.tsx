@@ -128,7 +128,6 @@ export function BookshelfPage() {
     sortBy: 'updatedAt',
     sortOrder: 'desc',
   });
-  const [searchFocused, setSearchFocused] = useState(false);
 
   // ★ 书架取数改走缓存查询（useCachedQuery）：
   //   挂载时**同步**用上次的结果渲染 —— 从别的页面转回书架不再闪「墨香渐浓...」；
@@ -338,11 +337,11 @@ export function BookshelfPage() {
 
             {/* Right: Search + Actions */}
             <div className="flex items-center gap-2.5">
-              {/* Search bar — 液态玻璃胶囊 */}
+              {/* Search bar — 液态玻璃胶囊
+                  ★ 2026-10-11：原聚焦套 ring-2 光环，输入时整框泛光，按反馈移除 ——
+                  聚焦反馈交由 hover 同款玻璃高亮承担（不再有独立发光态）。 */}
               <div
-                className={`glass-surface flex items-center gap-2 rounded-full transition-all duration-300 ${
-                  searchFocused ? 'ring-2 ring-primary/30' : 'glass-hover'
-                }`}
+                className="glass-surface glass-hover flex items-center gap-2 rounded-full transition-all duration-300"
                 style={{ padding: '6px 6px 6px 16px' }}
               >
                 <Search size={15} className="shrink-0" style={{ color: 'hsl(var(--muted-foreground))' }} />
@@ -351,8 +350,6 @@ export function BookshelfPage() {
                   placeholder="搜索作品..."
                   value={filter.search}
                   onChange={e => setFilter(f => ({ ...f, search: e.target.value }))}
-                  onFocus={() => setSearchFocused(true)}
-                  onBlur={() => setSearchFocused(false)}
                   className="bg-transparent border-none outline-none text-[13px] min-w-[120px] sm:min-w-[160px]"
                   style={{ color: 'hsl(var(--foreground))', fontFamily: "'Noto Serif SC', serif" }}
                   aria-label="搜索作品"

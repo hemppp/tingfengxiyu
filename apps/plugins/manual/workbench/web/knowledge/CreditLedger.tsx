@@ -159,7 +159,7 @@ export function CreditLedger() {
                 value={charSearch}
                 onChange={(e) => { setCharSearch(e.target.value); setSelectedCharId(null); setSelectedTxId(null); }}
                 placeholder="搜索人物..."
-                className="w-full pl-8 pr-3 py-1.5 text-sm bg-card border border-border rounded-[14px] focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring placeholder:text-muted-foreground transition-shadow"
+                className="w-full pl-8 pr-3 py-1.5 text-sm bg-card border border-border rounded-[14px] focus:outline-none focus:border-ring placeholder:text-muted-foreground transition-colors"
               />
             </div>
           </div>
@@ -349,7 +349,7 @@ export function CreditLedger() {
                     min={1}
                     value={form.chapter}
                     onChange={(e) => setForm((f) => ({ ...f, chapter: e.target.value }))}
-                    className="w-full px-2.5 py-1.5 text-sm bg-card border border-border rounded-[14px] focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring"
+                    className="w-full px-2.5 py-1.5 text-sm bg-card border border-border rounded-[14px] focus:outline-none focus:border-ring"
                   />
                 </div>
                 <div className="flex-1">
@@ -360,7 +360,7 @@ export function CreditLedger() {
                     value={form.amount}
                     onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
                     placeholder="如 500"
-                    className="w-full px-2.5 py-1.5 text-sm bg-card border border-border rounded-[14px] focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring placeholder:text-muted-foreground"
+                    className="w-full px-2.5 py-1.5 text-sm bg-card border border-border rounded-[14px] focus:outline-none focus:border-ring placeholder:text-muted-foreground"
                   />
                 </div>
               </div>
@@ -372,7 +372,7 @@ export function CreditLedger() {
                   value={form.reason}
                   onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
                   placeholder={form.type === 'gain' ? '如：完成新手任务 / 击杀魔兽' : '如：兑换功法 / 购买丹药'}
-                  className="w-full px-2.5 py-1.5 text-sm bg-card border border-border rounded-[14px] focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring placeholder:text-muted-foreground"
+                  className="w-full px-2.5 py-1.5 text-sm bg-card border border-border rounded-[14px] focus:outline-none focus:border-ring placeholder:text-muted-foreground"
                 />
               </div>
 
@@ -392,7 +392,7 @@ export function CreditLedger() {
                         amount: f.type === 'spend' && !f.amount && item?.creditPrice ? String(item.creditPrice) : f.amount,
                       }));
                     }}
-                    className="w-full px-2.5 py-1.5 text-sm bg-card border border-border rounded-[14px] focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring"
+                    className="w-full px-2.5 py-1.5 text-sm bg-card border border-border rounded-[14px] focus:outline-none focus:border-ring"
                   >
                     <option value="">无</option>
                     {projectItems.map((i) => (

@@ -46,9 +46,24 @@ const SUBTITLE_STYLE: React.CSSProperties = {
 
 /** 元信息行的一段；四段全部来自真实数据，缺失时整段不进入数组（不渲染空占位/null） */
 
+/**
+ * 内容签名（djb2 变体）—— 用于「内容没实质变化就别再打 AI 请求」。
+ * 与 StyleAdvisor 内的同名函数是**各自独立**的实现（有意不共享：
+ * 两处防抖策略不同，耦合只会让任一侧的调整牵动另一侧）。
+ */
+function styleContentSignature(text: string): number {
+  let hash = 5381;
+  for (let i = 0; i < text.length; i++) {
+    hash = ((hash << 5) + hash + text.charCodeAt(i)) | 0;
+  }
+  return hash >>> 0;
+}
+
 export function EditorPage() {
   const [styleProfile, setStyleProfile] = useState<StyleProfile | null>(null);
   const [findVisible, setFindVisible] = useState(false);
+  // 上次已发起分析的正文签名（跨 render 保留，见下方风格学习 effect 的注释）
+  const lastStyleSigRef = useRef<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const editorAreaRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -132,15 +147,34 @@ export function EditorPage() {
   // 不再在 EditorPage 中单独监听 editor.on('update')，避免重复订阅和潜在的字数冻结
   // 章节列表的字数显示走 store 的 chapter.wordCount，由 useEditorInstance 的 200ms 防抖 flushPersist 更新
 
+  // ★ 风格学习（F-F 修复，2026-10-10）。原实现的三个问题：
+  //   ① `deps: [chapters]` + 立即调用 ⇒ 章节内容每次变化都**立刻**打一次 60 s 的
+  //      AI 请求（无防抖）。键入时 store 频繁更新，等于持续占满同源连接。
+  //   ② `:137` 建了 AbortController 却**从未传给 analyzeStyle**（当时签名也没有
+  //      signal 参数）⇒ abort 只改本地的 `aborted` 标志，请求本身取消不掉。
+  //   ③ 于是在 AI 端点饱和时，这些 60 s 请求会把普通写请求挤到 8 s 客户端超时，
+  //      而写请求是 `silent: true` ⇒ 静默丢数据（F-F）。
+  //   现在：按内容签名去重 + 3 s 防抖 + 卸载/内容再变时**真取消**在途请求。
+  //   签名与防抖阈值与 StyleAdvisor 各自独立实现（不互相依赖），两者都在场时
+  //   各自持有一条连接，但都受防抖约束，不再随每次键入放大。
   useEffect(() => {
     let aborted = false;
     const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
     const learnStyle = async () => {
       if (chapters.length < 1) return;
       const texts = chapters.slice(0, 5).map(ch => ch.content);
+      // 内容不足 100 字符时样本太短，分析结果没有意义 —— 直接跳过，
+      // 省下一条 60 s 的长连接（后端对此也只会返回降级结果）。
+      if (texts.join('\n\n').trim().length < 100) return;
+      const sig = styleContentSignature(texts.join('\n\n'));
+      if (sig === lastStyleSigRef.current) return;
+      // 先记签名再发请求：失败时也**不重试**（本地启发式兜底已足够），
+      // 否则内容不变而请求失败的场景会在每次 render 后重复打。
+      lastStyleSigRef.current = sig;
       try {
-        const { profile: p, isLocalFallback } = await styleService.analyzeStyle(texts);
+        const { profile: p, isLocalFallback } = await styleService.analyzeStyle(texts, controller.signal);
         if (!aborted && !controller.signal.aborted) {
           // 后端不可用时仍写入兜底结果（StyleAdvisor 仅用于本地启发式检查）
           if (!isLocalFallback) setStyleProfile(p);
@@ -149,10 +183,13 @@ export function EditorPage() {
         // style analysis is 可选
       }
     };
-    learnStyle();
+
+    // 3 s 防抖：写作者连续键入期间不发请求，停笔后才分析一次
+    timer = setTimeout(learnStyle, 3000);
 
     return () => {
       aborted = true;
+      if (timer) clearTimeout(timer);
       controller.abort();
     };
   }, [chapters]);

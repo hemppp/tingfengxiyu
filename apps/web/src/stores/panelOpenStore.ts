@@ -32,6 +32,12 @@
 //   与旧行为的两点区别，都是为了避免「做了但用户不知道」：
 //     · 淘汰依据是**最近使用**而非最早打开 —— 挤掉的永远是你最近没在看的那个；
 //     · 淘汰时抛一条 info toast（`notifyEviction`），用户知道面板去哪了。
+//
+// ## 持久化（2026-10-11 用户口径「AI 对话的窗口还是固定的……让他和其他的功能一样
+//    可以动态关闭」）
+//   打开集合落 localStorage（`STORAGE_KEY`），进项目时**恢复**而非重播默认种子 ——
+//   于是「章节 / AI 对话」两栏关掉后刷新不再自己回来，与其余面板行为一致。
+//   详见文件中部「持久化」小节（含 `persistArmed` 落盘闸门）。
 // ============================================================
 
 import { create } from 'zustand';
@@ -50,6 +56,12 @@ export interface PanelOpenState {
   keys: string[];
   /** 当前聚焦（dockview active panel）的 key；无则 null */
   activeKey: string | null;
+  /**
+   * ★ 2026-10-11：「章节正文」基础标签是否打开（默认 true）。
+   * 它代表中心编辑区本身（不是业务面板），故不进 `keys`；但**计入总标签上限** ——
+   * 见 `MAX_OPEN_PANELS` 上方注释。关闭它 = 关掉中心文档标签（可从「+」菜单恢复）。
+   */
+  baseOpen: boolean;
   /** 打开或聚焦面板。已打开 ⇒ 只聚焦（不新增、不重排）；未打开 ⇒ 打开并按上限淘汰 */
   open: (key: string) => void;
   /** 已打开则聚焦，未打开则打开。语义等同 `open`（保留旧名仅为对称，ADR §2.3.1） */
@@ -74,6 +86,10 @@ export interface PanelOpenState {
    * activeKey 只在它仍存在于新集合中时保留；集合超出上限时同样按 LRU 淘汰。
    */
   _syncFromView: (keys: string[]) => void;
+  /** ★ 2026-10-11：打开「章节正文」基础标签（从「+」菜单恢复；幂等）。 */
+  openBase: () => void;
+  /** ★ 2026-10-11：关闭「章节正文」基础标签（标签上的 ×）。 */
+  closeBase: () => void;
 }
 
 // ---- 视图层桥接（模块级单例；不放进 store state，避免每次渲染换引用） ----
@@ -86,6 +102,16 @@ let viewOpen: ((key: string) => void) | null = null;
  * 单个 open 调用，只能把闭包结果推过去）。
  */
 let viewSync: ((keys: string[]) => void) | null = null;
+
+/**
+ * ★ 2026-10-11 单列布局：「聚焦基础标签（章节正文）」执行器。
+ *
+ * 基础标签「章节正文」代表中心编辑区本身（`CENTER_DEFAULT_PANEL_ID`），**不是**一个
+ * 业务面板 —— 它不在 `panelOpenStore.keys` 里，故无法经 `open()` 表达。单列布局下
+ * 点它必须把中心组切回承载章节编辑器的那个面板，否则正文出不来（点击无反应）。
+ * DockShell 挂载时注册、卸载时注销；未挂载时静默（无面板可聚焦）。
+ */
+let viewBase: (() => void) | null = null;
 
 /** DockShell 未挂载期间收到的打开请求（静默排队，ADR §2.4） */
 const pendingOpens: string[] = [];
@@ -139,6 +165,22 @@ export function registerPanelViewSync(fn: ((keys: string[]) => void) | null): vo
   viewSync = fn;
 }
 
+/** DockShell 注册「聚焦基础标签」回调（点「章节正文」时切回中心编辑区）。 */
+export function registerPanelViewBase(fn: (() => void) | null): () => void {
+  viewBase = fn;
+  return () => {
+    if (viewBase === fn) viewBase = null;
+  };
+}
+
+/**
+ * 命令式「聚焦基础标签（章节正文）」：把中心组切回章节编辑器出口。
+ * 视图层缺席时静默（无面板可聚焦）。
+ */
+export function focusDocBase(): void {
+  viewBase?.();
+}
+
 // ---- ★ 2026-10-07 修订：打开数量上限（ADR §4.4） ---------------------------
 
 /**
@@ -151,6 +193,21 @@ export function registerPanelViewSync(fn: ((keys: string[]) => void) | null): vo
  * 而且必须看得见 —— 于是上限回归、淘汰依据改为 LRU、并补一条 toast。
  */
 export const MAX_OPEN_PANELS = 3;
+
+/**
+ * ★ 2026-10-11 用户口径（「打开的页面是叠加的可以打开页面，最多打开三个页面」+
+ *   「正文也当动态标签」）：
+ *
+ * 「章节正文」现在是文档标签栏的**第 1 格动态标签** —— 可关闭、且**计入总上限**。
+ * 它代表中心编辑区本身（DockShell 的 `CENTER_DEFAULT_PANEL_ID`），**不是**业务面板，
+ * 故用这个保留 key 表达，存在 `PanelOpenState.baseOpen` 里（不进 `keys`）。
+ *
+ * 上限口径 = **总标签数**（基础标签 + 功能面板）≤ `MAX_OPEN_PANELS`。实现上等价于
+ * 「功能面板数 ≤ MAX - (baseOpen ? 1 : 0)」—— 基础标签本身**不参与 LRU 淘汰**
+ * （它是文档本身，被自动收起会很突兀；用户可用标签上的 × 手动关它）。
+ * 于是：基础标签开着 ⇒ 最多 2 个功能面板；关掉 ⇒ 最多 3 个。
+ */
+export const BASE_TAB_KEY = 'doc:chapter';
 
 /**
  * 「最近使用」顺序（最近用过的在前）。只记 key、不含时间戳 —— 只需要相对顺序。
@@ -182,13 +239,18 @@ function ageRank(key: string): number {
 }
 
 /**
- * 把打开集合裁到 `MAX_OPEN_PANELS`，返回**新集合**与**被淘汰者**。
+ * 把打开集合裁到**功能面板允许数**，返回**新集合**与**被淘汰者**。
  * 淘汰顺序：最久没用过 → 次久没用过 …；集合自身顺序（= 打开顺序）保持不变。
+ *
+ * ★ 2026-10-11：「最多打开三个页面」是**总标签数**（基础标签 + 功能面板）。
+ *   基础标签开着时占 1 个名额 ⇒ 功能面板上限 = `MAX_OPEN_PANELS - 1`；关掉 ⇒ 恢复 3。
+ *   基础标签自身**不参与**淘汰（`baseOpen` 只影响名额，不进 `keys`）。
  */
-function limitOpenKeys(keys: string[]): { keys: string[]; evicted: string[] } {
-  if (keys.length <= MAX_OPEN_PANELS) return { keys, evicted: [] };
+function limitOpenKeys(keys: string[], baseOpen = false): { keys: string[]; evicted: string[] } {
+  const max = baseOpen ? MAX_OPEN_PANELS - 1 : MAX_OPEN_PANELS;
+  if (keys.length <= max) return { keys, evicted: [] };
   const byAge = keys.slice().sort((a, b) => ageRank(b) - ageRank(a));
-  const evicted = byAge.slice(0, keys.length - MAX_OPEN_PANELS);
+  const evicted = byAge.slice(0, keys.length - max);
   return { keys: keys.filter((k) => !evicted.includes(k)), evicted };
 }
 
@@ -235,6 +297,89 @@ export const DEFAULT_OPEN_PANEL_KEYS: Readonly<Record<string, readonly string[]>
   manual: Object.freeze(['chapters', 'ai-chat']),
   auto: Object.freeze([]),
 });
+
+// ---- ★ 2026-10-11 持久化：打开集合跨刷新保留 -----------------------------
+//
+// 用户口径：「AI 对话的窗口还是固定的……让他和其他的功能一样可以动态关闭」。
+//
+// 现象根因：打开集合原先**每次进项目都重新播默认种子**（`DEFAULT_OPEN_PANEL_KEYS.manual`
+// = 章节树 + AI 对话），于是用户把这两栏关掉后**一刷新就回来** —— 表现为它们「关不掉 /
+// 固定」，与其余面板（默认不开、关了保持关）不一致。会话内其实点标签的 × 就能关，
+// 但刷新即复原，用户感知就是「固定」。
+//
+// 修法：把打开集合落 localStorage，作为「用户上次的选择」：
+//   · 有记录 ⇒ 原样恢复，**不再播默认种子**（关掉的面板保持关闭）；
+//   · 无记录（首次使用）⇒ 播默认种子，并立刻落盘作为基线；
+//   · 之后每次集合变化（打开 / 关闭 / 上限淘汰 / 视图回写）都同步落盘。
+// 于是「章节树 / AI 对话」与「人物设定 / 时间线…」行为完全一致：关掉就是关掉。
+//
+// 口径：**应用级**（不分项目 / 模式）—— 与 VS Code 的「工作台布局」同语义，一个应用一套。
+// 失败静默（隐私模式 / 配额满 / SSR 无 window 都不该影响交互）。
+const STORAGE_KEY = 'novelmuse.panelOpen.v1';
+
+/**
+ * 读取持久化的打开集合。
+ * @returns `{ keys, baseOpen }`；**`null` = 从未记录过**（首次使用，应播默认种子）。
+ *
+ * ★ 2026-10-11：持久化结构从裸 `string[]` 升级为 `{ keys, baseOpen }`（基础标签也
+ *   可关 ⇒ 它开/关状态也要跨刷新保留）。为兼容旧记录，仍接受**裸数组**形态
+ *   （视为 `{ keys: 数组, baseOpen: true }`—— 旧记录时代基础标签恒在）。
+ */
+function readPersistedKeys(): { keys: string[]; baseOpen: boolean } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (raw === null) return null;
+    const parsed: unknown = JSON.parse(raw);
+    // 旧形态：裸数组
+    if (Array.isArray(parsed)) {
+      return { keys: parsed.filter((k): k is string => typeof k === 'string'), baseOpen: true };
+    }
+    if (parsed && typeof parsed === 'object') {
+      const o = parsed as { keys?: unknown; baseOpen?: unknown };
+      const keys = Array.isArray(o.keys)
+        ? o.keys.filter((k): k is string => typeof k === 'string')
+        : [];
+      return { keys, baseOpen: o.baseOpen !== false };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** 落盘（静默失败）。 */
+function writePersisted(keys: readonly string[], baseOpen: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ keys, baseOpen }));
+  } catch {
+    /* 静默：持久化失败不该影响面板交互 */
+  }
+}
+
+/** 去重并保持首次出现顺序。 */
+function dedupeKeys(keys: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const k of keys) {
+    if (!seen.has(k)) {
+      seen.add(k);
+      out.push(k);
+    }
+  }
+  return out;
+}
+
+/**
+ * 落盘闸门：只有**播种 / 恢复决策完成之后**才允许持久化。
+ *
+ * 为什么需要：DockShell 的 `onReady` 会先以「视图实际面板集合」（此刻往往是空）
+ * 回写一次 `_syncFromView([])`，它可能**早于** ProjectLayout 的播种 effect 触发。
+ * 若此时就落盘，会把「空集合」写成用户选择，随后播种读取到 `[]` 便不再播种子
+ * （首屏三栏永久缺席）。闸门把这次早期回写挡在持久化之外。
+ */
+let persistArmed = false;
 
 /** 本会话是否已经播过种（诊断 / 测试用） */
 let seeded = false;
@@ -285,8 +430,20 @@ export function hasSeededPanelOpenKeys(): boolean {
 export function seedPanelOpenKeys(keys: readonly string[] | null | undefined): boolean {
   if (seeded) return false;
   seeded = true;
-  if (!keys || keys.length === 0) return false;
-  const wanted = keys.filter((k, i) => keys.indexOf(k) === i);
+  // ★ 2026-10-11 持久化：优先恢复「用户上次的打开集合」——
+  //   有记录就不再播默认种子（关掉的面板保持关闭）；无记录才播种子并落盘为基线。
+  const persisted = readPersistedKeys();
+  const initialKeys = persisted !== null ? persisted.keys : (keys ? Array.from(keys) : []);
+  const baseOpen = persisted !== null ? persisted.baseOpen : true;
+  // ★ 基础标签开/关也随持久化恢复（关掉后刷新不自己回来）
+  usePanelOpenStore.setState({ baseOpen });
+  if (initialKeys.length === 0) {
+    // 用户明确关光了（persisted.keys === []），或本模式无默认种子（keys 为空）
+    persistArmed = true;
+    writePersisted([], baseOpen);
+    return false;
+  }
+  const wanted = dedupeKeys(initialKeys);
   const opened = usePanelOpenStore.getState().keys;
   const missing = wanted.filter((k) => !opened.includes(k));
   seedUnconfirmed = wanted.slice();
@@ -297,12 +454,16 @@ export function seedPanelOpenKeys(keys: readonly string[] | null | undefined): b
     usePanelOpenStore.setState({ keys: opened.concat(missing) });
     for (const key of missing) openOrFocus(key);
   }
+  // 恢复完成 ⇒ 开启落盘，并立刻写入一次（把首次使用的默认种子固化为基线）
+  persistArmed = true;
+  writePersisted(usePanelOpenStore.getState().keys, usePanelOpenStore.getState().baseOpen);
   return true;
 }
 
 export const usePanelOpenStore = create<PanelOpenState>((set, get) => ({
   keys: [],
   activeKey: null,
+  baseOpen: true,
 
   // ADR §4.3-2 + §4.4：已打开 ⇒ 只更新焦点；否则 concat 后裁到上限（淘汰最久未用者）
   open: (key) => {
@@ -312,7 +473,7 @@ export const usePanelOpenStore = create<PanelOpenState>((set, get) => ({
       set({ activeKey: key });
       return;
     }
-    const limited = limitOpenKeys(state.keys.concat(key));
+    const limited = limitOpenKeys(state.keys.concat(key), state.baseOpen);
     notifyEviction(limited.evicted);
     set({ keys: limited.keys, activeKey: key });
   },
@@ -331,7 +492,7 @@ export const usePanelOpenStore = create<PanelOpenState>((set, get) => ({
       return;
     }
     touchRecency(key);
-    const limited = limitOpenKeys(state.keys.concat(key));
+    const limited = limitOpenKeys(state.keys.concat(key), state.baseOpen);
     notifyEviction(limited.evicted);
     set({ keys: limited.keys, activeKey: key });
   },
@@ -377,7 +538,7 @@ export const usePanelOpenStore = create<PanelOpenState>((set, get) => ({
     // ★ §4.4：视图可能上报**超过上限**的集合 —— 活动栏走的是 `DockShellApi.openPanel`
     //   （直接 addPanel，绕过了 store 的 `open`），用户拖标签也会。这里统一裁剪；
     //   被淘汰的面板由受控 effect（DockShell 的 `openKeys`）从视图移除。
-    const limited = limitOpenKeys(next);
+    const limited = limitOpenKeys(next, get().baseOpen);
     notifyEviction(limited.evicted);
     next = limited.keys;
     set((state) => ({
@@ -385,7 +546,34 @@ export const usePanelOpenStore = create<PanelOpenState>((set, get) => ({
       activeKey: state.activeKey && next.includes(state.activeKey) ? state.activeKey : null,
     }));
   },
+
+  // ★ 2026-10-11：基础标签（章节正文）的开 / 关 —— 幂等。
+  //   关掉它腾出的名额让功能面板可回到 3 个（受控 effect 会在 baseOpen 变化后重跑）。
+  //   重开则**反向收名额**：基础标签占回 1 格 ⇒ 若此刻已有 3 个功能面板，按 LRU
+  //   淘汰最久未用者（并 toast），保证「总标签数 ≤ MAX_OPEN_PANELS」恒成立。
+  openBase: () =>
+    set((state) => {
+      const limited = limitOpenKeys(state.keys, true);
+      notifyEviction(limited.evicted);
+      return { baseOpen: true, keys: limited.keys };
+    }),
+  closeBase: () => set({ baseOpen: false }),
 }));
+
+// ---- ★ 2026-10-11 持久化：打开集合变化即落盘 -------------------------------
+//
+// 订阅 store：只要 `keys` 变化（打开 / 关闭 / 上限淘汰 / 视图回写）就写 localStorage。
+// 闸门 `persistArmed` 保证播种 / 恢复决策完成前不落盘（挡掉 DockShell 就绪时的早期
+// 空集合回写，见 `persistArmed` 注释）。`activeKey` 不落盘：焦点不是布局，刷新后由
+// 视图重建即可（VS Code 亦不恢复焦点）。
+if (typeof window !== 'undefined') {
+  usePanelOpenStore.subscribe((state, prev) => {
+    if (!persistArmed) return;
+    if (state.keys !== prev.keys || state.baseOpen !== prev.baseOpen) {
+      writePersisted(state.keys, state.baseOpen);
+    }
+  });
+}
 
 /**
  * §2.3.1 冻结：面板导航句柄（命令式，非 React 组件可直接调用）。
@@ -456,15 +644,33 @@ export function getPanelNavigation(): PanelNavigation {
 
 // ---- 调试辅助（非契约） ----------------------------------------------------
 
-/** 重置 store 与视图层桥接（测试用） */
-export function _resetPanelOpenStore(): void {
-  usePanelOpenStore.setState({ keys: [], activeKey: null });
+/**
+ * 重置 store 与视图层桥接（测试用）。
+ *
+ * @param opts.keepStorage 保留 localStorage 里的持久化记录 —— 用于模拟「刷新」：
+ *   清内存状态（含播种开关）但保留用户上次的选择，随后再次 `seedPanelOpenKeys`
+ *   应恢复该选择（而不是重新播默认种子）。
+ */
+export function _resetPanelOpenStore(opts?: { keepStorage?: boolean }): void {
+  // ★ 先关落盘闸门再改 state —— 否则下面那次 `setState({keys:[]})` 会经订阅把
+  //   「重置」写进 localStorage，把用户选择抹成空（测试里表现为「刷新后全空」）。
+  persistArmed = false;
+  usePanelOpenStore.setState({ keys: [], activeKey: null, baseOpen: true });
   pendingOpens.length = 0;
   viewOpen = null;
   viewSync = null;
+  viewBase = null;
   seeded = false;
   seedUnconfirmed = [];
   seedDeadline = 0;
   recency.length = 0;
   lastEvictNoticeAt = 0;
+  // ★ 2026-10-11 持久化：清掉落盘记录，避免跨用例串味（keepStorage 时保留，用于模拟刷新）
+  if (!opts?.keepStorage) {
+    try {
+      if (typeof window !== 'undefined') window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* 静默 */
+    }
+  }
 }

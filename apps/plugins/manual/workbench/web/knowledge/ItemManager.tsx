@@ -208,7 +208,7 @@ export function ItemManager() {
                   setSelectedItemId(null);
                 }}
                 placeholder="搜索人物..."
-                className="w-full pl-8 pr-3 py-1.5 text-sm bg-background border border-border rounded-[14px] focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring/50 placeholder:text-muted-foreground transition-shadow"
+                className="w-full pl-8 pr-3 py-1.5 text-sm bg-background border border-border rounded-[14px] focus:outline-none focus:border-ring/50 placeholder:text-muted-foreground transition-colors"
               />
             </div>
           </div>

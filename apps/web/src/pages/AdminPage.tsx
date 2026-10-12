@@ -354,7 +354,7 @@ export function AdminPage() {
       {resetTarget && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: 'hsl(var(--ink-deep) / 0.4)', backdropFilter: 'blur(4px)' }}
+          style={{ background: 'hsl(var(--foreground) / 0.4)', backdropFilter: 'blur(4px)' }}
           onClick={() => setResetTarget(null)}
         >
           <div
@@ -363,7 +363,7 @@ export function AdminPage() {
               background: 'rgb(var(--glass-tint) / 0.95)',
               backdropFilter: 'blur(24px) saturate(180%)',
               border: '1px solid hsl(var(--border) / 0.4)',
-              boxShadow: '0 12px 40px hsl(var(--ink-deep) / 0.2)',
+              boxShadow: '0 12px 40px hsl(var(--glass-shadow) / 0.2)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -373,7 +373,7 @@ export function AdminPage() {
                 重置密码
               </h3>
             </div>
-            <p className="text-[12px] mb-4" style={{ color: 'hsl(var(--ink-soft))' }}>
+            <p className="text-[12px] mb-4" style={{ color: 'hsl(var(--ink-light))' }}>
               将为用户「<span style={{ color: 'hsl(var(--ink))', fontWeight: 500 }}>{resetTarget.username}</span>」
               设置新密码，旧密码将立即失效。
             </p>
@@ -496,7 +496,7 @@ function ActionButton({
           ? 'hsl(var(--vermilion))'
           : active
             ? 'hsl(var(--ochre))'
-            : 'hsl(var(--ink-soft))',
+            : 'hsl(var(--ink-light))',
       }}
     >
       {icon}

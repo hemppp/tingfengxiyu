@@ -23,7 +23,78 @@ import type {
   Snapshot,
 } from '@novel/shared';
 import { nanoid } from 'nanoid';
-import { apiClient } from '../api/apiClient';
+import { apiClient, ApiError } from '../api/apiClient';
+import { dispatchToastEvent } from '@novel-plugins/ui-kit/errors';
+
+// ============================================================
+// 瞬时写失败的用户可见化（F-F 修复，2026-10-10）
+// ============================================================
+//
+// ★ 为什么需要这一层：本文件的写函数一律用 `silent: true` 调 apiClient ——
+//   这个「静默」的**原始意图**是「400/422 这类 zod 校验失败不要弹 toast 打扰
+//   用户」（见 apiSave / apiUpdate / apiDelete 各自的注释）。但 silent 是**一刀切**
+//   的开关，它把 TIMEOUT / NETWORK_ERROR 这类**瞬时故障**也一并吞掉了：
+//   调用链 apiSave → return null → createEntityService.save 不抛 → syncService
+//   的 try/catch 走不到 → 它那句「数据同步失败」的 toast **永远不会触发**。
+//   结果就是 UI 显示保存成功、后端什么都没有、用户毫无感知（F-F）。
+//
+// ★ 为什么不改 apiClient 的 silent 语义：silent 有约 30 个调用点，其中大半是
+//   AI 分析类的「失败即回退本地启发式」场景，本就该安静；改语义会牵动它们全部。
+//   这里只在**写入路径**上补一层判定，改动面最小、意图最明确。
+//
+// ★ 为什么要合并窗口：AI 端点饱和时（8 并发、单条约 24 s）会**同时**挤掉多个
+//   写请求 —— 一次 toast 可能是五条，逐条弹就是 toast 风暴。故按「首条立即、
+//   窗口内其余计数、窗口结束时补一条汇总」处理：用户一定看得见，但最多两条。
+const TRANSIENT_WINDOW_MS = 8000;
+
+/** 是否为「值得打扰用户的」瞬时故障（校验失败、404 等语义错误不在其列） */
+function isTransientWriteFailure(e: unknown): boolean {
+  if (!(e instanceof ApiError)) return false;
+  return e.code === 'TIMEOUT' || e.code === 'NETWORK_ERROR';
+}
+
+let transientWindowStart = 0;
+let transientSuppressed = 0;
+let transientTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * 上报一次瞬时写失败。首条立即弹 toast；随后窗口内的失败只计数，
+ * 窗口结束时若计数 > 0 再补一条汇总（避免写请求批量超时时刷屏）。
+ */
+function reportTransientWriteFailure(e: ApiError): void {
+  const now = Date.now();
+  if (now - transientWindowStart > TRANSIENT_WINDOW_MS) {
+    transientWindowStart = now;
+    transientSuppressed = 0;
+    dispatchToastEvent({
+      type: 'error',
+      message:
+        e.code === 'TIMEOUT'
+          ? '保存超时：服务器繁忙，本次改动可能未写入，请稍后重试'
+          : '保存失败：网络不可达，本次改动可能未写入，请稍后重试',
+      duration: 6000,
+    });
+    if (transientTimer) clearTimeout(transientTimer);
+    transientTimer = setTimeout(() => {
+      transientTimer = null;
+      // ★ 窗口关闭时把起点清零：否则下一次失败恰好落在窗口边界（now - start === 窗口长）
+      //   会被判为「仍在窗口内」而只计数不提示 —— 那正是「偶尔完全看不到提示」的坏味道。
+      //   清零后下一次失败必然重新立即弹一条（windowStart=0 ⇒ 差值恒大于窗口长）。
+      transientWindowStart = 0;
+      if (transientSuppressed > 0) {
+        const n = transientSuppressed;
+        transientSuppressed = 0;
+        dispatchToastEvent({
+          type: 'error',
+          message: `另有 ${n} 项改动未能保存（服务器繁忙），请检查后重试`,
+          duration: 6000,
+        });
+      }
+    }, TRANSIENT_WINDOW_MS);
+    return;
+  }
+  transientSuppressed += 1;
+}
 
 // ============================================================
 // HTTP API 调用底层
@@ -108,6 +179,9 @@ async function apiSave<T extends { id: string }>(tableName: string, entity: T): 
     const result = await apiClient.post<T>(apiPath, entity, { silent: true });
     return result;
   } catch (e) {
+    // ★ 瞬时故障（超时/网络）不属于上面的静默意图 —— 它意味着数据真的没落库，
+    //   必须让用户知道（F-F）。语义错误仍保持安静。
+    if (isTransientWriteFailure(e)) reportTransientWriteFailure(e as ApiError);
     console.warn(`[databaseService] API 保存 ${tableName} 失败:`, e);
     return null;
   }
@@ -138,6 +212,8 @@ async function apiUpdate<T extends { id: string }>(
     // silent: true — 同 apiSave，后台同步的 PUT 失败不弹 toast
     await apiClient.put(`${apiPath}/${id}`, cleaned, { silent: true });
   } catch (e) {
+    // ★ 同 apiSave：超时/网络失败要可见（F-F）
+    if (isTransientWriteFailure(e)) reportTransientWriteFailure(e as ApiError);
     console.warn(`[databaseService] API 更新 ${tableName} 失败:`, e);
   }
 }
@@ -157,6 +233,9 @@ async function apiDelete(tableName: string, id: string): Promise<void> {
     // 不应通过 apiClient 自动弹 toast 打扰用户；错误仍记录到 console 供调试
     await apiClient.delete(`${apiPath}/${id}`, { silent: true });
   } catch (e) {
+    // ★ 同 apiSave：超时/网络失败要可见（F-F）。404 仍静默 ——
+    //   「已经不存在了」是删除的成功等价，不是用户需要处理的故障。
+    if (isTransientWriteFailure(e)) reportTransientWriteFailure(e as ApiError);
     console.warn(`[databaseService] API 删除 ${tableName} 失败:`, e);
   }
 }

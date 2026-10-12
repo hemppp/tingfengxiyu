@@ -198,8 +198,10 @@ export function SelectionMenu({ editor }: SelectionMenuProps) {
     if (!isVisible) return;
     const handleScroll = (event: Event) => {
       // 菜单自身内部滚动（如未来的长列表）不应关闭它。
-      const t = event.target as Node | null;
-      if (menuRef.current && t && menuRef.current.contains(t)) return;
+      // ★ target 必须用 instanceof Node 收窄：resize 事件的 target 是 window（不是 Node），
+      //   直接 menuRef.current.contains(window) 会抛 TypeError（参数不是 Node）。
+      const t = event.target;
+      if (menuRef.current && t instanceof Node && menuRef.current.contains(t)) return;
       closeMenu();
     };
     document.addEventListener('scroll', handleScroll, true);

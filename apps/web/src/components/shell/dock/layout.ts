@@ -63,7 +63,13 @@ export interface DockAreaPlan {
 }
 
 /**
- * 按 `resolveDockMeta(def).slot` 把候选池分桶。
+ * 候选池 → 布局桶。
+ *
+ * ★ 2026-10-11 用户口径（「点击那些功能需要显示在正页」）：布局收敛为**单列** ——
+ *   所有面板都进中心组、作为文档标签堆叠，**不再有左右/底部停靠列**。
+ *   故本函数不再按 `slot` 分桶：`center` 桶收全部面板，其余三桶恒空。
+ *   `dock.slot` 字段（ADR §1.4 冻结）仍保留在类型上，但布局层已忽略它。
+ *
  * ★ 不修改传入数组；顺序按 `order`（缺省 0）稳定排序，保证初始布局可复现。
  */
 export function planDockAreas(panels: DockPanelDef[]): DockAreaPlan {
@@ -77,14 +83,7 @@ export function planDockAreas(panels: DockPanelDef[]): DockAreaPlan {
     })
     .map((x) => x.def);
 
-  const plan: DockAreaPlan = { left: [], right: [], bottom: [], center: [] };
-  for (const def of sorted) {
-    const meta = resolveDockMeta(def);
-    // §1.6 裁定：`center` 布尔优先于 `slot` —— center 面板不参与侧栏候选池。
-    const slot: DockSlot = meta.center ? 'center' : meta.slot;
-    plan[slot].push(def);
-  }
-  return plan;
+  return { left: [], right: [], bottom: [], center: sorted };
 }
 
 /** dockview `addPanel` 的入参（这里只列出本内核会设置的字段）。 */

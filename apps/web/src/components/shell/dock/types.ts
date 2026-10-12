@@ -99,6 +99,11 @@ export interface DockShellApi {
   openPanel(key: string): void;
   closePanel(key: string): void;
   focusPanel(key: string): void;
+  /**
+   * ★ 2026-10-11 单列布局：聚焦「基础标签（章节正文）」= 激活中心编辑区面板
+   * （`CENTER_DEFAULT_PANEL_ID`）。它代表中心文档本身，不是业务面板，故不在 `openKeys` 里。
+   */
+  focusBase(): void;
   /** 当前已打开 key 顺序 */
   listPanels(): string[];
   /** 当前聚焦 key，无则 null */
@@ -116,14 +121,23 @@ export interface DockShellApi {
 export interface DockShellProps {
   /** 候选面板定义池（已按当前 project.mode 过滤） */
   panels: DockPanelDef[];
-  /** 中心区默认内容（章节编辑器路由出口）；被 center panel 抢占时替换 */
+  /** 中心区默认内容（章节编辑器路由出口）——单列布局下恒为中心组的基础标签 */
   centerDefault: React.ReactNode;
-  /** 当前被占用时显示的中心面板 key（null = 用 centerDefault） */
-  activeCenterKey: string | null;
+  /**
+   * ★ 2026-10-11 单列布局：**已废弃**（保留占位以兼容旧调用方，DockShell 不再读取）。
+   *   原语义「被占用时显示的中心面板 key」已无意义 —— 全部面板都在中心组标签堆叠。
+   */
+  activeCenterKey?: string | null;
   /** 命令式控制句柄（经 ref 暴露，见 §2.3） */
   apiRef?: React.Ref<DockShellApi>;
   /** 可选：受控的「已打开 key 列表」。未传时 DockShell 内部按 defaultOpen 自管 */
   openKeys?: string[];
+  /**
+   * ★ 2026-10-11：「章节正文」基础标签是否打开（默认 true）。
+   * false ⇒ 中心默认面板（`CENTER_DEFAULT_PANEL_ID`）从中心组移除，基础标签退场；
+   * 它**计入总标签上限**（由 store 裁剪 `openKeys` 保证），但不参与 LRU 淘汰。
+   */
+  baseOpen?: boolean;
   /** 可选：面板打开 / 关闭 / 聚焦的回调（t4 用于把状态写回 panelNavigation） */
   onOpenChange?: (keys: string[]) => void;
   onActiveChange?: (key: string | null) => void;

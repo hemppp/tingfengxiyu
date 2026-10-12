@@ -24,7 +24,13 @@ const setActive = (key: string): void => usePanelOpenStore.getState()._setActive
 const syncFromView = (k: string[]): void => usePanelOpenStore.getState()._syncFromView(k);
 
 describe('panelOpenStore · 打开数量上限（ADR §4.4）', () => {
-  beforeEach(() => _resetPanelOpenStore());
+  // ★ 2026-10-11：基础标签（章节正文）计入**总**上限 ⇒ 它开着时功能面板只能 2 个。
+  //   本组测的是**功能面板**的经典 LRU 上限（3 个），故先把基础标签关掉。
+  //   基础标签开/关对名额的影响另见下方「基础标签也当动态标签」一组。
+  beforeEach(() => {
+    _resetPanelOpenStore();
+    usePanelOpenStore.getState().closeBase();
+  });
   afterEach(() => _resetPanelOpenStore());
 
   it('上限常量 = 3，且首屏种子（2 个）不触发淘汰', () => {
@@ -103,6 +109,144 @@ describe('panelOpenStore · 打开数量上限（ADR §4.4）', () => {
       syncFromView(['a', 'b', 'c', 'd']);
     });
     expect(seen).toHaveLength(1);
+  });
+});
+
+/**
+ * ★ 2026-10-11 持久化（用户口径「AI 对话的窗口还是固定的……让他和其他的功能一样
+ * 可以动态关闭」）：打开集合跨刷新保留 —— 关掉的面板刷新后**不再自动回来**。
+ */
+describe('panelOpenStore · 打开集合持久化（刷新保留）', () => {
+  beforeEach(() => _resetPanelOpenStore());
+  afterEach(() => _resetPanelOpenStore());
+
+  const STORAGE_KEY = 'novelmuse.panelOpen.v1';
+  // ★ 2026-10-11：持久化结构升级为 `{ keys, baseOpen }`（基础标签也当动态标签，
+  //   它的开/关同样要跨刷新保留）。这里读回整个对象。
+  const persisted = (): { keys: string[]; baseOpen: boolean } | null => {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    return raw === null ? null : (JSON.parse(raw) as { keys: string[]; baseOpen: boolean });
+  };
+  const persistedKeys = (): string[] | null => persisted()?.keys ?? null;
+  /** 模拟一次「刷新」：清内存状态（含播种开关）但保留持久化记录。 */
+  const reload = (): void => _resetPanelOpenStore({ keepStorage: true });
+
+  it('首次使用（无记录）⇒ 播默认种子并落盘为基线', () => {
+    expect(persisted()).toBeNull();
+    seedPanelOpenKeys(['chapters', 'ai-chat']);
+    expect(keys()).toEqual(['chapters', 'ai-chat']);
+    expect(persisted()).toEqual({ keys: ['chapters', 'ai-chat'], baseOpen: true });
+  });
+
+  it('关掉面板后刷新 ⇒ 保持关闭（不再被默认种子拉回）', () => {
+    seedPanelOpenKeys(['chapters', 'ai-chat']);
+    getPanelNavigation().close('ai-chat');
+    expect(persistedKeys()).toEqual(['chapters']);
+
+    reload(); // 刷新：内存清空，localStorage 保留
+    seedPanelOpenKeys(['chapters', 'ai-chat']); // 再次进项目
+    expect(keys()).toEqual(['chapters']); // ai-chat 未被拉回 —— 这就是「可以动态关闭」
+  });
+
+  it('关光后刷新 ⇒ 保持为空（不播默认种子）', () => {
+    seedPanelOpenKeys(['chapters', 'ai-chat']);
+    getPanelNavigation().closeAll();
+    expect(persistedKeys()).toEqual([]);
+
+    reload();
+    seedPanelOpenKeys(['chapters', 'ai-chat']);
+    expect(keys()).toEqual([]);
+  });
+
+  it('刷新恢复的是用户上次打开的面板（含非默认项）', () => {
+    seedPanelOpenKeys(['chapters', 'ai-chat']);
+    getPanelNavigation().close('ai-chat');
+    open('timeline');
+    expect(persistedKeys()).toEqual(['chapters', 'timeline']);
+
+    reload();
+    seedPanelOpenKeys(['chapters', 'ai-chat']);
+    expect(keys()).toEqual(['chapters', 'timeline']); // 恢复 timeline，且不夹带 ai-chat
+  });
+
+  it('播种前的早期空集合回写不落盘（闸门），播种仍能生效', () => {
+    // 模拟 DockShell onReady 早于播种 effect 的 _syncFromView([])
+    syncFromView([]);
+    expect(persisted()).toBeNull(); // 未落盘 ⇒ 不会被误判成「用户关光了」
+    seedPanelOpenKeys(['chapters', 'ai-chat']);
+    expect(keys()).toEqual(['chapters', 'ai-chat']);
+    expect(persisted()).toEqual({ keys: ['chapters', 'ai-chat'], baseOpen: true });
+  });
+
+  it('基础标签的开/关也跨刷新保留', () => {
+    seedPanelOpenKeys(['chapters', 'ai-chat']);
+    usePanelOpenStore.getState().closeBase();
+    expect(persisted()).toEqual({ keys: ['chapters', 'ai-chat'], baseOpen: false });
+
+    reload();
+    seedPanelOpenKeys(['chapters', 'ai-chat']);
+    expect(usePanelOpenStore.getState().baseOpen).toBe(false); // 关掉后刷新不自己回来
+  });
+
+  it('旧版裸数组记录（无 baseOpen 字段）⇒ 兼容为 baseOpen=true', () => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(['chapters', 'timeline']));
+    seedPanelOpenKeys(['chapters', 'ai-chat']);
+    expect(keys()).toEqual(['chapters', 'timeline']);
+    expect(usePanelOpenStore.getState().baseOpen).toBe(true);
+  });
+});
+
+/**
+ * ★ 2026-10-11 用户口径（「打开的页面是叠加的可以打开页面，最多打开三个页面」+
+ *   「正文也当动态标签」）：基础标签（章节正文）是文档标签栏的**第 1 格动态标签**，
+ *   可关闭、且**计入总上限** —— 总标签数（基础标签 + 功能面板）≤ MAX_OPEN_PANELS。
+ */
+describe('panelOpenStore · 基础标签也当动态标签（总上限 3）', () => {
+  beforeEach(() => _resetPanelOpenStore());
+  afterEach(() => _resetPanelOpenStore());
+
+  const baseOpen = (): boolean => usePanelOpenStore.getState().baseOpen;
+
+  it('基础标签默认打开', () => {
+    expect(baseOpen()).toBe(true);
+  });
+
+  it('基础标签开着 ⇒ 功能面板最多 2 个（第 3 个触发 LRU 淘汰）', () => {
+    expect(baseOpen()).toBe(true);
+    open('a');
+    open('b');
+    expect(keys()).toEqual(['a', 'b']);
+    const seen = collectToasts(() => open('c'));
+    expect(keys()).toHaveLength(MAX_OPEN_PANELS - 1);
+    expect(keys()).toEqual(['b', 'c']); // 最久没用过的 a 被淘汰
+    expect(seen).toHaveLength(1);
+  });
+
+  it('关掉基础标签 ⇒ 功能面板可回到 3 个', () => {
+    open('a');
+    open('b');
+    usePanelOpenStore.getState().closeBase();
+    open('c');
+    expect(keys()).toEqual(['a', 'b', 'c']);
+  });
+
+  it('重开基础标签时若已满 3 个功能面板 ⇒ 淘汰最久未用者，总数不超上限', () => {
+    usePanelOpenStore.getState().closeBase();
+    for (const k of ['a', 'b', 'c']) open(k);
+    setActive('c');
+    const seen = collectToasts(() => usePanelOpenStore.getState().openBase());
+    expect(baseOpen()).toBe(true);
+    expect(keys()).toEqual(['b', 'c']); // 最久没用过的 a 被淘汰，基础标签占回名额
+    expect(seen).toHaveLength(1);
+  });
+
+  it('closeBase / openBase 幂等', () => {
+    usePanelOpenStore.getState().closeBase();
+    usePanelOpenStore.getState().closeBase();
+    expect(baseOpen()).toBe(false);
+    usePanelOpenStore.getState().openBase();
+    usePanelOpenStore.getState().openBase();
+    expect(baseOpen()).toBe(true);
   });
 });
 

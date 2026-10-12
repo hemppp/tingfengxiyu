@@ -168,8 +168,10 @@
 .dock-shell {
   display: grid;
   grid-template-columns: 47px minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) minmax(0, auto);
+  /* ★ 2026-10-11 单列布局：新增顶部 `docbar` 行（文档标签栏整宽一条）。 */
+  grid-template-rows: auto minmax(0, 1fr) minmax(0, auto);
   grid-template-areas:
+    'activity docbar'
     'activity main'
     'activity bottom';
   height: 100%;
@@ -179,6 +181,21 @@
   color: var(--vscode-editor-foreground);
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
+}
+
+/* 文档标签栏（正页顶部整宽一条）：高度对齐原 dockview 组头带（约 35px）。 */
+.dock-docbar {
+  grid-area: docbar;
+  min-width: 0;
+  height: 35px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background-color: var(--vscode-tab-inactiveBackground);
+}
+
+/* ★ 单列布局：隐藏所有 dockview 原生组头（含原生标签）。
+   文档标签栏改由 .dock-docbar 承担；隐藏后组内容占满整个组高。 */
+.dock-main .dv-tabs-and-actions-container {
+  display: none;
 }
 
 .dock-shell > .dock-bottom-area {

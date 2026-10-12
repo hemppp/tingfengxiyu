@@ -44,6 +44,8 @@ vi.mock('@/stores/referenceStore', () => ({
 
 import { ProjectLayout } from '@/components/shell/ProjectLayout';
 import { useProjectStore, useChapterStore } from '@/stores';
+import { usePluginRegistry } from '@/plugin/registry';
+import { _resetPanelOpenStore } from '@/stores/panelOpenStore';
 
 const PROJECT = {
   id: 'p1',
@@ -92,6 +94,19 @@ beforeEach(() => {
   act(() => {
     useProjectStore.setState({ currentProject: PROJECT } as never);
     useChapterStore.setState({ chapters: [], currentChapterId: null } as never);
+    // 面板打开集合 + 两个内置栏面板定义：真实应用由插件宿主注册（本测试直接种下），
+    // 否则标签行只能回落成裸 key（chapters / ai-chat）—— 那是 fallback，不是用户可见形态。
+    // ⚠ 必须走 `_resetPanelOpenStore()` 而不是只 setState：播种开关（`seeded`）与
+    //   「种子待视图确认」缓冲都是**模块级**状态，只清 state 会让第 2 例起不再播种，
+    //   标签行退化成「只有基础标签」（那是测试残留，不是产品行为）。
+    _resetPanelOpenStore();
+    usePluginRegistry.setState({
+      builtinPanels: [
+        // `icon` 是 `FloatingPanelDef` 的必填字段（活动栏直接渲染它，缺了会让整壳报错）
+        { key: 'chapters', label: '章节', icon: () => null, Component: () => null, modes: ['manual'], dock: { slot: 'left' } },
+        { key: 'ai-chat', label: 'AI 对话', icon: () => null, Component: () => null, modes: ['manual'], dock: { slot: 'right' } },
+      ],
+    } as never);
   });
 });
 
@@ -203,10 +218,12 @@ describe('ProjectLayout 外壳（t1 截图形态）', () => {
     //   （旧断言「位于顶栏之下、主区之上」按新架构已不成立）。
     expect(topbar.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(main.contains(doctabs)).toBe(true);
-    // 三类标签在壳里真实渲染（细节行为见 DocTabs.test.tsx）
+    // ★ 2026-10-11 全动态标签：某条标签 = 某个已打开的面板（+ 第 1 格基础标签「章节正文」）。
+    //   手写台默认打开集合是 `DEFAULT_OPEN_PANEL_KEYS.manual`（章节树 / AI 对话），
+    //   因此这里断言的是该集合的标签，而不是旧的「目录三件套」。
     expect(
       Array.from(container.querySelectorAll('.shell-doctab-label')).map((el) => el.textContent),
-    ).toEqual(['章节正文', '人物设定', '大纲 · 卷一']);
+    ).toEqual(['章节正文', '章节', 'AI 对话']);
   });
 
   it('底部细条：左「底部面板」+ 右「N 条问题 Ctrl+J」', () => {

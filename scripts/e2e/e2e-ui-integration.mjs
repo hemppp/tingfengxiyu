@@ -1,14 +1,26 @@
 #!/usr/bin/env node
 // ============================================================
-// e2e-ui-integration.mjs — 「目标截图布局」跨区集成自测（t4）
+// e2e-ui-integration.mjs — 「目标截图布局」跨区集成自测（t4；★ 2026-10-11 单列化）
 //
-// 目的：把三条并行线（t1 外壳 / t2 中栏编辑器 / t3 左右栏面板）当成**一个整体**
-//       在真实栈上端到端验证，覆盖 5 条跨区契约：
-//         ①顶栏模式按钮 ↔ 文档标签栏 ↔ 中栏编辑器 ↔ 左右面板 ↔ 底部细条/状态栏 五处状态一致
+// 目的：把外壳各条并行线（顶栏 / 文档标签栏 / 中心编辑区 / 功能面板 / 底部细条/状态栏）
+//       当成**一个整体**在真实栈上端到端验证，覆盖 5 条跨区契约：
+//         ①顶栏模式按钮 ↔ 文档标签栏 ↔ 中栏编辑器 ↔ 功能面板 ↔ 底部细条/状态栏 五处状态一致
 //         ②底部细条「N 条问题」= 中栏批注块真实计数（不是写死）；Ctrl+J 开关且内容不丢
-//         ③文档标签栏「人物设定」→ 真实 characters 面板、「大纲 · 卷一」→ 真实 outline 面板
-//         ④右栏 AI 对话面板在手写（manual）模式下可用，且发消息得到**真实后端 SSE**
+//         ③文档标签栏「+」菜单「角色」→ 真实 characters 面板、「大纲」→ 真实 outline 面板；
+//           并覆盖 ADR §4.4 面板上限（开第 1 个 → 与基础标签共存；开第 2 个 = 第 4 个面板 →
+//           最久未用者被收起 + toast 可见 + 活动栏可重开，淘汰可逆）；
+//           ★ 2026-10-11「正文也当动态标签」：基础标签「章节正文」也是可关的第 1 格动态
+//           标签，且**计入总上限**（总标签数 ≤ 3）—— 见 6c 节
+//         ④AI 对话面板在手写（manual）模式下可用，且发消息得到**真实后端 SSE**
 //         ⑤100vh 无全局滚动条、各面板内部滚动；1280×800 与 1920×1080 都不溢出
+//
+// ★ 2026-10-11 用户口径（「点击那些功能需要显示在正页」）：布局收敛为**单列** ——
+//   所有功能面板都在**中心组**里以文档标签堆叠，与「章节正文」同处正页；
+//   不再有左/右/底部停靠列。文档标签栏 `.dock-docbar` 是 `.dock-main` 顶部整宽的一条，
+//   dockview 原生组头一律隐藏（`.dv-tabs-and-actions-container{display:none}`），
+//   故本脚本不再断言「左栏 240 / 右栏 340 / 三栏分居」，改断言「单列：一条整宽文档栏 +
+//   单个停靠分组 + 每个已打开面板都在正页渲染」。
+//   （`.dv-tab` 仍存在但不可见 —— 它是文档标签栏所在的中心组头里的原生标签容器。）
 //
 // 前置条件（三个都要在跑；脚本不做启动，避免误拉服务）：
 //   1) 后端：  pnpm dev:server            → http://localhost:3774（/api 前缀）
@@ -57,6 +69,9 @@ const S = {
   doctabMain: '.shell-doctab-main',
   doctabClose: '.shell-doctab-close',
   dvTab: '.dv-tab',
+  // ★ 2026-10-11 单列布局：不再有左右停靠列。面板「是否在正页渲染」改用
+  //   面板内容元素（章节树 / AI 对话）判定 —— 它们现在都堆在中心组、作为文档标签之一。
+  docbar: '.dock-docbar',
   leftPanel: '[aria-label="章节侧边栏"]',
   chapterCount: '[aria-label^="共 "]',
   aiPanel: '[aria-label="AI 对话面板"]',
@@ -87,6 +102,21 @@ function section(title) {
 }
 
 // ---------------- CDP 最小客户端（与 e2e-mode-separation.mjs 同构） ----------------
+/**
+ * 从 CDP target 列表里挑出**本脚本该操作的那个页面**。
+ *
+ * ★ F-E 修复（2026-10-10）：此前一律取列表里的**第一个** `type === 'page'` target。
+ *   本机 Chrome 常残留着上一次运行的标签页，脚本于是会附着到**错误的 target**。
+ *   现在按 `BASE` 的 origin 校验，只认本脚本要操作的那台 dev server 的页面；
+ *   找不到时调用方必须明确报错退出（EXIT=2），**绝不**回落到第一个 page。
+ *   （console 重放已在下方 `Runtime.discardConsoleEntries` 处处理。）
+ */
+function pickPageTarget(targets) {
+  if (!Array.isArray(targets)) return null;
+  const origin = new URL(BASE).origin;
+  return targets.find((t) => t.type === 'page' && typeof t.url === 'string' && t.url.startsWith(origin)) ?? null;
+}
+
 function getJson(url) {
   return new Promise((resolve, reject) => {
     const req = http.get(url, (res) => {
@@ -178,7 +208,7 @@ const viewportExpr = `(function(){
  *
  * 分组定位用**结构性锚点**（锚点元素的 closest('.dv-groupview')），而不是标签文本：
  * m04040 之后中心组组头由 DocTabs 接管，该组只有**一条** `.dv-tab`，其文本是
- * 「当前章节名 + 人物设定 + 大纲 · 卷一」的**拼接串**，用 indexOf('章节正文') 永远匹配不到
+ * 「当前章节名 + 章节 + AI 对话（+ 已打开面板…）」的**拼接串**，用 indexOf('章节正文') 永远匹配不到
  * ⇒ 旧口径会把「中心栏有 3 个可滚容器」误判成 found:false/count:0。
  * 锚点在组内找不到时回退到标签文本匹配（保底）。
  */
@@ -209,6 +239,38 @@ const scrollablesInGroup = (anchor, label) => `(function(){
 })()`;
 
 const dvTabTexts = `Array.prototype.map.call(document.querySelectorAll(${q(S.dvTab)}), function(e){return e.textContent.trim();})`;
+
+/**
+ * ★ 2026-10-11 单列布局快照：文档栏整宽 + 停靠分组数 + 各功能面板「在正页可见」的矩形 +
+ * 文档标签文本 + 淘汰 toast + 全局滚动条体检。用于替换旧的「左栏 240 / 右栏 340 /
+ * 三栏分居」几何断言。
+ * 「可见」= 元素存在且宽高 > 4（面板被关闭/未挂载时其内容元素不存在或尺寸为 0）。
+ * ⚠ 单列下**同一时刻只渲染一个面板** —— 只有被激活的标签其内容元素才「可见」。
+ */
+const columnSnapshot = `(function(){
+  var rectOf = function(sel){ var e = document.querySelector(sel); if(!e) return null; var r = e.getBoundingClientRect();
+    return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }; };
+  var visibleRect = function(sel){ var r = rectOf(sel); return (r && r.w > 4 && r.h > 4) ? r : null; };
+  var groups = Array.prototype.map.call(document.querySelectorAll('.dv-groupview'), function(g){
+    var r = g.getBoundingClientRect();
+    return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) };
+  });
+  var de = document.documentElement, b = document.body;
+  return {
+    docbar: visibleRect(${q(S.docbar)}),
+    groups: groups,
+    // 功能面板「在正页渲染」的锚点 = 面板内容元素本身（仅激活标签可见）
+    chapterTree: visibleRect(${q(S.leftPanel)}),
+    aiChat: visibleRect(${q(S.aiPanel)}),
+    editor: visibleRect(${q(PM)}),
+    docLabels: Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){ return e.textContent.trim(); }),
+    dvTabs: Array.prototype.map.call(document.querySelectorAll(${q(S.dvTab)}), function(e){ return e.textContent.trim(); }),
+    // 正页内容文本（被激活面板的内容容器）——用于「该面板确实渲染在正页」的内容级证据
+    mainText: (function(){ var c = document.querySelector('.dv-groupview .dv-content-container'); return c ? (c.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 120) : ''; })(),
+    evictToasts: (window.__nmEvictToasts || []).slice(),
+    global: { iw: window.innerWidth, ih: window.innerHeight, deScrollH: de.scrollHeight, deScrollW: de.scrollWidth, rootScrollTop: de.scrollTop },
+  };
+})()`;
 
 // ---------------- 网络监控 ----------------
 const netLog = [];
@@ -262,11 +324,60 @@ async function createProject(mode = 'manual') {
   return created2;
 }
 
-async function gotoProject(id, hashExtra = '') {
+/**
+ * 进入项目路由并等界面**落定到期望的创作模式分支**。
+ *
+ * ★ 2026-10-11 消除竞态：`ProjectLayout` 在 `project` 尚为 null 时按 `'manual'` 兜底
+ *   （`(project?.mode ?? 'manual') === 'auto'`），故 GET /api/projects/:id 回来之前会先
+ *   渲染**手写外壳**。对 auto 项目，这会让「工作台占位」断言偶发失败（实测固定
+ *   2200ms 等待在冷/热缓存下都偶不够 —— 一旦早查就查到 manual 壳）。因此按期望模式
+ *   等待：auto ⇒ 必须等到手写壳退场、占位出现；manual ⇒ 等到手写壳出现。
+ *
+ * @param expectMode 期望的 project.mode；缺省 'manual'（本脚本多数步骤都是手写台）。
+ */
+async function gotoProject(id, hashExtra = '', expectMode = 'manual') {
   await send('Page.navigate', { url: `${BASE}/project/${id}${hashExtra}` });
-  await sleep(2200);
-  // 等停靠外壳或（auto 模式下的）工作台占位出现
-  await waitFor(`!!document.querySelector('.shell-root') || !!document.querySelector(${q(S.workbenchMissing)})`, '项目壳挂载', TIMEOUT_MS);
+  await sleep(1200);
+  const settleExpr =
+    expectMode === 'auto'
+      ? `!!document.querySelector(${q(S.workbenchMissing)}) ? 'ready' : ''`
+      : `(function(){ return document.querySelector('.shell-root') ? 'ready' : ''; })()`;
+  await waitFor(settleExpr, `项目壳挂载（${expectMode}）`, TIMEOUT_MS);
+}
+
+/**
+ * ★ 2026-10-11 单列布局：点文档标签栏里某个标签（按**精确标题**匹配），
+ * 把该面板切到正页（其余 = 对应功能面板）。
+ * 精确匹配很重要 —— 基础标签标题常含「章节」二字，用 indexOf 会误命中。
+ */
+async function clickDocTab(label) {
+  const r = await evalJs(`(function(){
+    var t = Array.prototype.find.call(document.querySelectorAll(${q(S.doctab)}), function(x){
+      var m = x.querySelector(${q(S.doctabMain)}); return m && m.textContent.trim() === ${JSON.stringify(label)}; });
+    if (!t) return 'no-tab';
+    var m = t.querySelector(${q(S.doctabMain)}); if (m) m.click();
+    return 'clicked';
+  })()`);
+  await sleep(600);
+  return r;
+}
+
+/**
+ * ★ 2026-10-11 单列布局：点**基础标签**（恒为第 1 格）把中心编辑区切到正页。
+ *
+ * 为什么按**位置**而非标题：基础标签的标题 = 当前章节名（有章节时）/ 「章节正文」
+ * （无章节时）——见 DocTabs.tsx `labelOf`。建章后它不再叫「章节正文」，
+ * 按标题点会 miss；而它永远是 `.shell-doctab` 列表的第 1 格，位置稳定。
+ */
+async function clickBaseDocTab() {
+  const r = await evalJs(`(function(){
+    var t = document.querySelector(${q(S.doctab)});
+    if (!t) return 'no-tab';
+    var m = t.querySelector(${q(S.doctabMain)}); if (m) m.click();
+    return 'clicked';
+  })()`);
+  await sleep(600);
+  return r;
 }
 
 async function setViewport(width, height) {
@@ -346,8 +457,8 @@ async function main() {
     console.error('  请先启动带 --remote-debugging-port 的 Chromium，并确保前后端已运行。');
     process.exit(2);
   }
-  const page = Array.isArray(targets) ? targets.find((t) => t.type === 'page') : null;
-  if (!page) { console.error('✗ CDP 中没有 page 目标'); process.exit(2); }
+  const page = pickPageTarget(targets);
+  if (!page) { console.error(`✗ CDP 中没有属于 ${BASE} 的 page 目标`); process.exit(2); }
 
   const consoleErrors = [];
   ws = new WebSocket(page.webSocketDebuggerUrl, { perMessageDeflate: false });
@@ -371,8 +482,16 @@ async function main() {
       consoleErrors.push(`[exception] ${(d.exception && d.exception.description) || d.text || ''}`.slice(0, 200));
     }
     if (msg.method === 'Runtime.consoleAPICalled' && msg.params.type === 'error') {
-      const text = (msg.params.args || []).map((a) => String(a.value ?? a.description ?? '')).join(' ');
-      consoleErrors.push(`[console.error] ${text}`.slice(0, 200));
+      // 对象参数展开 preview.properties（如 [ErrorSystem] 追加的 {category,code,message}
+      // 详情对象）——只写 'Object' 时定位不到是哪条 API 失败，实测踩过。
+      const text = (msg.params.args || []).map((a) => {
+        if (a.value !== undefined) return String(a.value);
+        if (a.preview && Array.isArray(a.preview.properties)) {
+          return `${a.preview.description}{${a.preview.properties.map((p) => `${p.name}:${p.value}`).join(',')}}`;
+        }
+        return String(a.description ?? '');
+      }).join(' ');
+      consoleErrors.push(`[console.error] ${text}`.slice(0, 300));
     }
   });
 
@@ -401,55 +520,36 @@ async function main() {
   await evalJs(`try{localStorage.clear();sessionStorage.clear();}catch(e){}`);
   await gotoProject(proj.id);
 
-  // ---- 3) 首屏三栏（契约④/⑤：左 240 / 中 / 右 340 同时在位） ----
-  // 注意：此刻项目还是**空项目**（还没建章节），所以中栏是「编辑区」出口的空态，
-  // 断言口径用**停靠分组**（.dv-groupview + 标签文本）而不是 .ProseMirror；
-  // 编辑器真正挂载由下一节建章后单独断言。
-  section('3) 首屏三栏布局（契约⑤）');
-  const trioReady = await waitFor(
-    `(${existsOf(S.leftPanel)} && ${existsOf(S.aiPanel)} && ${existsOf(S.dvTab)}) ? 'ready' : ''`,
-    '三栏就位', TIMEOUT_MS,
+  // ---- 3) 首屏单列布局（契约④/⑤：文档栏整宽 + 全部面板在正页） ----
+  // ★ 2026-10-11 用户口径「点击那些功能需要显示在正页」：布局收敛为**单列** ——
+  //   文档标签栏 `.dock-docbar` 是 `.dock-main` 顶部整宽的一条，所有功能面板都在
+  //   中心组里以标签堆叠（不再有左/右/底部停靠列）。
+  //   注意：此刻项目还是**空项目**（还没建章节），中栏是「编辑区」出口的空态；
+  //   编辑器真正挂载由下一节建章后单独断言。
+  section('3) 首屏单列布局（契约⑤）');
+  const colReady = await waitFor(
+    `(${existsOf(S.docbar)} && ${existsOf(S.dvTab)}) ? 'ready' : ''`,
+    '单列外壳就位', TIMEOUT_MS,
   );
-  check('首屏左「章节侧边栏」+ 中编辑区 + 右「AI 对话面板」同时在位', trioReady === 'ready', String(trioReady));
+  check('首屏文档标签栏 + 停靠外壳就位', colReady === 'ready', String(colReady));
 
-  const geo = await evalJs(`(function(){
-    var rectOf = function(sel){ var e = document.querySelector(sel); if(!e) return null; var r = e.getBoundingClientRect();
-      return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }; };
-    var groupOf = function(label){
-      var gs = document.querySelectorAll('.dv-groupview');
-      for (var i=0;i<gs.length;i++){
-        var tabs = gs[i].querySelectorAll('.dv-tab');
-        for (var j=0;j<tabs.length;j++){
-          if ((tabs[j].textContent || '').trim().indexOf(label) !== -1) {
-            var r = gs[i].getBoundingClientRect();
-            return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height),
-                     tab: (tabs[j].textContent || '').trim() };
-          }
-        }
-      }
-      return null;
-    };
-    return { left: rectOf(${q(S.leftPanel)}), right: rectOf(${q(S.aiPanel)}),
-             leftGroup: groupOf('章节'), centerGroup: groupOf('章节正文'), rightGroup: groupOf('AI 对话'),
-             groups: Array.prototype.map.call(document.querySelectorAll('.dv-groupview'), function(g){
-               var r = g.getBoundingClientRect();
-               return { x: Math.round(r.x), w: Math.round(r.width),
-                        tabs: Array.prototype.map.call(g.querySelectorAll('.dv-tab'), function(t){ return (t.textContent||'').trim(); }) };
-             }),
-             iw: window.innerWidth, ih: window.innerHeight };
-  })()`);
-  console.log('  几何:', JSON.stringify(geo));
-  check('左栏宽 ≈ 240px（截图口径）', !!(geo && geo.left && geo.left.w >= 180 && geo.left.w <= 300), geo && geo.left ? `w=${geo.left.w}` : 'no-left');
-  check('右栏宽 ≈ 340px（截图口径）', !!(geo && geo.right && geo.right.w >= 280 && geo.right.w <= 400), geo && geo.right ? `w=${geo.right.w}` : 'no-right');
-  // m04040 起，中栏分组头带里的文档标签按「章节正文」命名（t4 时叫「编辑区」），
-  // 且左/中/右三栏的分组定位统一走 groupOf()。
-  check('三栏左右分居（left.x < center.x < right.x）',
-    !!(geo && geo.leftGroup && geo.centerGroup && geo.rightGroup
-      && geo.leftGroup.x < geo.centerGroup.x && geo.centerGroup.x < geo.rightGroup.x),
-    geo && geo.leftGroup && geo.centerGroup && geo.rightGroup
-      ? `x=${geo.leftGroup.x}/${geo.centerGroup.x}/${geo.rightGroup.x}` : 'no-rect');
-  check('三栏各占独立停靠分组（无叠放）',
-    !!(geo && geo.groups && geo.groups.length === 3), geo ? JSON.stringify(geo.groups) : 'no');
+  const col0 = await evalJs(columnSnapshot);
+  console.log('  单列几何:', JSON.stringify(col0));
+  check('文档标签栏整宽（.dock-docbar 宽 ≈ 视口 - 活动栏）',
+    !!(col0 && col0.docbar && col0.global && col0.docbar.w >= col0.global.iw - 120 && col0.docbar.x <= 80),
+    col0 && col0.docbar ? `x=${col0.docbar.x} w=${col0.docbar.w} iw=${col0.global.iw}` : 'no-docbar');
+  check('单列：只有一个停靠分组（不再有左右分列）',
+    !!(col0 && col0.groups && col0.groups.length === 1), col0 ? JSON.stringify(col0.groups) : 'no');
+  // 默认打开集合 = DEFAULT_OPEN_PANEL_KEYS.manual（章节树 + AI 对话）⇒ 标签栏 =
+  // [基础标签「章节正文」, 章节, AI 对话]。这**就是**「标签 = 打开集合」的运行时证据。
+  check('文档标签栏 = 打开集合（章节正文 / 章节 / AI 对话）',
+    !!(col0 && col0.docLabels && col0.docLabels.length === 3 && col0.docLabels[0] === '章节正文'
+      && col0.docLabels[1] === '章节' && col0.docLabels[2] === 'AI 对话'),
+    JSON.stringify(col0 && col0.docLabels));
+  check('首个功能面板在正页整宽渲染（章节树 / AI 对话之一，宽 ≈ 视口 - 活动栏）',
+    !!((col0 && (col0.chapterTree || col0.aiChat) && col0.global)
+      && (col0.chapterTree || col0.aiChat).w >= col0.global.iw - 120),
+    JSON.stringify({ tree: col0 && col0.chapterTree, ai: col0 && col0.aiChat }));
 
   // E2E_DEBUG=1：直接 import 宿主 store 模块读「真值」（Vite dev 下与 app 同一模块实例）
   if (process.env.E2E_DEBUG) {
@@ -504,6 +604,9 @@ async function main() {
 
   // ---- 4) 建第一章（真实用户路径）→ 五处状态一致 ----
   section('4) 建第一章 → 五处状态一致（契约①）');
+  // ★ 单列：空项目的「建章节」空态在**基础标签「章节正文」**里；首屏默认激活的是
+  //   某个功能面板（种子末位 AI 对话），故先点基础标签把编辑区切到正页。
+  await clickBaseDocTab();
   const empty = await waitFor(`document.querySelector(${q('input[placeholder*="章节标题"]')}) ? 'ready' : ''`, '建章节空态', TIMEOUT_MS);
   if (empty !== 'ready') {
     const why = await evalJs(`(function(){
@@ -537,6 +640,16 @@ async function main() {
   await sleep(1500);
   check('正文通过真实输入通道写入中栏编辑器', typeHow === 'insertText' || typeHow === 'keystrokes', String(typeHow));
 
+  // ★ 2026-10-11 单列布局：功能面板以标签堆叠在中心组，**同一时刻只渲染一个**。
+  //   基础标签「章节正文」（承载 .ProseMirror）与「章节」树不能同时可见。故分两步采：
+  //     ① 先在基础标签下读编辑器正文（bodyHasMarker）；
+  //     ② 再点「章节」文档标签把章节树切到正页，读树的一致性。
+  const editorBody = await evalJs(`(function(){
+    var docText = (document.querySelector(${q(PM)}) || {}).innerText || '';
+    return { bodyHasMarker: docText.includes(${JSON.stringify(bodyMarker)}),
+             editorText: docText.replace(/\\s+/g, ' ').trim().slice(0, 40) };
+  })()`);
+  await clickDocTab('章节');
   const consistency = await evalJs(`(function(){
     var docText = (document.querySelector(${q(PM)}) || {}).innerText || '';
     var items = document.querySelectorAll(${q(S.leftPanel)} + ' .sidebar-chapter-item');
@@ -552,6 +665,9 @@ async function main() {
     });
     return {
       breadcrumbLeaf: ${textOf(S.breadcrumbLeaf)},
+      // ★ 2026-10-11 全动态标签：激活标签 = 被聚焦的**面板**（或基础标签「章节正文」），
+      //   不再是「当前章节名」—— 故这里取全部标签文本，激活项是否含章节名交由断言判断。
+      doctabLabels: Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){ return e.textContent.trim(); }),
       doctabActive: ${textOf('.shell-doctab.is-active .shell-doctab-label')},
       statusbar: ${textOf(S.statusbar)},
       treeHasChapter: ((document.querySelector(${q(S.leftPanel)}) || {}).textContent || '').includes(${JSON.stringify(chapterTitle)}),
@@ -560,22 +676,28 @@ async function main() {
       treeActiveText: painted.length ? (painted[0].textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 60) : '',
       treeActiveBg: painted.length ? getComputedStyle(painted[0]).backgroundColor : '',
       treeActiveStyle: painted.length ? (painted[0].getAttribute('style') || '').replace(/\\s+/g, ' ').slice(0, 90) : '',
-      bodyHasMarker: docText.includes(${JSON.stringify(bodyMarker)}),
-      editorText: docText.replace(/\\s+/g, ' ').trim().slice(0, 40),
+      // ★ 单列布局：切到「章节」标签后基础标签（编辑器）已不在正页，正文存在性由
+      //   切换前采到的 editorBody 判定（见上）。此处 docText 仅作兜底证据。
+      editorStillVisible: !!document.querySelector(${q(PM)}),
+      docTextHead: docText.replace(/\\s+/g, ' ').trim().slice(0, 40),
     };
   })()`);
   console.log('  一致性:', JSON.stringify(consistency));
   check('面包屑章节名 = 真实章节标题（顶栏 ↔ 章节）',
     !!(consistency && consistency.breadcrumbLeaf && consistency.breadcrumbLeaf.includes(chapterTitle)),
     consistency && consistency.breadcrumbLeaf);
-  check('文档标签激活项 = 真实章节标题（标签栏 ↔ 章节）',
-    !!(consistency && consistency.doctabActive && consistency.doctabActive.includes(chapterTitle)),
-    consistency && consistency.doctabActive);
-  check('章节树出现该章节且高亮当前项（左栏 ↔ 当前章节）',
+  // ★ 2026-10-11 全动态标签：第 1 格基础标签「章节正文」的标题取自真实章节名；
+  //   激活项则是被聚焦的面板（如「章节」树）。故断言「基础标签含真实章节名」，
+  //   不再要求「激活项 = 章节名」（那是旧目录口径）。
+  check('文档标签基础格 = 真实章节标题（标签栏 ↔ 章节）',
+    !!(consistency && consistency.doctabLabels && consistency.doctabLabels[0]
+      && consistency.doctabLabels[0].includes(chapterTitle)),
+    JSON.stringify(consistency && consistency.doctabLabels));
+  check('章节树出现该章节且高亮当前项（章节面板 ↔ 当前章节）',
     !!(consistency && consistency.treeHasChapter && consistency.treeActiveCount === 1
       && consistency.treeActiveText.includes(chapterTitle)),
     consistency ? `items=${consistency.treeItems} active=${consistency.treeActiveCount} text=${consistency.treeActiveText}` : 'no');
-  check('正文写入成功（中栏真实内容）', !!(consistency && consistency.bodyHasMarker), consistency && consistency.editorText);
+  check('正文写入成功（中栏真实内容）', !!(editorBody && editorBody.bodyHasMarker), editorBody && editorBody.editorText);
   check('状态栏显示「手写模式」（状态栏 ↔ 项目 mode）',
     !!(consistency && /手写模式/.test(consistency.statusbar)),
     String(consistency && consistency.statusbar).slice(0, 120));
@@ -608,6 +730,8 @@ async function main() {
   }
   check('状态栏字数 = 服务端 currentWordCount（五处一致：状态栏 ↔ 真实数据）', wcOk, wcEvidence);
 
+  // 元信息行在基础标签（编辑器）里 —— 单列下先切回「章节正文」再读。
+  await clickBaseDocTab();
   const metaLine = await evalJs(`(function(){
     var btn = document.querySelector(${q(S.insertBlock)});
     if (!btn) return null;
@@ -708,8 +832,13 @@ async function main() {
   await evalJs(`(function(){ var a=document.querySelector(${q(S.bottomArea)}); if(a && a.getAttribute('data-open')==='true'){ var b=document.querySelector(${q(S.bottomToggle)}); if(b) b.click(); } return 'ok'; })()`);
   await sleep(300);
 
-  // ---- 6) 文档标签栏 → 真实 characters / outline 面板（契约③） ----
-  section('6) 文档标签栏 → characters / outline 真面板（契约③）');
+  // ---- 6) 文档标签栏 → 真实 characters / outline 面板（契约③ + ADR §4.4 面板上限） ----
+  // ★ 2026-10-11 全动态标签（用户口径「全部功能都需要变成动态标签」）：标签栏不再有
+  //   「目录三件套」常驻项，改为「第 1 格基础标签「章节正文」+ panelOpenStore.keys 各一条」
+  //   —— characters / outline 因此**不再预置**，改由标签栏最右的「+」菜单打开
+  //   （菜单 = 正文 + 全部功能面板候选池，与顶栏面板菜单同口径；已打开项带「已打开」标记）。
+  //   契约③的本体（点标签栏里的项 → 打开真实面板）不变，只是入口从常驻标签换成菜单项。
+  section('6) 文档标签栏 → characters / outline 真面板（契约③ + §4.4 面板上限）');
   const tabs0 = await evalJs(`(function(){
     return {
       list: ${existsOf(S.doctabsList)},
@@ -719,77 +848,304 @@ async function main() {
     };
   })()`);
   console.log('  文档标签:', JSON.stringify(tabs0));
-  check('文档标签栏渲染（当前章节名 / 人物设定 / 大纲 · 卷一 三项）',
-    !!(tabs0 && tabs0.labels && tabs0.labels.length >= 3
+  // 默认打开集合 = DEFAULT_OPEN_PANEL_KEYS.manual（章节树 + AI 对话）⇒ 标签栏 =
+  // [基础标签, 章节, AI 对话]。这**就是**「标签 = 打开集合」的运行时证据。
+  // ★ 基础标签的标题 = 当前章节名（建章后）或「章节正文」（无章节）——见 DocTabs.tsx
+  //   `labelOf`；故第 1 格断言「含真实章节名」，不写死字面「章节正文」。
+  check('文档标签栏 = 打开集合（基础标签 / 章节 / AI 对话）',
+    !!(tabs0 && tabs0.labels && tabs0.labels.length === 3
       && tabs0.labels[0] === chapterTitle
-      && tabs0.labels.some((l) => l.includes('人物设定'))
-      && tabs0.labels.some((l) => l.includes('大纲'))),
+      && tabs0.labels[1] === '章节'
+      && tabs0.labels[2] === 'AI 对话'),
     JSON.stringify(tabs0 && tabs0.labels));
   check('标签栏带「+」新建入口', !!(tabs0 && tabs0.add), String(tabs0 && tabs0.add));
 
-  await evalJs(`(function(){
-    var t = Array.prototype.find.call(document.querySelectorAll(${q(S.doctab)}), function(x){ return x.textContent.includes('人物设定'); });
-    if (!t) return 'no-tab';
-    var m = t.querySelector(${q(S.doctabMain)}) || t;
-    m.click();
-    return 'clicked';
-  })()`);
-  const charTab = await waitFor(`${dvTabTexts}.some(function(t){return t.includes('角色');}) ? 'ready' : ''`, 'characters 面板', TIMEOUT_MS);
-  check('点「人物设定」→ 打开真实 characters 面板（.dv-tab=角色）', charTab === 'ready',
-    JSON.stringify(await evalJs(dvTabTexts)));
+  // v2 打开面板的唯一入口：标签栏「+」菜单（点开 → 按可见文本点菜单项）。
+  // 分两次 evalJs（中间 sleep）：菜单是 React 状态驱动，同一 tick 里 DOM 还没渲染出来。
+  const openFromAddMenu = async (label) => {
+    await evalJs(`(function(){ var a = document.querySelector('.shell-doctab-add'); if (a) a.click(); return 'ok'; })()`);
+    await sleep(250);
+    return evalJs(`(function(){
+      var item = Array.prototype.find.call(document.querySelectorAll('.shell-doctab-menu-item'), function(x){ return x.textContent.trim() === ${JSON.stringify(label)}; });
+      if (!item) return 'no-item';
+      item.click();
+      return 'clicked';
+    })()`);
+  };
 
-  await evalJs(`(function(){
-    var t = Array.prototype.find.call(document.querySelectorAll(${q(S.doctab)}), function(x){ return x.textContent.includes('大纲'); });
-    if (!t) return 'no-tab';
-    var m = t.querySelector(${q(S.doctabMain)}) || t;
-    m.click();
-    return 'clicked';
-  })()`);
-  const outlineTab = await waitFor(`${dvTabTexts}.some(function(t){return t.includes('大纲');}) ? 'ready' : ''`, 'outline 面板', TIMEOUT_MS);
-  const dvTabsNow = await evalJs(dvTabTexts);
-  console.log('  dockview 标签:', JSON.stringify(dvTabsNow));
-  check('点「大纲 · 卷一」→ 打开真实 outline 面板（.dv-tab=大纲）', outlineTab === 'ready', JSON.stringify(dvTabsNow));
+  const charOpen = await openFromAddMenu('角色');
+  const charReady = await waitFor(`(function(){
+    var labels = Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){return e.textContent.trim();});
+    return labels.indexOf('角色') !== -1 ? 'ready' : '';
+  })()`, 'characters 标签出现', TIMEOUT_MS);
+  check('「+」菜单点「角色」→ 打开真实 characters 面板（标签栏出现「角色」）', charOpen === 'clicked' && charReady === 'ready',
+    JSON.stringify({ click: charOpen, labels: await evalJs(`Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){return e.textContent.trim();})`) }));
 
-  // m04040 后：中心组组头由 DocTabs 接管，打开/关闭侧栏面板会触发 dockview relayout，
-  // 其间中心面板会**短暂 unmount**（.ProseMirror 消失几十~几百 ms）。这里先等几何稳定，
-  // 再断言「三栏共存」，否则会把瞬态误判成「中栏被顶掉」。
+  // —— 先验「打开新面板不破坏单列基座」——
+  // 此时打开集合 = 种子 2 个（章节 + AI 对话）+ 角色 = 3，正好到 §4.4 上限、尚未淘汰。
   await waitFor(`(function(){
-    var pm = document.querySelector(${q(PM)});
-    if (!pm) return '';
-    var a = document.querySelector(${q(S.leftPanel)}), b = document.querySelector(${q(S.aiPanel)});
-    if (!a || !b) return '';
-    var r = pm.getBoundingClientRect();
+    var c = document.querySelector('.dv-groupview .dv-content-container');
+    if (!c) return '';
+    var r = c.getBoundingClientRect();
     return (r.width > 100 && r.height > 100) ? 'ready' : '';
-  })()`, '三栏几何稳定', TIMEOUT_MS);
+  })()`, '正页几何稳定', TIMEOUT_MS);
   await sleep(400);
 
-  const coexist = await evalJs(`(function(){
-    return {
-      left: ${existsOf(S.leftPanel)}, center: ${existsOf(PM)}, right: ${existsOf(S.aiPanel)},
-      tabs: ${dvTabTexts},
-      global: ${viewportExpr},
-    };
-  })()`);
-  const coexistTabs = ((coexist && coexist.tabs) || []).filter((t) => t && t.length);
-  check('新面板与三栏共存（左/中/右仍在，不遮挡）',
-    !!(coexist && coexist.left && coexist.center && coexist.right && coexistTabs.length >= 5),
-    `left=${coexist && coexist.left} center=${coexist && coexist.center} right=${coexist && coexist.right} tabs=${JSON.stringify(coexist && coexist.tabs)}`);
+  const coexist = await evalJs(columnSnapshot);
+  console.log('  新面板共存:', JSON.stringify({ groups: coexist && coexist.groups, docLabels: coexist && coexist.docLabels }));
+  // 单列口径：仍只有 1 个停靠分组；文档栏整宽；「角色」标签在栏里；打开新面板后无全局滚动条。
+  // 面板**内容**是否在正页由下一步「点标签切到正页」专门断言（同一时刻只渲染一个面板）。
+  check('新面板打开后单列基座不破（仍 1 个停靠分组 + 文档栏整宽 + 「角色」标签在栏）',
+    !!(coexist && coexist.groups && coexist.groups.length === 1
+      && coexist.docbar && coexist.docbar.w >= coexist.global.iw - 120
+      && coexist.docLabels && coexist.docLabels.indexOf('角色') !== -1),
+    JSON.stringify({ groups: coexist && coexist.groups, docbar: coexist && coexist.docbar, labels: coexist && coexist.docLabels }));
   check('打开新面板未产生全局滚动条', !!(coexist && coexist.global && coexist.global.deScrollH <= coexist.global.ih + 1),
     coexist ? JSON.stringify(coexist.global) : 'no');
 
-  // 关掉这两个面板（验证可关闭 + 不破坏布局）
+  // ★ 单列契约本体：点「角色」标签 ⇒ characters 面板切到正页（内容元素可见、整宽）。
+  const charActive = await clickDocTab('角色');
+  const charOnPage = await evalJs(columnSnapshot);
+  check('点「角色」文档标签 ⇒ characters 面板在正页整宽渲染',
+    !!(charActive === 'clicked' && charOnPage && charOnPage.groups.length === 1
+      && charOnPage.mainText.indexOf('角色管理') !== -1
+      && charOnPage.chapterTree === null && charOnPage.editor === null),
+    JSON.stringify({ click: charActive, groups: charOnPage && charOnPage.groups.length, main: charOnPage && charOnPage.mainText.slice(0, 60) }));
+
+  // —— 再开「第 2 个文档面板（大纲）」= 第 4 个面板：ADR §4.4 上限 3 ⇒ 可见 LRU 淘汰 ——
+  // 依据：docs/architecture/dock-protocol-adr.md §4.4（2026-10-07 用户口径 m01407）——
+  //   「最多同时打开 3 个面板；第 4 个把**最久没用过的**收起来，且必须可见（toast）」。
+  // ★ 单列下「最久未用者」取决于本脚本此前点过哪些标签（LRU 由「被打开 / 被聚焦」驱动），
+  //   故断言**动态化**：只要求「恰好收起一个标签 + 新增「大纲」标签 + toast 可见」，
+  //   不写死被收起的是哪一项。
+  const beforeEvict = await evalJs(`Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){return e.textContent.trim();})`);
   await evalJs(`(function(){
-    var t = Array.prototype.find.call(document.querySelectorAll(${q(S.doctab)}), function(x){ return x.textContent.includes('人物设定'); });
+    window.__nmEvictToasts = [];
+    window.addEventListener('novelmuse:toast-notify', function(e){
+      var d = e && e.detail;
+      if (d && typeof d.message === 'string' && d.message.indexOf('收起最久未用') !== -1) window.__nmEvictToasts.push(d.message);
+    });
+    return 'listening';
+  })()`);
+  const outlineOpen = await openFromAddMenu('大纲');
+  const outlineReady = await waitFor(`(function(){
+    var labels = Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){return e.textContent.trim();});
+    return labels.some(function(l){ return l.indexOf('大纲') === 0; }) ? 'ready' : '';
+  })()`, 'outline 标签出现', TIMEOUT_MS);
+  console.log('  文档标签:', JSON.stringify(await evalJs(`Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){return e.textContent.trim();})`)));
+  check('「+」菜单点「大纲」→ 打开真实 outline 面板（标签栏出现「大纲…」）', outlineOpen === 'clicked' && outlineReady === 'ready',
+    JSON.stringify({ click: outlineOpen }));
+
+  await sleep(600); // 等淘汰收敛：视图回写 → store 裁剪 → 受控 effect 移除面板
+  const fourth = await evalJs(columnSnapshot);
+  const evictedLabels = (beforeEvict || []).filter((l) => (fourth.docLabels || []).indexOf(l) === -1);
+  const addedLabels = (fourth.docLabels || []).filter((l) => (beforeEvict || []).indexOf(l) === -1);
+  console.log('  第 4 个面板后:', JSON.stringify({ before: beforeEvict, after: fourth && fourth.docLabels, evicted: evictedLabels, added: addedLabels, toast: fourth && fourth.evictToasts }));
+  check('第 4 个面板触发可见 LRU 淘汰（§4.4：恰好收起一个最久未用面板 + toast 提示）',
+    !!(evictedLabels.length === 1 && addedLabels.length === 1 && addedLabels[0].indexOf('大纲') === 0
+      && fourth.evictToasts && fourth.evictToasts.length >= 1
+      && fourth.groups && fourth.groups.length === 1),
+    JSON.stringify({ evicted: evictedLabels, added: addedLabels, toast: fourth && fourth.evictToasts }));
+  check('淘汰后布局不破（仍 1 个停靠分组且无全局滚动条）',
+    !!(fourth && fourth.global && fourth.global.deScrollW <= fourth.global.iw + 1 && fourth.global.deScrollH <= fourth.global.ih + 1),
+    fourth ? JSON.stringify(fourth.global) : 'no');
+
+  // 关掉「角色」（验证标签上的 × 可关闭真实面板 + 不破坏布局）
+  await evalJs(`(function(){
+    var t = Array.prototype.find.call(document.querySelectorAll(${q(S.doctab)}), function(x){
+      var m = x.querySelector(${q(S.doctabMain)}); return m && m.textContent.trim() === '角色'; });
     if (!t) return 'no-tab';
     var c = t.querySelector(${q(S.doctabClose)}) || t.querySelector('button[aria-label^="关闭"]');
     if (c) { c.click(); return 'closed'; }
     return 'no-close';
   })()`);
   await sleep(800);
-  const afterClose = await evalJs(`(function(){ return { tabs: ${dvTabTexts}, global: ${viewportExpr} }; })()`);
-  check('「人物设定」标签可关闭，面板退场且布局不破',
-    !!(afterClose && !afterClose.tabs.includes('角色') && afterClose.global.deScrollW <= afterClose.global.iw + 1),
-    JSON.stringify(afterClose && afterClose.tabs));
+  const afterClose = await evalJs(columnSnapshot);
+  check('「角色」标签可关闭，面板退场且布局不破',
+    !!(afterClose && afterClose.docLabels && afterClose.docLabels.indexOf('角色') === -1
+      && afterClose.global.deScrollW <= afterClose.global.iw + 1),
+    JSON.stringify(afterClose && afterClose.docLabels));
+
+  // 关「大纲」→ 从活动栏重开**被收起的那一项**：§4.4 淘汰必须可逆。
+  await evalJs(`(function(){
+    var t = Array.prototype.find.call(document.querySelectorAll(${q(S.doctab)}), function(x){
+      var m = x.querySelector(${q(S.doctabMain)}); return m && m.textContent.trim().indexOf('大纲') === 0; });
+    if (!t) return 'no-tab';
+    var c = t.querySelector(${q(S.doctabClose)}) || t.querySelector('button[aria-label^="关闭"]');
+    if (c) { c.click(); return 'closed'; }
+    return 'no-close';
+  })()`);
+  await sleep(600);
+  if (evictedLabels.length === 1) {
+    const evictedLabel = evictedLabels[0];
+    // 活动栏按钮的 aria-label = 面板注册 label = 文档标签标题（如「AI 对话」「章节」）
+    const abSel = `[aria-label="活动栏"] button[aria-label=${JSON.stringify(evictedLabel)}]`;
+    await evalJs(`(function(){ var b = document.querySelector(${q(abSel)}); if (b) { b.click(); return 'clicked'; } return 'no-btn'; })()`);
+    const backReady = await waitFor(`(function(){
+      var labels = Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){return e.textContent.trim();});
+      return labels.indexOf(${JSON.stringify(evictedLabel)}) !== -1 ? 'ready' : '';
+    })()`, '被淘汰面板回归', TIMEOUT_MS);
+    check('活动栏可重开被淘汰的面板（§4.4 淘汰可逆）', backReady === 'ready',
+      JSON.stringify({ evicted: evictedLabel, back: backReady }));
+  }
+
+  // 6b 前置：确保「AI 对话」在栏里（它可能在上面的淘汰 / 重开里被收走），
+  //   使下一步「关掉 AI 对话 → reload 不回来」有真实对象可关。
+  await evalJs(`(function(){
+    var labels = Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){return e.textContent.trim();});
+    if (labels.indexOf('AI 对话') !== -1) return 'present';
+    var b = document.querySelector(${q(S.activityBar)} + ' button[aria-label="AI 对话"]');
+    if (b) { b.click(); return 'clicked'; }
+    return 'no-btn';
+  })()`);
+  await waitFor(`(function(){
+    var labels = Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){return e.textContent.trim();});
+    return labels.indexOf('AI 对话') !== -1 ? 'ready' : '';
+  })()`, 'AI 对话就位', TIMEOUT_MS);
+
+  // ---- 6b) ★ 2026-10-11 打开集合持久化：关掉的面板刷新后不再自己回来 ----------
+  // 用户口径「AI 对话的窗口还是固定的……让他和其他的功能一样可以动态关闭」：
+  // 根因是每次进项目都重播默认种子（章节树 + AI 对话），关掉一刷新就回来。
+  // 现改为恢复 localStorage 里的上次选择。本步证明：关掉 AI 对话 → reload → 它**不回来**。
+  section('6b) 打开集合持久化（关掉的面板刷新后不自己回来）');
+  await evalJs(`(function(){
+    var t = Array.prototype.find.call(document.querySelectorAll(${q(S.doctab)}), function(x){ return x.textContent.includes('AI 对话'); });
+    if (!t) return 'no-tab';
+    var c = t.querySelector(${q(S.doctabClose)}) || t.querySelector('button[aria-label^="关闭"]');
+    if (c) { c.click(); return 'closed'; }
+    return 'no-close';
+  })()`);
+  await sleep(500);
+  const persistAfterClose = await evalJs(`(function(){
+    return { hasAiPanel: ${existsOf(S.aiPanel)}, labels: Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){return e.textContent.trim();}), store: window.localStorage.getItem('novelmuse.panelOpen.v1') };
+  })()`);
+  check('关掉「AI 对话」⇒ 面板退场且持久化集合不再含 ai-chat',
+    !!(persistAfterClose && persistAfterClose.hasAiPanel === false && (persistAfterClose.labels || []).indexOf('AI 对话') === -1
+      && String(persistAfterClose.store || '').indexOf('ai-chat') === -1),
+    JSON.stringify(persistAfterClose));
+
+  await gotoProject(proj.id); // 刷新（同 URL 重新加载）
+  const persistAfterReload = await evalJs(`(function(){
+    return { hasAiPanel: ${existsOf(S.aiPanel)}, labels: Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){return e.textContent.trim();}), store: window.localStorage.getItem('novelmuse.panelOpen.v1') };
+  })()`);
+  console.log('  reload 后:', JSON.stringify(persistAfterReload));
+  check('reload 后「AI 对话」**不自动回来**（与其余面板行为一致，不再「固定」）',
+    !!(persistAfterReload && persistAfterReload.hasAiPanel === false && (persistAfterReload.labels || []).indexOf('AI 对话') === -1),
+    JSON.stringify(persistAfterReload));
+
+  // 复原单列基座供后续视口契约用：从活动栏重开 AI 对话，并切到它的标签
+  await evalJs(`(function(){
+    var b = document.querySelector(${q(S.activityBar)} + ' button[aria-label="AI 对话"]');
+    if (!b) return 'no-btn';
+    b.click();
+    return 'clicked';
+  })()`);
+  const aiBack = await waitFor(`(function(){
+    var labels = Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){return e.textContent.trim();});
+    return labels.indexOf('AI 对话') !== -1 ? 'ready' : '';
+  })()`, 'AI 对话标签回归', TIMEOUT_MS);
+  check('活动栏可重开「AI 对话」（关闭可逆，标签回到栏里）', aiBack === 'ready', String(aiBack));
+  await clickDocTab('AI 对话');
+
+  // ---- 6c) ★ 2026-10-11 基础标签（章节正文）也当动态标签（用户口径） ----------
+  //   「打开的页面是叠加的可以打开页面，最多打开三个页面」+「正文也当动态标签」：
+  //   「章节正文」现在是文档标签栏的**第 1 格动态标签** —— 可关闭、且**计入总上限**
+  //   （总标签数 = 基础标签 + 功能面板 ≤ 3）。关掉它腾出的名额让功能面板可回到 3 个；
+  //   重开则反向收名额（按 LRU 淘汰最久未用者）。全程仍只 1 个停靠分组（不拆组）。
+  section('6c) 基础标签（章节正文）也当动态标签（可关 + 计入总上限）');
+
+  // 前置：把标签集合收敛到可预测状态 —— 只留基础标签 + 章节 + AI 对话。
+  //   做法：先关光**全部**功能面板标签（此时仅剩基础标签），再从活动栏重开 章节 / AI 对话。
+  const closeAllPanelTabs = () => evalJs(`(function(){
+    var tabs = Array.prototype.slice.call(document.querySelectorAll(${q(S.doctab)}));
+    for (var i = 0; i < tabs.length; i++) {
+      var c = tabs[i].querySelector(${q(S.doctabClose)});
+      if (c) c.click();
+    }
+    return 'ok';
+  })()`);
+  const reopenFromActivity = async (label) => {
+    const sel = `${S.activityBar} button[aria-label=${JSON.stringify(label)}]`;
+    await evalJs(`(function(){ var b = document.querySelector(${JSON.stringify(sel)}); if (b) { b.click(); return 'clicked'; } return 'no-btn'; })()`);
+    await waitFor(`(function(){
+      var labels = Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){return e.textContent.trim();});
+      return labels.indexOf(${JSON.stringify(label)}) !== -1 ? 'ready' : '';
+    })()`, `${label} 回归`, TIMEOUT_MS);
+  };
+  // 关光全部标签（含基础标签），再从「+」菜单**第一项**（基础标签，位置固定）重开，
+  // 最后从活动栏重开 章节 / AI 对话 —— 得到确定的 [基础, 章节, AI 对话]。
+  await closeAllPanelTabs();
+  await sleep(700);
+  const openBaseFromAddMenu = async () => {
+    await evalJs(`(function(){ var a = document.querySelector('.shell-doctab-add'); if (a) a.click(); return 'ok'; })()`);
+    await sleep(250);
+    return evalJs(`(function(){
+      var items = document.querySelectorAll('.shell-doctab-menu-item');
+      if (!items.length) return 'no-item';
+      items[0].click();
+      return 'clicked';
+    })()`);
+  };
+  await openBaseFromAddMenu();
+  await sleep(500);
+  await reopenFromActivity('章节');
+  await reopenFromActivity('AI 对话');
+  await sleep(400);
+  const baseLabels0 = await evalJs(`Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){return e.textContent.trim();})`);
+  console.log('  基础标签前置:', JSON.stringify(baseLabels0));
+
+  // 6c-1：基础标签带 × 且可关（关掉后第 1 格退场、总数 −1）
+  const baseClose = await evalJs(`(function(){
+    var tabs = document.querySelectorAll(${q(S.doctab)});
+    if (!tabs.length) return 'no-tabs';
+    var first = tabs[0];
+    var c = first.querySelector(${q(S.doctabClose)});
+    if (!c) return 'no-close';
+    c.click();
+    return 'closed';
+  })()`);
+  await sleep(700);
+  const afterBaseClose = await evalJs(`(function(){
+    return { labels: Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){return e.textContent.trim();}), store: window.localStorage.getItem('novelmuse.panelOpen.v1'), groups: document.querySelectorAll('.dv-groupview').length };
+  })()`);
+  console.log('  关基础标签后:', JSON.stringify(afterBaseClose));
+  check('基础标签可关（× 关闭 ⇒ 第 1 格退场，store.baseOpen=false，仍 1 个停靠分组）',
+    !!(baseClose === 'closed' && afterBaseClose && afterBaseClose.labels.length === baseLabels0.length - 1
+      && String(afterBaseClose.store || '').indexOf('"baseOpen":false') !== -1
+      && afterBaseClose.groups === 1),
+    JSON.stringify({ click: baseClose, ...afterBaseClose }));
+
+  // 6c-2：基础标签关掉 ⇒ 功能面板可回到 3 个（此时是 章节 / AI 对话 共 2 个，再开 1 个 = 3，不淘汰）
+  await openFromAddMenu('时间线');
+  await waitFor(`(function(){
+    var labels = Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){return e.textContent.trim();});
+    return labels.indexOf('时间线') !== -1 ? 'ready' : '';
+  })()`, '时间线出现', TIMEOUT_MS);
+  await sleep(400);
+  const threePanels = await evalJs(`(function(){
+    return { labels: Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){return e.textContent.trim();}), groups: document.querySelectorAll('.dv-groupview').length };
+  })()`);
+  console.log('  基础关 + 3 功能面板:', JSON.stringify(threePanels));
+  check('基础标签关掉 ⇒ 功能面板可到 3 个（总上限仍是 3，但基础标签已退场）',
+    !!(threePanels && threePanels.labels.length === 3 && threePanels.groups === 1),
+    JSON.stringify(threePanels));
+
+  // 6c-3：重开基础标签 ⇒ 总数将变 4 ⇒ 反向按 LRU 淘汰 1 个，仍 ≤ 3
+  const baseReopen = await openBaseFromAddMenu();
+  await sleep(700);
+  const afterBaseReopen = await evalJs(`(function(){
+    return { labels: Array.prototype.map.call(document.querySelectorAll('.shell-doctab-label'), function(e){return e.textContent.trim();}), store: window.localStorage.getItem('novelmuse.panelOpen.v1'), groups: document.querySelectorAll('.dv-groupview').length };
+  })()`);
+  console.log('  重开基础标签后:', JSON.stringify(afterBaseReopen));
+  check('重开基础标签 ⇒ 总数不超 3（反向淘汰最久未用者，仍 1 个停靠分组）',
+    !!(baseReopen === 'clicked' && afterBaseReopen && afterBaseReopen.labels.length === 3
+      && afterBaseReopen.labels[0] === chapterTitle
+      && String(afterBaseReopen.store || '').indexOf('"baseOpen":true') !== -1
+      && afterBaseReopen.groups === 1),
+    JSON.stringify({ click: baseReopen, ...afterBaseReopen }));
+
+  // 复原：切回 AI 对话标签（供后续视口契约步骤读取其内部滚动）
+  await clickDocTab('AI 对话');
 
   // ---- 7) 视口契约：1280×800 / 1920×1080（契约⑤） ----
   section('7) 视口契约 1280×800 与 1920×1080（契约⑤）');
@@ -797,12 +1153,12 @@ async function main() {
     await setViewport(w, h);
     const vp = await evalJs(viewportExpr);
     const panels = await evalJs(`(function(){
+      var r = document.querySelector(${q(S.docbar)});
       return {
-        left: ${scrollablesInGroup(S.leftPanel, '章节')},
-        center: ${scrollablesInGroup(PM, null)},
-        right: ${scrollablesInGroup(S.aiPanel, 'AI 对话')},
+        // 单列下同一时刻只有**一个**面板在正页 —— 这里测当前激活的 AI 对话面板的内部滚动
+        active: ${scrollablesInGroup(S.aiPanel, 'AI 对话')},
         bottomOpen: ${bottomOpen},
-        rightEdge: (function(){ var e = document.querySelector(${q(S.aiPanel)}); if(!e) return null; return Math.round(e.getBoundingClientRect().right); })(),
+        docbarEdge: r ? Math.round(r.getBoundingClientRect().right) : null,
       };
     })()`);
     console.log(`  ${w}×${h}:`, JSON.stringify(vp));
@@ -811,11 +1167,11 @@ async function main() {
     check(`${w}×${h} 无横向全局滚动条（documentElement.scrollWidth ≤ innerWidth+1）`,
       vp.deScrollW <= vp.iw + 1, `scrollW=${vp.deScrollW} innerW=${vp.iw}`);
     check(`${w}×${h} html 未被滚动（scrollTop=0）`, vp.rootScrollTop === 0, `scrollTop=${vp.rootScrollTop}`);
-    check(`${w}×${h} 布局未超出视口（右栏右边缘 ≤ 视口宽）`,
-      !!(panels && panels.rightEdge !== null && panels.rightEdge <= w + 1), panels ? `rightEdge=${panels.rightEdge}` : 'no');
-    check(`${w}×${h} 三个面板各自具备内部滚动容器`,
-      !!(panels && panels.left.count > 0 && panels.center.count > 0 && panels.right.count > 0),
-      JSON.stringify({ left: panels && panels.left.count, center: panels && panels.center.count, right: panels && panels.right.count }));
+    check(`${w}×${h} 布局未超出视口（文档栏右边缘 ≤ 视口宽）`,
+      !!(panels && panels.docbarEdge !== null && panels.docbarEdge <= w + 1), panels ? `docbarEdge=${panels.docbarEdge}` : 'no');
+    check(`${w}×${h} 正页面板具备内部滚动容器`,
+      !!(panels && panels.active && panels.active.count > 0),
+      JSON.stringify({ active: panels && panels.active && panels.active.count }));
   }
   await setViewport(1280, 800);
 
@@ -873,12 +1229,14 @@ async function main() {
   check('服务端 GET /api/projects/:id 返回 mode=auto（真实落库）', !!(serverMode && serverMode.mode === 'auto'), JSON.stringify(serverMode));
 
   // m04040 后 mode 由 API 写回 ⇒ 重新进入项目路由让界面按新 mode 渲染
-  await gotoProject(proj.id);
+  await gotoProject(proj.id, '', 'auto');
   const autoUi = await evalJs(`(function(){
     return {
       missing: ${existsOf(S.workbenchMissing)},
       missingText: ${textOf(S.workbenchMissing)},
       activityBar: ${existsOf(S.activityBar)},
+      docbar: ${existsOf(S.docbar)},
+      doctabs: ${existsOf(S.doctabsList)},
       leftPanel: ${existsOf(S.leftPanel)},
       aiPanel: ${existsOf(S.aiPanel)},
       statusbar: ${existsOf(S.statusbar)},
@@ -887,9 +1245,9 @@ async function main() {
     };
   })()`);
   console.log('  auto 模式 UI:', JSON.stringify(autoUi));
-  check('切到 AI 写作后面板集合真实变化（手写停靠外壳与手写面板退场）',
-    !!(autoUi && !autoUi.leftPanel && !autoUi.aiPanel && !autoUi.activityBar),
-    JSON.stringify({ left: autoUi && autoUi.leftPanel, ai: autoUi && autoUi.aiPanel, activity: autoUi && autoUi.activityBar }));
+  check('切到 AI 写作后手写外壳真实退场（活动栏 / 文档栏 / 手写面板全消失）',
+    !!(autoUi && !autoUi.leftPanel && !autoUi.aiPanel && !autoUi.activityBar && !autoUi.docbar && !autoUi.doctabs),
+    JSON.stringify({ left: autoUi && autoUi.leftPanel, ai: autoUi && autoUi.aiPanel, activity: autoUi && autoUi.activityBar, docbar: autoUi && autoUi.docbar }));
   check('auto 模式渲染工作台占位（AI 写作台未安装 / 工作台未安装）',
     !!(autoUi && autoUi.missing), autoUi && autoUi.missingText);
   check('auto 模式无全局滚动条', !!(autoUi && autoUi.global.deScrollH <= autoUi.global.ih + 1), JSON.stringify(autoUi && autoUi.global));
@@ -915,7 +1273,7 @@ async function main() {
   console.log('  点小返回键后 path:', autoBackClick);
   check('auto 占位屏小返回键真的能出去（回到 /bookshelf）', autoBackClick === '/bookshelf', String(autoBackClick));
 
-  // 反向：写回 manual（同一条 API），验证 manual 侧状态栏与三栏回归
+  // 反向：写回 manual（同一条 API），验证 manual 侧状态栏与单列外壳回归
   console.log('  ↺ 写回 manual（PUT 同一 API）并回到手写台');
   const back = await evalJs(`fetch('/api/projects/${proj.id}', {
     method: 'PUT', headers: { 'content-type': 'application/json' }, credentials: 'include',
@@ -925,27 +1283,30 @@ async function main() {
   check('PUT mode=manual 成功（同一 API 反向写回）', !!(back && back.status === 200 && back.mode === 'manual'), JSON.stringify(back));
 
   await gotoProject(proj.id);
-  const restored = await waitFor(`(${existsOf(S.leftPanel)} && ${existsOf(S.aiPanel)} && ${existsOf(S.dvTab)}) ? 'ready' : ''`, '手写三栏回归', TIMEOUT_MS);
+  const restored = await waitFor(`(${existsOf(S.docbar)} && ${existsOf(S.dvTab)}) ? 'ready' : ''`, '手写单列回归', TIMEOUT_MS);
   const restoredTop = await evalJs(`(function(){
     return { statusbar: ${textOf(S.statusbar)},
+             docbar: ${existsOf(S.docbar)},
              modeBtnCount: document.querySelectorAll(${q(S.modeBtn)}).length };
   })()`);
   check('状态栏在手写模式下显示「手写模式」（mode 真值驱动）',
     !!(restoredTop && /手写模式/.test(restoredTop.statusbar) && restoredTop.modeBtnCount === 0),
     JSON.stringify(restoredTop));
-  check('手写三栏在 reload 后回归（受控种子 + 左右面板）', restored === 'ready', String(restored));
+  check('手写单列外壳在 reload 后回归（文档栏整宽 + 全部面板在正页）', restored === 'ready', String(restored));
 
   // 再进章节路由：中栏编辑器与正文应从服务端恢复（内容不丢）
   await send('Page.navigate', { url: `${BASE}/project/${proj.id}/${chapterId}` });
   await sleep(2600);
+  // ★ 单列：正文在**基础标签「章节正文」**里；先点它把编辑器切到正页再读。
+  await clickBaseDocTab();
   const bodyBack = await waitFor(`(function(){
     var el = document.querySelector(${q(PM)});
     return el && (el.innerText || '').indexOf(${JSON.stringify(bodyMarker)}) !== -1;
   })()`, '正文从服务端恢复', TIMEOUT_MS);
   check('reload 后正文从服务端恢复（Ctrl+J/面板开关不丢内容，落库可复现）', bodyBack === true, String(bodyBack));
 
-  // ---- 9) 右栏 AI 对话面板：真实 SSE（契约④） ----
-  section('10) 右栏 AI 对话面板 ↔ 真实后端 SSE（契约④）');
+  // ---- 9) AI 对话面板：真实 SSE（契约④） ----
+  section('10) AI 对话面板 ↔ 真实后端 SSE（契约④）');
   const probeExpr = `(async function(){
     var ctrl = new AbortController();
     var timer = setTimeout(function(){ ctrl.abort(); }, 15000);
@@ -1013,6 +1374,8 @@ async function main() {
     !!(probe && probe.kinds && Object.keys(probe.kinds).length > 0), JSON.stringify(probe && probe.kinds));
 
   // 面板 UI 路径：填输入框 → 点发送 → 断言真实 POST + 助手回合渲染
+  // ★ 单列：AI 对话面板需先经文档标签切到正页（同一时刻只渲染一个面板）。
+  await clickDocTab('AI 对话');
   const uiText = `E2E面板探针-${STAMP}`;
   const logBefore = await evalJs(textOf(S.aiLog));
   await evalJs(setInputValue(S.aiInput, uiText));

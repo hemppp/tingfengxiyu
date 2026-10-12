@@ -71,9 +71,24 @@ router.put('/:id', requireAuth, zValidator('json', updateEarmarkSchema), async (
   const id = c.req.param('id')!;
   const existing = await getEarmark(id, projectId);
   if (!existing) {
-    // upsert：不存在则创建（RFC 7231 PUT 幂等语义）
-    const data = c.req.valid('json');
-    const created = await createEarmark({ id, ...data, projectId } as Parameters<typeof createEarmark>[0], projectId);
+    // upsert：不存在则创建（RFC 7231 PUT 幂等语义）。
+    // ★ updateEarmarkSchema 是 createEarmarkSchema.partial()（缺字段也放行），
+    //   创建分支必须按**完整** createEarmarkSchema 再校验一次：缺必填字段退回
+    //   400（与 POST 语义一致），否则会直达 INSERT 撞 NOT NULL 约束 → 500。
+    const parsed = createEarmarkSchema.safeParse({ id, ...c.req.valid('json'), projectId });
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: '请求参数验证失败',
+            details: parsed.error.issues.map((e) => ({ path: e.path.join('.'), message: e.message })),
+          },
+        },
+        400,
+      );
+    }
+    const created = await createEarmark({ ...parsed.data, projectId } as Parameters<typeof createEarmark>[0], projectId);
     return c.json({ data: created }, 201);
   }
   const data = c.req.valid('json') as z.infer<typeof updateEarmarkSchema>;

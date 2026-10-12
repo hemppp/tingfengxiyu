@@ -139,7 +139,7 @@ export function ForeshadowManager() {
                     onChange={(e) => setEditDesc(e.target.value)}
                     onBlur={() => handleSaveDesc(fs.id)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSaveDesc(fs.id)}
-                    className="flex-1 text-xs px-2 py-1 border border-ring rounded-xl bg-transparent outline-none focus:ring-2 focus:ring-ring/20"
+                    className="flex-1 text-xs px-2 py-1 border border-ring rounded-xl bg-transparent outline-none"
                     autoFocus
                     onClick={(e) => e.stopPropagation()}
                     aria-label="编辑伏笔描述"

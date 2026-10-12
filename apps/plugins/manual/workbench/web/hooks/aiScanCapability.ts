@@ -8,7 +8,10 @@
 //   · 能力表（AI 接口）是**两边模块都可引用的共享面**：core 契约写的是
 //     「一个模块提供实现、另一个模块按名消费，缺席时静默降级」，kernel 不按
 //     模块/创作模式隔离它（模式隔离只作用于 UI 扩展点与模块间静态 import）；
-//   · 本仓当前无任何 provider ⇒ 能力为 null ⇒ 调用点静默 return（设计 §5.3）。
+//   · ★ 2026-10-11：provider 已由本模块补齐（`web/ai/aiCapabilityProvider.ts`，
+//     经 manual 入口 apply() 注册 ai.scan / ai.timelineExtract / ai.quickPhrases）。
+//     此前的「全仓无 provider ⇒ 能力为 null ⇒ 调用点静默 return」为历史状态；
+//     各调用点的缺席分支按设计 §5.3 保留（能力真的缺席时仍然生效）。
 // ============================================================
 
 /** 流式时间线事件（即 `ai.scan` 能力返回的事件结构） */
@@ -63,10 +66,11 @@ export class ScanSkippedError extends Error {
 }
 
 /**
- * `ai.scan` 能力的形状：由**提供方模块**经
+ * `ai.scan` 能力的形状：由提供方经
  * `ctx.registerCapability('ai.scan', impl)` 注册后，任一模块都可按名取用 ——
  * AI 接口是两边共享的引用面（kernel 不按模块/创作模式过滤；隔离只作用于
  * UI 扩展点与模块间静态 import）。
+ * ★ 2026-10-11 起提供方 = 本模块 `web/ai/aiCapabilityProvider.ts`（manual 入口注册）。
  * 缺失（null）时：自动实体检测 / 最新章节轮询**静默 return**（设计 §5.3）。
  */
 export interface AIScanCapability {

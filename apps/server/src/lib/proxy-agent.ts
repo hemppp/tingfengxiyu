@@ -70,7 +70,14 @@ export async function initProxy(): Promise<void> {
     process.env.http_proxy ||
     '';
 
-  const noProxy = (process.env.NO_PROXY || process.env.no_proxy || 'localhost,127.0.0.1,::1').trim();
+  // ★ 榜单站点直连清单（2026-10-11）：七猫对代理出口有 WAF 风控 —— 经 Clash 等
+  //   代理抓到的是阿里云 WAF 挑战页（HTTP 200、无 book_id），解析为空 → 书源报
+  //   「榜单解析结果为空(502)」；同一 URL 直连即正常。仅追加不过滤用户值，
+  //   且 NO_PROXY 会写回 process.env 供 curl 回退子进程一并继承。
+  const BOOKSCAN_DIRECT_HOSTS = 'qimao.com,www.qimao.com';
+  const userNoProxy = (process.env.NO_PROXY || process.env.no_proxy || 'localhost,127.0.0.1,::1').trim();
+  const noProxy = [...new Set([...userNoProxy.split(','), ...BOOKSCAN_DIRECT_HOSTS.split(',')]
+    .map((s) => s.trim()).filter(Boolean))].join(',');
 
   const applyProxy = (proxyUrl: string, source: 'env' | 'auto-detected'): boolean => {
     try {

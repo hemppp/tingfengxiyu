@@ -3,7 +3,20 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { createHtmlPlugin } from 'vite-plugin-html';
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
+  // ★ 仓库根 = apps/web 的上两级。dev(serve) 时把 envDir 指向它，使 web 与 server
+  //   共用**同一份**根 .env（与 apps/server/src/env.ts 的 pnpm-workspace.yaml 锚点一致）；
+  //   此前 web 的 envDir 默认是 apps/web，根 .env 里的 VITE_* 实际读不到 ⇒ 死配置。
+  //   ⚠ build 保持 Vite 默认（apps/web）**不**读根 .env：否则本地打包会把根 .env 的
+  //   绝对地址（http://localhost:3774/api）烧进生产/桌面产物，而生产要求相对 /api
+  //   （内嵌 server 同源托管 web-dist）。需绝对地址的部署请在 CI/进程环境设
+  //   VITE_API_BASE_URL —— 下面的 process.env 分支仍优先，不受影响。
+  //   注意：dev 读入后 VITE_API_BASE_URL 是绝对地址，浏览器将**跨源**直连 3774
+  //   （不再走 /api 代理）；鉴权 Cookie 为 SameSite=Strict，要求 web 与 api 同主机名
+  //   （都用 localhost，勿混用 127.0.0.1）。
+  const repoRoot = path.resolve(__dirname, '../..');
+  const envDir = command === 'serve' ? repoRoot : __dirname;
+
   // ★ 防御：确保 VITE_API_BASE_URL 是合法的 API 根（带 /api 后缀）。
   //   背景：宿主/IDE 可能把 VITE_API_BASE_URL 注入到**进程环境**，而 Vite 解析环境
   //   变量时 process.env 的优先级高于 .env 文件（见 vite 的 loadEnv 实现）。
@@ -13,7 +26,7 @@ export default defineConfig(({ mode }) => {
   //   这里统一规范化，并写回 process.env 使 import.meta.env 与 dev server 端一致。
   const rawApiBase = (
     process.env.VITE_API_BASE_URL ??
-    loadEnv(mode, __dirname, 'VITE_').VITE_API_BASE_URL ??
+    loadEnv(mode, envDir, 'VITE_').VITE_API_BASE_URL ??
     ''
   ).trim();
   const apiBaseUrl = rawApiBase
@@ -29,6 +42,9 @@ export default defineConfig(({ mode }) => {
   process.env.VITE_API_BASE_URL = apiBaseUrl;
 
   return {
+    // 环境变量目录：dev=仓库根（与上面 loadEnv 的 envDir 一致），build=apps/web（Vite 默认）。
+    // 让 import.meta.env.VITE_* 与 Vite 内置的 .env 解析都指向同一处。
+    envDir,
     // 覆盖 import.meta.env.VITE_API_BASE_URL，确保运行时拿到规范化后的 API 根
     define: {
       'import.meta.env.VITE_API_BASE_URL': JSON.stringify(apiBaseUrl),

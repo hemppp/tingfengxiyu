@@ -165,12 +165,18 @@ export class BaseService<T extends { id: string; createdAt: number; updatedAt: n
     for (const [key, value] of Object.entries(updates)) {
       if (key === 'id') continue;
       if (value !== undefined) {
-        setData[key] = this.jsonFields.includes(key) ? jsonStringify(value) : value;
+        // ★ 时间列（drizzle `mode: 'timestamp'`，如 createdAt/updatedAt/deletedAt）只接受 Date：
+        //   调用方把 rowToModel 产物（毫秒数字）整体回传时 —— 角色合并正是如此
+        //   （characters.ts 把 mergeTwoCharacters 的完整 Character 交给 updateCharacter）——
+        //   drizzle 的 mapToDriverValue 会在 value.getTime() 上抛 TypeError → 500。
+        //   按列元数据统一归一化，比逐字段特判更抗未来新增时间列。
+        const col = this.table[key] as { columnType?: string } | undefined;
+        if (typeof value === 'number' && !Number.isNaN(value) && col?.columnType === 'SQLiteTimestamp') {
+          setData[key] = new Date(value);
+        } else {
+          setData[key] = this.jsonFields.includes(key) ? jsonStringify(value) : value;
+        }
       }
-    }
-    // 安全处理 updatedAt：仅在有值且为有效数字时才转换
-    if (typeof updates.updatedAt === 'number' && !Number.isNaN(updates.updatedAt)) {
-      setData.updatedAt = new Date(updates.updatedAt);
     }
     db.update(this.table).set(setData).where(eq(this.table.id, id)).run();
     await this.maybePersist();

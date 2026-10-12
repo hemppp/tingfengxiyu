@@ -299,11 +299,20 @@ export function CharacterManager() {
       const description = prompt('请描述你想创建的角色（如：一个沉默寡言的剑客，背负着家族的仇恨）');
       if (!description) return;
 
-      const res = await apiClient.post<Record<string, unknown>>('/ai/generate-character', {
-        description,
-        genre: useProjectStore.getState().currentProject?.genre,
-        context: `项目：${useProjectStore.getState().currentProject?.name || ''}`,
-      });
+      const res = await apiClient.post<Record<string, unknown>>(
+        '/ai/generate-character',
+        {
+          description,
+          // ?? undefined：未设题材时 project.genre 是 null，别把显式 null 发上去
+          // （服务端 schema 可选字段只放行 undefined；两边都已按 nullish 收口）
+          genre: useProjectStore.getState().currentProject?.genre ?? undefined,
+          context: `项目：${useProjectStore.getState().currentProject?.name || ''}`,
+        },
+        // ★ timeoutMs 必传（2026-10-11 UI 实测）：apiClient 默认 8s，而生成角色是
+        //   推理模型整段生成（实测 14–40s+）⇒ 不传必然「请求超时 (8s)」失败。
+        //   120s 与 styleService/rhythmService 的 60s 同思路，生成类留更大余量。
+        { timeoutMs: 120_000 },
+      );
 
       // ★ 后端红石开关关闭时返回 { skipped: true, reason: '功能已关闭' }
       // 必须显式提示用户，否则 'name' in res 判断失败 → 静默无反馈
@@ -320,6 +329,41 @@ export function CharacterManager() {
       }
 
       if (res && typeof res === 'object' && 'name' in res) {
+        // ★ 2026-10-11 UI 实测踩到的第三处（POST /api/characters 400，角色丢持久化）：
+        //   /ai/generate-character 的 prompt 约定 relations 是
+        //   `[{ target: "角色名", type, description }]`（**按名字** —— 目标角色
+        //   可能还不存在），而 `CharacterRelation` 要的是 `targetId`（服务端 zod
+        //   硬校验 `string` + `direction` 枚举）。原先原样强转 ⇒ 保存 400
+        //   （`relations[0].targetId: expected string, received undefined`），
+        //   角色只在本地 store 里「看得见」，一刷新就没了（实测 谢孤鸿）。
+        //   收口：按名字/别名解析现有角色 → 解析到的建成真关系（mutual）；
+        //   解析不到的丢弃并在面板明示 —— RelationGraph 本就只画
+        //   `validCharIds` 里的边（L154），悬空关系既画不出也存不进。
+        const aiRelations = Array.isArray(res.relations)
+          ? (res.relations as Array<Record<string, unknown>>)
+          : [];
+        const relations: Character['relations'] = [];
+        const unresolvedNames: string[] = [];
+        for (const r of aiRelations) {
+          const targetName = typeof r.target === 'string' ? r.target.trim() : '';
+          if (!targetName) continue;
+          const hit = characters.find(
+            (c) =>
+              c.projectId === projectId &&
+              (c.name.trim() === targetName || (c.aliases ?? []).includes(targetName)),
+          );
+          if (!hit) {
+            unresolvedNames.push(targetName);
+            continue;
+          }
+          relations.push({
+            targetId: hit.id,
+            type: typeof r.type === 'string' && r.type.trim() ? r.type.trim() : '关联',
+            description: typeof r.description === 'string' && r.description ? r.description : undefined,
+            direction: 'mutual',
+            chapter: null,
+          });
+        }
         const newChar: Character = {
           id: nanoid(),
           projectId,
@@ -335,7 +379,7 @@ export function CharacterManager() {
           weakness: (res.weakness as string) || '',
           tags: [],
           states: [],
-          relations: Array.isArray(res.relations) ? res.relations as Character['relations'] : [],
+          relations,
           chapters: [],
           thumbnail: undefined,
           color: undefined,
@@ -345,6 +389,13 @@ export function CharacterManager() {
         addCharacter(newChar);
         setSelectedId(newChar.id);
         setEditing(newChar);
+        if (unresolvedNames.length > 0) {
+          setError(
+            `已生成「${newChar.name}」；其中 ${unresolvedNames.length} 条关系提示` +
+              `（${unresolvedNames.join('、')}）在项目中暂无对应角色，未一并写入 —— ` +
+              `先创建对应角色，再在关系图中手动连边即可。`,
+          );
+        }
       } else {
         // ★ 兜底：未知响应格式
         setError('AI 返回数据格式不识别，请重试');

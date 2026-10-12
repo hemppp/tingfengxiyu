@@ -2,7 +2,7 @@
 // 章节 Service
 // ============================================================
 
-import { schema, getDb, getProjectDbSync, eq, and, isNotNull, isNull, lt, sql, saveToDisk } from '@novel/db';
+import { schema, getDb, getProjectDbSync, initProjectDb, eq, and, isNotNull, isNull, lt, sql, saveToDisk } from '@novel/db';
 import type { Chapter } from '@novel/shared';
 import { BaseService, normalizeTimestamps, toDbTimestamps } from './base-service.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -380,6 +380,11 @@ export async function listTrashedChapters(projectId: string): Promise<Chapter[]>
     // 清理失败不应阻塞列表查询
     console.error('[chapter-service] cleanupExpiredChapters 失败:', e);
   }
+  // ★ cleanupExpiredChapters 会逐个 init 主库中的**全部**项目库；project-db 的 LRU
+  //   （MAX_OPEN_PROJECT_DBS=5）会在扫描途中把本项目库淘汰关闭（主库项目数 >5 时必然发生），
+  //   之后 loadAll 的 getProjectDbSync 拿到 null → 500「项目库未初始化」。
+  //   这里显式补一次 init：库已在 LRU 时仅刷新 lastUsed，无额外开销。
+  await initProjectDb(projectId);
   const all = await service.loadAll(projectId, projectId);
   return all
     .filter((c) => c.deletedAt != null)

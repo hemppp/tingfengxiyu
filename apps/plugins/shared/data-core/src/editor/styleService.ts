@@ -142,8 +142,16 @@ export const styleService = {
    *
    * 调用后端 POST /ai/analyze-style (simple=true)，
    * 失败时回退本地启发式并标注 isLocalFallback=true。
+   *
+   * ★ signal 必须贯通到 apiClient（F-F 修复，2026-10-10）：
+   *   此前本函数签名**没有** signal 参数，而调用点（EditorPage / StyleAdvisor）
+   *   都建了 AbortController 却传不进来 —— 请求**不可取消**，被 abort 后
+   *   仍占着同源连接直到 `timeoutMs`（60 s）走完。
+   *   在 AI 端点饱和时（8 并发、单条约 24 s），这会和普通写请求抢那 6 条
+   *   同源连接，把写请求挤到 8 s 客户端超时 ⇒ 静默丢数据（F-F 的完整链路）。
+   *   参数可选：不传时行为与修复前**逐字节相同**（向后兼容）。
    */
-  async analyzeStyle(chapters: string[]): Promise<StyleAnalysisResult> {
+  async analyzeStyle(chapters: string[], signal?: AbortSignal): Promise<StyleAnalysisResult> {
     const combined = chapters.join('\n\n');
     if (!combined.trim()) {
       return { profile: localHeuristic(chapters), isLocalFallback: true };
@@ -158,7 +166,7 @@ export const styleService = {
           referenceText: combined,
           simple: true,
         },
-        { silent: true, timeoutMs: 60_000 },
+        { silent: true, timeoutMs: 60_000, signal },
       );
       // 后端返回降级结果（AI 不可用 / JSON 解析失败）→ 走本地启发式
       if (data?.degraded) {

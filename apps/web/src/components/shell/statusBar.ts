@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { getCachedChapterContent } from '@novel-plugins/data-core/data/chapterLocalCache';
-import { apiClient } from '@/services/api/apiClient';
+import { ApiError, apiClient } from '@/services/api/apiClient';
 import { useProjectStore } from '@/stores';
 
 export interface SaveState {
@@ -91,14 +91,22 @@ export function formatWordCount(n: number): string {
  *   · 之后 `intervalMs`（默认 5s）轮询一次，覆盖「边写边涨」的窗口；
  *   · 值未变则不写 store（不触发无谓重渲染）；项目不匹配则丢弃（防跨项目竞态）；
  *   · 失败静默 —— 一次网络抖动不该让状态栏报错（保存态另有本地缓存判定）。
+ *
+ * ★ 2026-10-11（e2e 实测暴露）两处补强，均属上述「失败静默」的落实：
+ *   1) 请求带 `silent: true` —— 静默此前只在 `.catch` 里，但 apiClient 在 reject
+ *      之前就会 `dispatchApiErrorEvent`（console.error + api-error 事件），
+ *      `.catch` 挡不住。「页面停在已删除项目上」时每 5s 刷一条 console 错误。
+ *   2) NOT_FOUND（项目被删 / 换库）时**停表** —— 项目都不存在了，再永远轮询
+ *      只是每 5s 捶一次 404（e2e 遗留页实测刷错误刷到套件断言失败）。
  */
 export function useProjectWordCountSync(projectId: string | null, intervalMs = 5000): void {
   useEffect(() => {
     if (!projectId || intervalMs <= 0) return;
     let cancelled = false;
+    let timer: number | null = null;
     const sync = (): void => {
       apiClient
-        .get<{ id: string; currentWordCount: number }>(`/projects/${projectId}`)
+        .get<{ id: string; currentWordCount: number }>(`/projects/${projectId}`, undefined, { silent: true })
         .then((p) => {
           if (cancelled || !p || typeof p.currentWordCount !== 'number') return;
           const cur = useProjectStore.getState().currentProject;
@@ -106,15 +114,19 @@ export function useProjectWordCountSync(projectId: string | null, intervalMs = 5
           if (cur.currentWordCount === p.currentWordCount) return;
           useProjectStore.getState().updateProject({ currentWordCount: p.currentWordCount });
         })
-        .catch(() => {
-          /* 静默：见上方注释 */
+        .catch((err: unknown) => {
+          /* 网络抖动：静默（silent 已挡掉全局分发），等下一轮 */
+          if (err instanceof ApiError && err.code === 'NOT_FOUND' && timer !== null) {
+            window.clearInterval(timer);
+            timer = null;
+          }
         });
     };
     sync();
-    const timer = window.setInterval(sync, intervalMs);
+    timer = window.setInterval(sync, intervalMs);
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      if (timer !== null) window.clearInterval(timer);
     };
   }, [projectId, intervalMs]);
 }

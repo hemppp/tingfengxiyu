@@ -77,6 +77,8 @@
 | `ai.outlineFill` | `(args) => Promise<void>` | `OutlineFillDialog` 入口隐藏；大纲纯文本编辑完整 |
 | `ai.entityRefresh` | `(args) => Promise<void>` | 交付后实体刷新跳过，不报错 |
 
+> **2026-10-11 变更（provider 补齐）**：`ai.scan` / `ai.timelineExtract` / `ai.quickPhrases` 三个能力的**实现**由手写台补齐（`apps/plugins/manual/workbench/web/ai/aiCapabilityProvider.ts`，manual 入口 `apply()` 经 `ctx.registerCapability` 注册；manual 的 `plugin.json` `web.inject` 相应新增 `capability`）。上表「缺席降级」列语义不变 —— 它是**能力真的缺席时**（provider 注销 / 模块被移走）的兜底；在本仓当前构建下三个入口均为**可用态**：正文变更自动扫描（时间线/角色/物品/地点/流转/别名，`/ai/scan-timeline-stream`）、时间线「提取」按钮显示且可用（`/ai/extract-events-stream`）、快捷短语「AI提取」走真 AI（`/ai/gateway` quick-phrases）。红石开关面（`isScannerEnabled` 等）本构建无客户端开关来源，按「缺席视为已启用」实现；服务端冻结时端点返回 200+`{skipped:true}`，provider 转为 `ScanSkippedError` 并由消费方 toast 提示。`ai.outlineFill` / `ai.entityRefresh` 在本仓仍无消费方，维持现状。
+
 `chatRail` 与 `registerBuiltinBubble` 为两个独立机制：前者是编辑器内 AI 气泡栏**单槽**（auto 注册 `AiChatBubbleRail`，**缺席即不渲染，kernel 不内置兜底**，D32-Q3）；后者是 kernel 内置气泡浮窗**多槽**（manual 注册 `chapters`、auto 注册 `ai-chat`，各自缺席则对应气泡不渲染）。
 
 ## 3. 归属决策表

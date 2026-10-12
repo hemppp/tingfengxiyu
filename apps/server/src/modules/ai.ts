@@ -279,8 +279,12 @@ const chatSchema = z.object({
 
 const generateCharacterSchema = z.object({
   description: z.string(),
-  genre: z.string().optional(),
-  context: z.string().optional(),
+  // ★ nullish 而非 optional（2026-10-11，UI 实测踩到）：客户端把
+  //   `project.genre`（未设题材时为 **null**）原样 POST 过来，`z.string().optional()`
+  //   只放行 undefined ⇒ 未设题材的新项目点「AI 生成角色」必 400（invalid_type）。
+  //   处理器侧本就按 falsy 处理（`body.genre ? … : ''`），放行 null 无副作用。
+  genre: z.string().nullish(),
+  context: z.string().nullish(),
 });
 
 const generatePlotSchema = z.object({

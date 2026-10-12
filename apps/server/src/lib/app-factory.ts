@@ -41,7 +41,13 @@ export function createApp(): Hono {
       return null;
     },
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization'],
+    // ★ 必须覆盖前端 apiClient 实际发送的**全部**自定义头（data-core/api/apiClient.ts）：
+    //   · X-Request-Id —— 每个请求无条件附加（L268，用于后端日志追踪）；
+    //   · X-Project-Id —— 项目作用域请求动态注入（L449，project-scope.ts 读取）。
+    //   漏掉任何一个 ⇒ 跨源时浏览器预检（OPTIONS）判定头部不被允许 ⇒ 请求被拦，
+    //   前端只看到 "网络错误: Failed to fetch"（同源走 vite 代理时 CORS 不参与，
+    //   故该缺陷只在跨源直连 3774 的部署/开发形态下暴露，症状隐蔽）。
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Project-Id'],
     exposeHeaders: ['Content-Length'],
     // C4：跨源（局域网直连 3774）时允许携带认证 Cookie
     credentials: true,

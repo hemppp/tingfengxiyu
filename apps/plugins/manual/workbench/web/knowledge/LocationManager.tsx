@@ -167,7 +167,7 @@ export function LocationManager() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="搜索地点..."
-                    className="w-full pl-8 pr-3 py-1.5 text-sm bg-white border border-border rounded-[14px] focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-border placeholder:text-muted-foreground transition-shadow"
+                    className="w-full pl-8 pr-3 py-1.5 text-sm bg-white border border-border rounded-[14px] focus:outline-none focus:border-ring/50 placeholder:text-muted-foreground transition-colors"
                   />
                 </div>
               </div>

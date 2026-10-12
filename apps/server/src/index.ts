@@ -3,6 +3,12 @@
 // 所有业务模块 = cordis 插件，由宿主 mount() 装配，start() 启动 HTTP。
 // ============================================================
 
+// ★ 必须置于首位：顶层副作用加载仓库根 .env，确保下面所有
+//   `process.env.X`（PORT / HOST_MODE / JWT_SECRET …）都能读到 .env。
+//   ESM 按 import 顺序求值 ⇒ 本行先于任何其它模块的顶层代码执行。
+//   不再依赖 `tsx --env-file=`（此前遗漏即静默丢配置）。
+import './env.js';
+
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { createServerPluginHost, normalizeHostMode } from './plugin/host.js';

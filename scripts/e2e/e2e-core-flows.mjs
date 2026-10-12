@@ -99,6 +99,24 @@ function connect(wsUrl) {
   });
 }
 
+/**
+ * 从 CDP target 列表里挑出**本脚本该操作的那个页面**。
+ *
+ * ★ F-E 修复（2026-10-10）：此前一律取 `pages.find(p => p.type === 'page')` ——
+ *   列表里的**第一个** page。本机 Chrome 常残留着上一次运行的标签页，脚本于是
+ *   会附着到**错误的 target**；更糟的是对遗留 target 调 `Runtime.enable` 时，
+ *   CDP 会**回放该页在连接前产生的 console 消息**（实测回放 15 条
+ *   `[ErrorSystem] API Error dispatched`，时间跨度仅 1 ms），脚本把它当成本次
+ *   运行产生的错误 ⇒ **假失败**。
+ *   现在按 `BASE` 的 origin 校验，只认本脚本要操作的那台 dev server 的页面；
+ *   找不到就明确报错退出（EXIT=2），**绝不**回落到第一个 page。
+ */
+function pickPageTarget(pages) {
+  if (!Array.isArray(pages)) return null;
+  const origin = new URL(BASE).origin;
+  return pages.find((p) => p.type === 'page' && typeof p.url === 'string' && p.url.startsWith(origin)) ?? null;
+}
+
 let msgId = 0;
 const pending = new Map();
 function send(ws, method, params = {}) {
@@ -115,8 +133,13 @@ console.log('===== 0) 环境探测 =====');
 let page;
 try {
   const pages = await getJson(`http://127.0.0.1:${PORT}/json`);
-  page = pages.find((p) => p.type === 'page');
-  if (!page) throw new Error('CDP 上没有 type=page 的目标');
+  page = pickPageTarget(pages);
+  if (!page) {
+    throw new Error(
+      `CDP 上没有属于 ${BASE} 的 page 目标（当前 ${(pages ?? []).length} 个 target：` +
+      `${(pages ?? []).map((p) => `${p.type}:${p.url}`).join(' | ') || '无'}）`,
+    );
+  }
 } catch (err) {
   console.error(`\n❌ 环境不可用：无法连接 CDP（127.0.0.1:${PORT}）— ${err.message}`);
   console.error('   e2e 需要浏览器开 remote-debugging。手动步骤：');
@@ -213,6 +236,12 @@ const countTrue = (obj) => Object.values(obj ?? {}).filter(Boolean).length;
 
 await send(ws, 'Page.enable');
 await send(ws, 'Runtime.enable');
+// ★ F-E 修复（2026-10-10）：即使已按 origin 挑对了 target，`Runtime.enable` 仍会
+//   回放**该页面在这次连接之前**产生的 console 消息。若上一步的登录/导航就发生在
+//   本脚本连接之前（复用已开页面时），回放的历史错误会被算进第 6 项「console 错误
+//   清零」断言 ⇒ 假失败。丢弃重放缓冲后再跑断言。
+//   （同款处理已存在于 e2e-ui-integration.mjs:384，此处补齐。）
+try { await send(ws, 'Runtime.discardConsoleEntries'); } catch { /* 老版本 CDP 无此命令 */ }
 await send(ws, 'Network.enable');
 await send(ws, 'Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
 

@@ -82,7 +82,10 @@ export function StyleAdvisor() {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      styleService.analyzeStyle(texts).then(({ profile, isLocalFallback }) => {
+      // ★ 传 signal（F-F 修复，2026-10-10）：此前这里建了 controller 却从不传出去，
+      //   `abortRef.current.abort()` 只影响下面两处的日志判断，**取消不掉请求** ——
+      //   一次 60 s 的长连接会一直占着同源连接额度，把普通写请求挤到 8 s 超时。
+      styleService.analyzeStyle(texts, controller.signal).then(({ profile, isLocalFallback }) => {
         if (!controller.signal.aborted && !isLocalFallback) {
           lastSigRef.current = sig;
           void profile;

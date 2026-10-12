@@ -32,6 +32,10 @@ import { registerBuiltinPanelAsContext } from '@/plugin/host';
 import { registerBottomPanelSection } from '@/components/shell/bottomSections';
 import { QuickPhraseSection, QuickPhraseThinEntry } from './editor/panels/QuickPhrasePanel';
 import { BUILTIN_PANELS, preloadPanels } from './panels';
+// ★ AI 能力 provider（静态引入）：注册必须发生在任何消费点首帧之前 ——
+//   TimelineView 在**渲染期** getCapability('ai.timelineExtract') 决定按钮显隐，
+//   懒加载 provider 会让按钮在补注册前的一帧里缺失（渲染时序不可依赖）。
+import { registerAICapabilities } from './ai/aiCapabilityProvider';
 
 // 章节面板内容：懒加载保持 chunk 分割
 const LeftSidebar = React.lazy(() =>
@@ -47,7 +51,9 @@ const AiChatPanel = React.lazy(() =>
 );
 
 export const name = 'novel.manual.workbench';
-export const inject = ['projectPanels', 'builtinBubble'];
+// 'capability'（= registerCapability/getCapability 服务名，WEB_SERVICES 白名单项）：
+// 2026-10-11 起本入口注册三个 AI 能力实现（见 apply() 第 5 步）。
+export const inject = ['projectPanels', 'builtinBubble', 'capability'];
 
 export function apply(ctx: WebPluginContext): void {
   // 1) 12 个手写台工作台面板（ADR §7.1：FloatingPanelDef 全部既有字段保留 ⇒ 零改动）
@@ -112,6 +118,13 @@ export function apply(ctx: WebPluginContext): void {
     }),
     'bottom-section:quick-phrase',
   );
+
+  // 5) AI 能力 provider（2026-10-11 补齐）—— 注册 `ai.scan` / `ai.timelineExtract` /
+  //    `ai.quickPhrases` 三个实现。此前全仓无 provider（auto 模块实现随 c2583f8
+  //    移出仓外），自动实体检测 / 时间线提取 / 快捷短语 AI 全部停在静默降级态。
+  //    能力表是跨模块共享面（kernel 不按模式隔离），实现=本模块 `./ai/aiCapabilityProvider`，
+  //    服务端引擎全部在本仓（详见该文件头注）。
+  registerAICapabilities(ctx);
 }
 
 // ------------------------------------------------------------------

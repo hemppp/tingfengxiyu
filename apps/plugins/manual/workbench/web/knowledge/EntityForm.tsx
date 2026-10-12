@@ -28,9 +28,9 @@ const HOLDER_ACTION_META: Record<ItemHolder['action'], { label: string; icon: ty
 };
 
 // 表单元素统一样式（顶层常量，子组件可复用）
-const inputCls = "w-full px-3 py-2 text-sm text-foreground bg-card border border-border rounded-[14px] focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring placeholder:text-muted-foreground transition-shadow";
-const textareaCls = "w-full px-3 py-2 text-sm text-foreground bg-card border border-border rounded-[14px] focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring placeholder:text-muted-foreground transition-shadow resize-none";
-const selectCls = "w-full px-3 py-2 text-sm text-foreground bg-card border border-border rounded-[14px] focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-ring transition-shadow appearance-none";
+const inputCls = "w-full px-3 py-2 text-sm text-foreground bg-card border border-border rounded-[14px] focus:outline-none focus:border-ring placeholder:text-muted-foreground transition-colors";
+const textareaCls = "w-full px-3 py-2 text-sm text-foreground bg-card border border-border rounded-[14px] focus:outline-none focus:border-ring placeholder:text-muted-foreground transition-colors resize-none";
+const selectCls = "w-full px-3 py-2 text-sm text-foreground bg-card border border-border rounded-[14px] focus:outline-none focus:border-ring transition-colors appearance-none";
 
 function getTagColor(tag: string) {
   let hash = 0;

@@ -72,12 +72,9 @@ import { DockShell } from '@/components/shell/DockShell';
 //   仅服务 auto 工作台一处；停靠内核 DockPanelContent 也需要同一种 fallback）。
 import { PanelFallback } from '@/components/shell/PanelFallback';
 import type { DockPanelDef, DockShellApi } from '@/components/shell/dock/types';
-// ★ §1.5：`resolveDockMeta` 是缺省行为的**唯一真源** —— center 判定一律经它取值，
-//   本壳不得自写 `?? false` 兜底（否则与 DockShell 的分桶口径漂移）。
-import { resolveDockMeta } from '@/components/shell/dock/types';
 import { PanelMenu } from '@/components/shell/PanelMenu';
 import { usePluginRegistry, useProjectMode, filterByProjectMode, entryAppliesToProjectMode } from '@/plugin/registry';
-import { getPanelNavigation, registerPanelViewOpener, registerPanelViewSync, usePanelOpenStore } from '@/stores/panelOpenStore';
+import { getPanelNavigation, registerPanelViewOpener, registerPanelViewSync, registerPanelViewBase, usePanelOpenStore } from '@/stores/panelOpenStore';
 // ★ t4（集成接线）新增：manual 模式首屏三栏种子（chapters / ai-chat）。
 //   受控 openKeys 使 DockShell 的 `dock.defaultOpen` 失效（见 store 内注释），
 //   缺省打开集合的真源只能是 store，故种子从此处驱动。
@@ -158,9 +155,10 @@ export function ProjectLayout() {
 
   // 打开状态来自 store（编辑器内的插件面板栏共享同一份，可开关面板）
   var openPanelKeys = usePanelOpenStore(function(s) { return s.keys; });
+  // ★ 2026-10-11：「章节正文」基础标签也当动态标签（可关、计入总上限）——
+  //   它的开/关真源是 store.baseOpen，透传给 DockShell 控制中心默认面板的显隐。
+  var baseOpen = usePanelOpenStore(function(s) { return s.baseOpen; });
   var syncFromView = usePanelOpenStore(function(s) { return s._syncFromView; });
-  // 当前活动面板：activeCenterKey 的「激活优先」判据（见下方 useMemo）
-  var activeKey = usePanelOpenStore(function(s) { return s.active(); });
   var setActiveKey = usePanelOpenStore(function(s) { return s._setActive; });
 
   // ★ 插件化：面板列表来自插件注册表（内置 12 面板 + 插件新增面板）
@@ -209,55 +207,11 @@ export function ProjectLayout() {
     return filterByProjectMode(candidatePanels, projectMode);
   }, [candidatePanels, projectMode]);
 
-  // ★ §1.2 scope 语义收窄：'editor' → 辅助侧栏；缺省/'workspace' → 主候选池。
-  //   分类真源唯一为 `resolveDockMeta(def).slot`（DockShell 内分桶），
-  //   故本壳**不做** scope 分流，整池透传给 DockShell（避免两处各写一套缺省）。
+  // ★ 单列布局：整池透传给 DockShell（不再做 scope 分流 / center 抢占判定）。
+  //   分类真源仍在 DockShell 内部（经 `resolveDockMeta`），本壳不重复一套缺省。
   var allShellPanels = useMemo<DockPanelDef[]>(function() {
     return floatingPanels as DockPanelDef[];
   }, [floatingPanels]);
-
-  // ★ F1 / §1.6 中心槽抢占：`activeCenterKey` = 「被占用时显示的中心面板 key」
-  //   （null = 中心槽交回 `centerDefault` 的章节编辑器路由出口）。
-  //
-  //   判定口径**与 DockShell 完全一致**：只认 `resolveDockMeta(def).center`（§1.5 唯一真源）。
-  //   本壳不得自写 `?? false` 之类的兜底 —— 那会让宿主与内核的 center 判据各写一份、逐渐漂移。
-  //
-  //   取值优先级（闭环 t9 评审遗留的 F1：原实现硬编码 null，使该能力实际不可达）：
-  //     1. dockview 当前**激活**面板若声明了 center ⇒ 用它（用户正聚焦者抢占中心槽）
-  //     2. 否则回落：已打开的 center 面板中**最近打开**的那个
-  //        （`keys` 为打开顺序，故倒序扫描取首个命中）
-  //     3. 无任何已打开的 center 面板 ⇒ null
-  //   关闭 center 面板后它同时从 `keys` 与 `activeKey` 消失 ⇒ 自然回落 null；
-  //   多个 center 面板并存时，后开者关闭会重新占用先前那个（互斥语义），无需额外状态。
-  //
-  //   ⚠ 本推导是 hook，必须位于下方 `mode === 'auto'` 提前 return **之前**，
-  //     以保证两种创作模式下 hooks 调用顺序完全一致。
-  var defByKey = useMemo(function() {
-    var map = new Map<string, DockPanelDef>();
-    for (var i = 0; i < allShellPanels.length; i++) {
-      var def = allShellPanels[i];
-      if (def) map.set(def.key, def);
-    }
-    return map;
-  }, [allShellPanels]);
-
-  var activeCenterKey = useMemo<string | null>(function() {
-    var isCenterPanel = function(key: string): boolean {
-      var def = defByKey.get(key);
-      return !!def && resolveDockMeta(def).center;
-    };
-    // 1) 激活面板优先（仅当它确实处于已打开集合中）
-    if (activeKey && openPanelKeys.indexOf(activeKey) !== -1 && isCenterPanel(activeKey)) {
-      return activeKey;
-    }
-    // 2) 回落：已打开集合中最近打开的 center 面板
-    for (var i = openPanelKeys.length - 1; i >= 0; i--) {
-      var key = openPanelKeys[i];
-      if (key && isCenterPanel(key)) return key;
-    }
-    // 3) 无 center 面板被打开 ⇒ 中心槽用 centerDefault
-    return null;
-  }, [defByKey, openPanelKeys, activeKey]);
 
   // ★ 章节 / AI 对话面板：§3.2 决策 3-A —— 取消 ProjectLayout 的 key 硬编码查找，
   //   降级为**普通面板**，由上面的统一候选池承载，DockShell 对二者无特殊分支。
@@ -278,7 +232,13 @@ export function ProjectLayout() {
   //   目标截图是「一打开就在位」：左 240px 章节树 + 中栏正文 + 右 340px AI 对话。
   //   DockShell 的 `dock.defaultOpen` 在受控 openKeys 下不生效
   //   （DockShell.tsx:291-295 + ProjectLayout.tsx:153，store 内有详细注释），
-  //   所以默认打开集合只能由这里播进 store；幂等（只播一次，用户关掉后不再拉开）。
+  //   所以默认打开集合只能由这里播进 store。
+  //
+  //   ★ 2026-10-11 持久化：本调用现在语义是「**恢复或播种**」——
+  //     `seedPanelOpenKeys` 先读 localStorage 里用户上次的打开集合；有记录就原样恢复、
+  //     **不再播默认种子**（于是关掉「章节 / AI 对话」后刷新不会自己回来，与其余面板
+  //     行为一致）；无记录（首次使用）才播 `DEFAULT_OPEN_PANEL_KEYS.manual` 并落盘。
+  //     仍幂等：同一会话只执行一次。
   // ============================================================
   useEffect(function() {
     if (projectMode !== 'manual') return;
@@ -400,9 +360,14 @@ export function ProjectLayout() {
     registerPanelViewSync(function(keys) {
       syncFromView(keys);
     });
+    // ★ 单列布局：点文档标签栏的基础标签「章节正文」⇒ 切回中心编辑区面板。
+    var unregisterBase = registerPanelViewBase(function() {
+      dockApiRef.current?.focusBase();
+    });
     return function() {
       unregisterOpen();
       registerPanelViewSync(null);
+      unregisterBase();
     };
   }, [syncFromView]);
 
@@ -462,9 +427,6 @@ export function ProjectLayout() {
       </Suspense>
     );
   }
-
-  // 中心槽占用者 `activeCenterKey` 已在上方（提前 return 之前）经
-  // `resolveDockMeta(def).center` 派生 —— 见 F1 / §1.6 注释块。
 
   return (
     <ErrorBoundary renderError={function(error) { return <ShellFatal error={error} />; }}>
@@ -580,16 +542,16 @@ export function ProjectLayout() {
             （DockShell 的 `dock:doc-tabs` tabComponent），与左「章节」/ 右「AI 对话」
             共用同一条 35px 头部带，顶部由三层收敛为两层（顶栏 + 头部带）。 */}
 
-        {/* 主区：DockShell 承载全部面板（编辑区 + 四区 + 悬浮 + 标签堆叠 + Splitter） */}
+        {/* 主区：DockShell 承载全部面板（单列 —— 正页标签堆叠 + 悬浮 + Splitter） */}
         <main className="shell-main">
           <DockShell
             panels={allShellPanels}
             /* 中心槽出口（章节编辑器路由）自带 Suspense —— `lazyRoute()` 已为它套了边界
                （routes/Lazy.tsx），编辑器 chunk 未就绪时只在该出口内转圈。 */
             centerDefault={<Outlet />}
-            activeCenterKey={activeCenterKey}
             apiRef={dockApiRef}
             openKeys={openPanelKeys}
+            baseOpen={baseOpen}
             onOpenChange={syncFromView}
             onActiveChange={setActiveKey}
             // ★ t1：底部细条 =「N 条问题 Ctrl+J」；N 来自真实批注（见 shell/issues.tsx），
